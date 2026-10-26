@@ -264,3 +264,12 @@ export function decodeSave(text: string): Result<SaveFile>;
 - Validator từ chối mọi khóa không có trong hợp đồng; `HIDDEN_CHARACTER_KEYS` liệt kê khóa ẩn để test.
 - Thêm hàm lịch thuần: `isMonthStart`, `isQuarterStart`, `isYearStart`, `ageYearsAt`, `seasonOfMonth`.
 - Nhánh bị ảnh hưởng: chưa nhánh nào bắt đầu.
+
+### 2026-10-26 — v0.2 Bước 0 (ADR 0008–0011)
+Lý do: v0.2 thêm hành động, kế hoạch tháng, di chuyển và nhật ký lệnh. `PROTOCOL_VERSION` 1 → **2**, `SAVE_VERSION` 1 → **2** (save v0.1 bị từ chối như ADR 0004 đã định).
+- Tệp mới `actions.ts`: `ActionId`, `CountyIndex`, `PlanSlot`, `MonthPlan` (đúng 3 ô), `ActionGroup`, `ActionOption`, `TravelOption`, `TravelPreview`, `StaminaBand`, `SkillView`, `RecordedCommand`, `CommandRecord` và validator. `ADVANCE_MODES` chuyển từ `protocol.ts` sang đây (protocol vẫn xuất lại) để tránh vòng import save ↔ protocol.
+- Tệp mới `contentId.ts`: `ContentId`, `CONTENT_ID_RE`, `vContentId` (tách khỏi `character.ts` để tránh vòng import).
+- `CharacterView` thêm `location`, `home`, `staminaBand`, `skills`, `canAct`. `HIDDEN_CHARACTER_KEYS` thêm `stamina`, `skillXp`, `commandLog`.
+- Lệnh mới `SET_PLAN { plan }`, `PREVIEW_TRAVEL { county }`. Tin `STATE` thêm `plan`, `slotIndex`, `actions`, `travel`. Tin mới `TRAVEL_PREVIEW { preview }`.
+- `SaveFile` thêm `commandLog: CommandRecord[]`.
+- Nhánh bị ảnh hưởng: **Sim** — `CharacterState` thêm `home`/`location` (= quận nơi sinh), `SIM_VERSION` 0.2.0, view trả giá trị tạm (`staminaBand: 'fresh'`, `skills: []`, `canAct: false`), `STATE` trả kế hoạch/hành động rỗng, `SET_PLAN`/`PREVIEW_TRAVEL` trả `BAD_COMMAND` cho tới S7, save ghi `commandLog: []`. Digest pin đổi (tuổi và nguyên nhân chết 3 seed mẫu giữ nguyên). **FE** — máy trạng thái bỏ qua `TRAVEL_PREVIEW` cho tới F3.

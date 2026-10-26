@@ -1,14 +1,11 @@
 // Những gì người chơi được thấy về nhân vật, nhật ký và tổng kết đời (ADR 0001, 0005).
 import type { Tick } from './calendar';
-import { arr, bool, int, intRange, nat, nonEmpty, obj, oneOf, record, str, union, type Validator } from './schema';
+import { STAMINA_BANDS, vSkillView, type CountyIndex, type SkillView, type StaminaBand } from './actions';
+import { vContentId, type ContentId } from './contentId';
+import { arr, bool, int, intRange, nat, nonEmpty, obj, oneOf, record, str, union } from './schema';
 import { vBirthplaceId, vNewLifeConfig, type BirthplaceId, type NewLifeConfig } from './world';
 
-/** Id nội dung; nhãn hiển thị nằm trong packages/content. Dạng "nhóm.tên". */
-export type ContentId = string;
-export const CONTENT_ID_RE = /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/;
-const vContentId: Validator<ContentId> = {
-  check: (u, p) => (typeof u === 'string' && CONTENT_ID_RE.test(u) ? null : `${p}: cần id nội dung dạng "nhom.ten"`),
-};
+export { CONTENT_ID_RE, type ContentId } from './contentId';
 
 export const GENDERS = ['male', 'female'] as const;
 export type Gender = (typeof GENDERS)[number];
@@ -50,10 +47,19 @@ export interface CharacterView {
   healthBand: HealthBand;
   conditions: ConditionView[];
   alive: boolean;
+  /** Quận đang ở và quận nhà (ADR 0009). */
+  location: CountyIndex;
+  home: CountyIndex;
+  /** Thể lực, mức chữ (ADR 0010). */
+  staminaBand: StaminaBand;
+  /** Kỹ năng đã có, mức chữ, vd. { id: "skill.farming", rank: "rank.novice" }. */
+  skills: SkillView[];
+  /** Được tự xếp kế hoạch tháng chưa (từ 12 tuổi, ADR 0008). */
+  canAct: boolean;
 }
 
 /** Khóa không bao giờ được xuất hiện trong CharacterView (test ở shared và sim). */
-export const HIDDEN_CHARACTER_KEYS = ['spiritRoot', 'lifespanBase', 'lifespanBonus', 'lifespanCap', 'luck', 'healthMax', 'scars', 'rng', 'hiddenTraits'] as const;
+export const HIDDEN_CHARACTER_KEYS = ['spiritRoot', 'lifespanBase', 'lifespanBonus', 'lifespanCap', 'luck', 'healthMax', 'scars', 'rng', 'hiddenTraits', 'stamina', 'skillXp', 'commandLog'] as const;
 
 export interface LogEntry {
   tick: Tick;
@@ -96,6 +102,11 @@ export const vCharacterView = obj<CharacterView>({
   healthBand: oneOf(HEALTH_BANDS),
   conditions: arr(obj<ConditionView>({ id: vContentId, severity: oneOf(SEVERITIES) })),
   alive: bool,
+  location: nat,
+  home: nat,
+  staminaBand: oneOf(STAMINA_BANDS),
+  skills: arr(vSkillView),
+  canAct: bool,
 });
 
 export const vLogEntry = obj<LogEntry>({

@@ -1,6 +1,6 @@
 import {
   birthplaceId, regionId,
-  type Birthplace, type CharacterView, type LifeSummary, type LogEntry, type RegionMapData, type RegionSummary, type SaveFile,
+  type ActionOption, type Birthplace, type CharacterView, type MonthPlan, type LifeSummary, type LogEntry, type RegionMapData, type RegionSummary, type SaveFile,
 } from '../src/index';
 
 export function sampleMap(W = 4, H = 3): RegionMapData {
@@ -59,6 +59,18 @@ export const sampleCharacter: CharacterView = {
   healthBand: 'healthy',
   conditions: [{ id: 'illness.cold', severity: 'mild' }],
   alive: true,
+  location: 0,
+  home: 0,
+  staminaBand: 'tired',
+  skills: [{ id: 'skill.farming', rank: 'rank.novice' }],
+  canAct: true,
+};
+
+export const samplePlan: MonthPlan = { slots: [{ action: 'action.farm' }, { action: 'action.travel', target: 2 }, { action: 'action.rest' }] };
+
+export const sampleOption: ActionOption = {
+  id: 'action.farm', group: 'livelihood', slots: 1,
+  cost: { stamina: 'cost.high', risk: 'risk.low' }, gains: ['skill.farming'], locked: null,
 };
 
 export const sampleLog: LogEntry = { tick: 3, key: 'log.illness.onset', params: { illness: 'illness.cold', age: 0 }, importance: 'minor' };
@@ -79,13 +91,18 @@ export const sampleLife: LifeSummary = {
 export function sampleSave(): SaveFile {
   return {
     format: 'tsvl-save',
-    version: 1,
+    version: 2,
     protocolVersion: 1,
     simVersion: '0.1.0',
     worldSeed: 'tsvl-01',
     region: { summary: sampleSummary, map: sampleMap(), birthplaces: [sampleBirthplace], logic: { adjacency: [[0, 1]] } },
     sim: { tick: 3, rng: { health: [1, 2, 3, 4] } },
     log: [sampleLog],
+    commandLog: [
+      { seq: 0, tick: 0, cmd: { type: 'NEW_LIFE', config: { worldSeed: 'tsvl-01', regionId: regionId('r1'), birthplaceId: birthplaceId('r1/c3') } } },
+      { seq: 1, tick: 5, cmd: { type: 'SET_PLAN', plan: samplePlan } },
+      { seq: 2, tick: 5, cmd: { type: 'ADVANCE', mode: 'year' } },
+    ],
     digest: '0123456789abcdef',
   };
 }

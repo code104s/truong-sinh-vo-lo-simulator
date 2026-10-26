@@ -107,6 +107,9 @@ function onMessage(s: AppState, m: WorkerMessage): AppState {
       return { ...s, summary: m.summary, running: false, hasSave: false, screen: 'summary' };
     case 'SAVED':
       return s;
+    case 'TRAVEL_PREVIEW':
+      // Bản đồ di chuyển làm ở task F3
+      return s;
     case 'ERROR': {
       const back = s.screen === 'loading';
       return { ...s, error: `${m.code}: ${m.message}`, running: false, loadingSave: false, screen: back ? 'menu' : s.screen };

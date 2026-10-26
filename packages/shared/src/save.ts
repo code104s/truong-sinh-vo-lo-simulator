@@ -1,11 +1,13 @@
 // Định dạng save (ADR 0004). Trong bộ nhớ và qua postMessage/IndexedDB, mảng số giữ nguyên kiểu;
 // encodeSave/decodeSave đổi sang JSON văn bản (file CLI, xuất save), mảng số mã hóa base64 little-endian.
+import { vCommandRecord, type CommandRecord } from './actions';
 import { vLogEntry, type LogEntry } from './character';
 import { arr, lit, nat, nonEmpty, obj, parseWith, unknownValue, type Result } from './schema';
 import { vBirthplace, vRegionMapData, vRegionSummary, vWorldSeed, type Birthplace, type RegionMapData, type RegionSummary, type WorldSeed } from './world';
 
 export const SAVE_FORMAT = 'tsvl-save';
-export const SAVE_VERSION = 1;
+/** 2: v0.2 — thêm nhật ký lệnh (ADR 0011); save version 1 bị từ chối (ADR 0004). */
+export const SAVE_VERSION = 2;
 
 export interface SaveRegion {
   summary: RegionSummary;
@@ -25,6 +27,8 @@ export interface SaveFile {
   /** Snapshot sim; sim sở hữu định dạng. */
   sim: unknown;
   log: LogEntry[];
+  /** Các lệnh đổi trạng thái đời, theo thứ tự, để phát lại (ADR 0011). */
+  commandLog: CommandRecord[];
   /** Digest snapshot sim lúc lưu. */
   digest: string;
 }
@@ -38,6 +42,7 @@ export const vSaveFile = obj<SaveFile>({
   region: obj<SaveRegion>({ summary: vRegionSummary, map: vRegionMapData, birthplaces: arr(vBirthplace), logic: unknownValue }),
   sim: unknownValue,
   log: arr(vLogEntry),
+  commandLog: arr(vCommandRecord),
   digest: nonEmpty,
 });
 

@@ -31,6 +31,9 @@ export interface CharacterState {
   birthTick: Tick;
   birthplaceId: BirthplaceId;
   birthplaceKind: SettlementKind;
+  /** Quận nhà (quận sinh) và quận đang ở (ADR 0009). */
+  home: number;
+  location: number;
   background: Background;
   personality: string;
   /** 1..10 */
@@ -65,7 +68,7 @@ export function traitDef(id: string) {
 }
 
 export function createCharacter(
-  input: { birthTick: Tick; birthplaceId: BirthplaceId; birthplaceKind: SettlementKind },
+  input: { birthTick: Tick; birthplaceId: BirthplaceId; birthplaceKind: SettlementKind; county: number },
   r: Rng,
   names: Rng,
 ): CharacterState {
@@ -113,6 +116,7 @@ export function createCharacter(
 
   const c: CharacterState = {
     name, gender, birthTick: input.birthTick, birthplaceId: input.birthplaceId, birthplaceKind: input.birthplaceKind,
+    home: input.county, location: input.county,
     background, personality, constitution, aptitude, luck, traits, spiritRoot,
     lifespanBase, lifespanBonus: 0, health: 0, healthMax: 0, scars: 0, conditions: [], alive: true,
   };
@@ -151,5 +155,11 @@ export function toView(c: CharacterState, tick: Tick): CharacterView {
     healthBand: healthBandOf(c),
     conditions: c.conditions.map((x) => ({ id: x.id, severity: x.severity })),
     alive: c.alive,
+    location: c.location,
+    home: c.home,
+    // Thể lực, kỹ năng, quyền tự xếp kế hoạch: giá trị tạm của Bước 0, làm thật ở S3, S4, S6
+    staminaBand: 'fresh',
+    skills: [],
+    canAct: false,
   };
 }

@@ -10,7 +10,7 @@ import { createCharacter, toView, type CharacterState } from './character';
 import { agingPhase, consequencesPhase, eventsPhase, type Death } from './health';
 import { AGE_MILESTONES, UNTIL_EVENT_MAX_TICKS } from './params';
 
-export const SIM_VERSION = '0.1.0';
+export const SIM_VERSION = '0.2.0';
 export const STREAMS = ['accident', 'character', 'health', 'illness', 'names'] as const;
 
 export interface LifeSnapshot {
@@ -47,7 +47,7 @@ export class Life {
     const streams = RngStreams.create(lifeRoot(config), STREAMS);
     // Sinh vào một tuần bất kỳ của năm 1
     const birthTick = streams.get('character').int(0, TICKS_PER_YEAR - 1);
-    const character = createCharacter({ birthTick, birthplaceId: birthplace.id, birthplaceKind: birthplace.kind }, streams.get('character'), streams.get('names'));
+    const character = createCharacter({ birthTick, birthplaceId: birthplace.id, birthplaceKind: birthplace.kind, county: birthplace.county }, streams.get('character'), streams.get('names'));
     agingPhase(character, birthTick);
     character.health = character.healthMax;
     // Tuần sinh coi như đã qua: tick kế tiếp là tuần sau khi sinh

@@ -129,9 +129,9 @@ describe('tất định và lưu/tải (nghiệm thu Sim)', () => {
     });
     expect(out).toMatchInlineSnapshot(`
       [
-        "74 illness fbbf1aef3d7c66c9",
-        "54 illness ca7a97b4dfdeb400",
-        "75 old_age 363427b5ced7144d",
+        "74 illness 55aa606d0ff2eda8",
+        "54 illness 7ab595035e9e8784",
+        "75 old_age 7569731881febd4f",
       ]
     `);
   });

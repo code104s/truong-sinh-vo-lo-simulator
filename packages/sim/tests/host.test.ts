@@ -44,7 +44,7 @@ describe('SimHost', () => {
   it('READY rồi luồng chuẩn: GEN_WORLD → WORLD, NEW_LIFE → LOG + STATE', () => {
     const { h, out, send } = host();
     h.ready();
-    expect(out[0]).toMatchObject({ type: 'READY', protocolVersion: 1 });
+    expect(out[0]).toMatchObject({ type: 'READY', protocolVersion: 2 });
     const w = send({ type: 'GEN_WORLD', worldSeed: 'tsvl-01' });
     expect(w.map((m) => m.type)).toEqual(['PROGRESS', 'PROGRESS', 'WORLD']);
     const n = send({ type: 'NEW_LIFE', config: { worldSeed: 'tsvl-01', regionId: region.summary.id, birthplaceId: region.birthplaces[0]!.id } });
@@ -116,5 +116,30 @@ describe('SimHost', () => {
     const out: WorkerMessage[] = [];
     new SimHost((m) => out.push(m)).handle({ type: 'LOAD', reqId: 1, save: (back as { value: SaveFile }).value });
     expect(out).toMatchObject([{ type: 'ERROR', code: 'BAD_SAVE' }]);
+  });
+});
+
+describe('SimHost — Bước 0 v0.2', () => {
+  it('lệnh v0.2 hợp lệ về mặt hợp đồng nhưng chưa xử lý thì trả BAD_COMMAND, không làm đổi đời', () => {
+    const { send } = host();
+    newLife(send);
+    const before = send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>;
+    const plan = { slots: [{ action: 'action.farm' }, { action: 'action.rest' }, { action: 'action.rest' }] };
+    expect(send({ type: 'SET_PLAN', plan })).toMatchObject([{ type: 'ERROR', code: 'BAD_COMMAND' }]);
+    expect(send({ type: 'PREVIEW_TRAVEL', county: 0 })).toMatchObject([{ type: 'ERROR', code: 'BAD_COMMAND' }]);
+    const after = send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>;
+    expect(after.save.digest).toBe(before.save.digest);
+    expect(after.save.version).toBe(2);
+    expect(after.save.commandLog).toEqual([]);
+  });
+
+  it('STATE mang nơi ở = quận nơi sinh, kế hoạch rỗng', () => {
+    const { send } = host();
+    const msgs = newLife(send, 2);
+    const st = msgs.find((m) => m.type === 'STATE') as Extract<WorkerMessage, { type: 'STATE' }>;
+    expect(st.character.location).toBe(region.birthplaces[2]!.county);
+    expect(st.character.home).toBe(region.birthplaces[2]!.county);
+    expect(st.plan).toBeNull();
+    expect(st.actions).toEqual([]);
   });
 });

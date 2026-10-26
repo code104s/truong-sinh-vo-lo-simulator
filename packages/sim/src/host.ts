@@ -92,6 +92,10 @@ export class SimHost {
         if (res.status === 'died') this.emit({ type: 'DIED', reqId: cmd.reqId, summary: life.summary() });
         return;
       }
+      case 'SET_PLAN':
+      case 'PREVIEW_TRAVEL':
+        // Bước 0 chỉ chốt hợp đồng; xử lý thật ở task S7 (ADR 0008, 0009)
+        throw new HostError('BAD_COMMAND', `${cmd.type} chưa được hỗ trợ ở bản này`);
       case 'PAUSE':
         // Tua chạy đồng bộ và xong trong vài mili giây, nên không có gì đang chạy để dừng.
         if (this.life) this.emitState(cmd.reqId);
@@ -121,7 +125,7 @@ export class SimHost {
 
   private emitState(reqId: number): void {
     const life = this.requireLife();
-    this.emit({ type: 'STATE', reqId, date: calendarOf(life.displayTick), character: life.view(), running: false });
+    this.emit({ type: 'STATE', reqId, date: calendarOf(life.displayTick), character: life.view(), running: false, plan: null, slotIndex: calendarOf(life.displayTick).tenDay, actions: [], travel: [] });
   }
 
   save(): SaveFile {
@@ -137,6 +141,8 @@ export class SimHost {
       region: { summary: r.summary, map: r.map, birthplaces: r.birthplaces, logic },
       sim: life.snapshot(),
       log: [...life.log],
+      // Nhật ký lệnh ghi thật ở task S7 (ADR 0011)
+      commandLog: [],
       digest: life.digest(),
     };
   }

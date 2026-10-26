@@ -21,6 +21,8 @@ const vCharacter = obj<CharacterState>({
   birthTick: nat,
   birthplaceId: vBirthplaceId,
   birthplaceKind: oneOf(SETTLEMENT_KINDS),
+  home: nat,
+  location: nat,
   background: oneOf(BACKGROUNDS),
   personality: oneOf(PERSONALITIES) as Validator<string>,
   constitution: intRange(1, 10),

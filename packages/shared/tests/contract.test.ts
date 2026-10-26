@@ -4,7 +4,7 @@ import {
   ageYearsAt, base64ToBytes, bytesToBase64, calendarOf, decodeSave, encodeSave, isMonthStart, isYearStart,
   parseCommand, parseWorkerMessage, vCharacterView,
 } from '../src/index';
-import { sampleBirthplace, sampleCharacter, sampleLife, sampleLog, sampleMap, sampleSave, sampleSummary } from './fixtures';
+import { sampleBirthplace, sampleCharacter, sampleLife, sampleLog, sampleMap, sampleOption, samplePlan, sampleSave, sampleSummary } from './fixtures';
 
 describe('lịch', () => {
   it('tick 0 là thượng tuần tháng Giêng năm 1', () => {
@@ -75,7 +75,7 @@ describe('tin worker → UI', () => {
       { type: 'READY', protocolVersion: 1, simVersion: '0.1.0' },
       { type: 'PROGRESS', reqId: 1, stage: 'worldgen.terrain', pct: 40 },
       { type: 'WORLD', reqId: 1, worldSeed: 'tsvl-01', region: sampleSummary, map: sampleMap(), birthplaces: [sampleBirthplace] },
-      { type: 'STATE', reqId: 2, date: calendarOf(37), character: sampleCharacter, running: false },
+      { type: 'STATE', reqId: 2, date: calendarOf(37), character: sampleCharacter, running: false, plan: samplePlan, slotIndex: 1, actions: [sampleOption], travel: [] },
       { type: 'LOG', reqId: 2, entries: [sampleLog] },
       { type: 'INTERRUPT', reqId: 2, entry: { ...sampleLog, importance: 'major' } },
       { type: 'DIED', reqId: 3, summary: sampleLife },
@@ -144,7 +144,55 @@ describe('save', () => {
 
   it('từ chối save hỏng', () => {
     expect(decodeSave('{').ok).toBe(false);
-    expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 2 })).ok).toBe(false);
+    // Save v1 của v0.1 bị từ chối (ADR 0004)
+    expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 1 })).ok).toBe(false);
+    expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 3 })).ok).toBe(false);
     expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), format: 'other' })).ok).toBe(false);
+  });
+});
+
+describe('v0.2: kế hoạch tháng, di chuyển, nhật ký lệnh (ADR 0008–0011)', () => {
+  it('nhận SET_PLAN và PREVIEW_TRAVEL hợp lệ', () => {
+    expect(parseCommand({ type: 'SET_PLAN', reqId: 1, plan: samplePlan })).toMatchObject({ ok: true });
+    expect(parseCommand({ type: 'PREVIEW_TRAVEL', reqId: 2, county: 3 })).toMatchObject({ ok: true });
+  });
+
+  it.each([
+    ['thiếu ô', { slots: [{ action: 'action.farm' }, { action: 'action.rest' }] }],
+    ['thừa ô', { slots: [{ action: 'action.farm' }, { action: 'action.rest' }, { action: 'action.rest' }, { action: 'action.rest' }] }],
+    ['id hành động sai', { slots: [{ action: 'farm' }, { action: 'action.rest' }, { action: 'action.rest' }] }],
+    ['đích âm', { slots: [{ action: 'action.travel', target: -1 }, { action: 'action.rest' }, { action: 'action.rest' }] }],
+    ['khóa lạ trong ô', { slots: [{ action: 'action.rest', cost: 0 }, { action: 'action.rest' }, { action: 'action.rest' }] }],
+  ])('từ chối kế hoạch: %s', (_n, plan) => {
+    expect(parseCommand({ type: 'SET_PLAN', reqId: 1, plan }).ok).toBe(false);
+  });
+
+  it('STATE mang kế hoạch, hành động khả dụng, đích đi được', () => {
+    const base = { type: 'STATE', reqId: 2, date: calendarOf(37), character: sampleCharacter, running: false };
+    expect(parseWorkerMessage({ ...base, plan: samplePlan, slotIndex: 1, actions: [sampleOption, { ...sampleOption, id: 'action.hunt', locked: 'lock.winter' }], travel: [{ county: 2, slots: 1, risk: 'risk.low' }] })).toMatchObject({ ok: true });
+    expect(parseWorkerMessage({ ...base, plan: null, slotIndex: 0, actions: [], travel: [] })).toMatchObject({ ok: true });
+    expect(parseWorkerMessage({ ...base, plan: null, slotIndex: 3, actions: [], travel: [] }).ok).toBe(false);
+    expect(parseWorkerMessage({ ...base, plan: null, slotIndex: 0, actions: [{ ...sampleOption, group: 'magic' }], travel: [] }).ok).toBe(false);
+    // STATE kiểu v0.1 (thiếu trường mới) bị từ chối
+    expect(parseWorkerMessage(base).ok).toBe(false);
+  });
+
+  it('TRAVEL_PREVIEW', () => {
+    expect(parseWorkerMessage({ type: 'TRAVEL_PREVIEW', reqId: 3, preview: { county: 4, route: [0, 2, 4], days: 7, slots: 1, risk: 'risk.medium' } })).toMatchObject({ ok: true });
+    expect(parseWorkerMessage({ type: 'TRAVEL_PREVIEW', reqId: 3, preview: { county: 4, route: [], days: 7, slots: 1, risk: 'risk.medium' } }).ok).toBe(false);
+  });
+
+  it('view thiếu trường v0.2 bị từ chối', () => {
+    const { staminaBand: _s, ...old } = sampleCharacter;
+    expect(vCharacterView.check(old, '$')).toContain('staminaBand');
+  });
+
+  it('nhật ký lệnh round-trip trong save, lệnh lạ bị từ chối', () => {
+    const back = decodeSave(encodeSave(sampleSave()));
+    expect(back.ok).toBe(true);
+    if (back.ok) expect(back.value.commandLog).toEqual(sampleSave().commandLog);
+    const bad = JSON.parse(encodeSave(sampleSave()));
+    bad.commandLog.push({ seq: 3, tick: 9, cmd: { type: 'PAUSE' } });
+    expect(decodeSave(JSON.stringify(bad)).ok).toBe(false);
   });
 });
