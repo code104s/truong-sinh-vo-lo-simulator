@@ -1,0 +1,20 @@
+{
+  "name": "@tsvl/sim",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Lõi mô phỏng thuần: tick, NPC, thế lực, sự kiện, thọ nguyên. Không import React, DOM, Worker",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@tsvl/shared": "workspace:*",
+    "@tsvl/content": "workspace:*",
+    "@tsvl/worldgen": "workspace:*"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5"
+  }
+}

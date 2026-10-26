@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../packages/sim"
+    },
+    {
+      "path": "../../packages/worldgen"
+    },
+    {
+      "path": "../../packages/shared"
+    },
+    {
+      "path": "../../packages/content"
+    }
+  ]
+}

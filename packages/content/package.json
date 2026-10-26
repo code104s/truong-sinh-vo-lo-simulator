@@ -1,0 +1,10 @@
+{
+  "name": "@tsvl/content",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sự kiện, nghề, tên, chuỗi văn bản tiếng Việt (khóa–giá trị)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": { "@tsvl/shared": "workspace:*" }
+}

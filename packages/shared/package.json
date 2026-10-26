@@ -1,0 +1,16 @@
+{
+  "name": "@tsvl/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Kiểu dữ liệu, schema, giao thức worker, định dạng save",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {},
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5"
+  }
+}

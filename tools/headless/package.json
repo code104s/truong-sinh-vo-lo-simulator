@@ -1,0 +1,22 @@
+{
+  "name": "@tsvl/headless",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CLI chạy mô phỏng hàng loạt để cân bằng",
+  "main": "src/cli.ts",
+  "types": "src/cli.ts",
+  "dependencies": {
+    "@tsvl/shared": "workspace:*",
+    "@tsvl/sim": "workspace:*",
+    "@tsvl/worldgen": "workspace:*",
+    "@tsvl/content": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15",
+    "@types/node": "^26.6.5"
+  },
+  "scripts": {
+    "sim": "tsx src/cli.ts"
+  }
+}

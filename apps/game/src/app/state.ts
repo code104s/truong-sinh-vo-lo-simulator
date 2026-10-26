@@ -1,0 +1,115 @@
+// Máy trạng thái màn hình (thuần, test được không cần DOM). Không có luật game: mọi số liệu đến từ worker.
+import type {
+  Birthplace, BirthplaceId, CalendarDate, CharacterView, LifeSummary, LogEntry, RegionMapData, RegionSummary, WorkerMessage, WorldSeed,
+} from '@tsvl/shared';
+
+export type Screen = 'menu' | 'settings' | 'loading' | 'birthplace' | 'life' | 'summary';
+
+export interface WorldInfo {
+  seed: WorldSeed;
+  region: RegionSummary;
+  map: RegionMapData;
+  birthplaces: Birthplace[];
+}
+
+export interface AppState {
+  screen: Screen;
+  /** Worker đã báo READY. */
+  ready: boolean;
+  hasSave: boolean;
+  /** Đang tải save (WORLD đến trước STATE; không chuyển sang màn chọn nơi sinh). */
+  loadingSave: boolean;
+  progress: { stage: string; pct: number } | null;
+  world: WorldInfo | null;
+  selected: BirthplaceId | null;
+  date: CalendarDate | null;
+  character: CharacterView | null;
+  log: LogEntry[];
+  interrupt: LogEntry | null;
+  summary: LifeSummary | null;
+  /** Đang tua liên tục (tới khi có biến). */
+  running: boolean;
+  error: string | null;
+  seedInput: string;
+}
+
+export const initialState: AppState = {
+  screen: 'menu', ready: false, hasSave: false, loadingSave: false, progress: null, world: null, selected: null,
+  date: null, character: null, log: [], interrupt: null, summary: null, running: false, error: null, seedInput: '',
+};
+
+export type Action =
+  | { type: 'msg'; m: WorkerMessage }
+  | { type: 'go'; screen: Screen }
+  | { type: 'hasSave'; value: boolean }
+  | { type: 'genStart' }
+  | { type: 'loadStart' }
+  | { type: 'newLifeStart' }
+  | { type: 'select'; id: BirthplaceId | null }
+  | { type: 'run'; on: boolean }
+  /** Bắt đầu một lần tua: biển "có biến" cũ không còn đúng nữa. */
+  | { type: 'advanceStart' }
+  | { type: 'seedInput'; value: string }
+  | { type: 'dismissError' };
+
+/** Giữ nhật ký trong bộ nhớ UI ở mức vừa phải; save vẫn giữ đủ. */
+export const LOG_LIMIT = 2000;
+
+export function reduce(s: AppState, a: Action): AppState {
+  switch (a.type) {
+    case 'go':
+      return { ...s, screen: a.screen, error: null };
+    case 'hasSave':
+      return { ...s, hasSave: a.value };
+    case 'genStart':
+      return { ...s, screen: 'loading', progress: { stage: 'progress.worldgen', pct: 0 }, world: null, selected: null, loadingSave: false, error: null };
+    case 'loadStart':
+      return { ...s, screen: 'loading', progress: null, loadingSave: true, log: [], interrupt: null, summary: null, character: null, error: null };
+    case 'newLifeStart':
+      return { ...s, log: [], interrupt: null, summary: null, character: null, running: false };
+    case 'select':
+      return { ...s, selected: a.id };
+    case 'advanceStart':
+      return { ...s, interrupt: null };
+    case 'run':
+      return { ...s, running: a.on, interrupt: a.on ? null : s.interrupt };
+    case 'seedInput':
+      return { ...s, seedInput: a.value };
+    case 'dismissError':
+      return { ...s, error: null };
+    case 'msg':
+      return onMessage(s, a.m);
+  }
+}
+
+function onMessage(s: AppState, m: WorkerMessage): AppState {
+  switch (m.type) {
+    case 'READY':
+      return { ...s, ready: true };
+    case 'PROGRESS':
+      return { ...s, progress: { stage: m.stage, pct: m.pct } };
+    case 'WORLD': {
+      const world = { seed: m.worldSeed, region: m.region, map: m.map, birthplaces: m.birthplaces };
+      if (s.loadingSave) return { ...s, world };
+      return { ...s, world, selected: null, progress: null, screen: s.screen === 'loading' ? 'birthplace' : s.screen };
+    }
+    case 'LOG': {
+      const log = s.log.concat(m.entries);
+      return { ...s, log: log.length > LOG_LIMIT ? log.slice(log.length - LOG_LIMIT) : log };
+    }
+    case 'STATE': {
+      const toLife = s.screen === 'loading' || s.screen === 'birthplace';
+      return { ...s, date: m.date, character: m.character, loadingSave: false, screen: toLife ? 'life' : s.screen };
+    }
+    case 'INTERRUPT':
+      return { ...s, interrupt: m.entry, running: false };
+    case 'DIED':
+      return { ...s, summary: m.summary, running: false, hasSave: false, screen: 'summary' };
+    case 'SAVED':
+      return s;
+    case 'ERROR': {
+      const back = s.screen === 'loading';
+      return { ...s, error: `${m.code}: ${m.message}`, running: false, loadingSave: false, screen: back ? 'menu' : s.screen };
+    }
+  }
+}

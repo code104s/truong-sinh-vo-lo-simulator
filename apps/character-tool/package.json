@@ -1,0 +1,10 @@
+{
+  "name": "@tsvl/character-tool",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tool tạo nhân vật (sẽ dùng chung logic từ sim)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": { "@tsvl/sim": "workspace:*", "@tsvl/shared": "workspace:*" }
+}

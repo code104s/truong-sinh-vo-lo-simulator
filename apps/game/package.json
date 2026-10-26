@@ -1,0 +1,24 @@
+{
+  "name": "@tsvl/game",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Giao diện game (Vite). Bản đồ vẽ bằng renderer atlas của Cartographer",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "main": "src/main.ts",
+  "dependencies": {
+    "@tsvl/content": "workspace:*",
+    "@tsvl/shared": "workspace:*",
+    "@tsvl/sim": "workspace:*",
+    "@tsvl/worldgen": "workspace:*",
+    "preact": "^11.0.2"
+  },
+  "devDependencies": {
+    "vite": "^8.3.1"
+  }
+}
