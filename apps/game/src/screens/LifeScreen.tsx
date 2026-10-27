@@ -92,6 +92,7 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
             <main class="chronicle">
               {c.canAct
                 ? <ActionPlanner plan={plan} draft={draft} active={active} slotIndex={date.tenDay} actions={actions} travel={travel} world={world} locked={lock}
+                    household={c.household} tick={date.tick}
                     onDraft={setDraft} onApply={() => onPlan(draft)} onUndo={() => setDraft(copyPlan(plan))} />
                 : <p class="hint childhood-hint">{t('ui.plan.childhood')}</p>}
               {interrupt && (

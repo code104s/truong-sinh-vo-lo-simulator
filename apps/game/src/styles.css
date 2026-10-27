@@ -719,3 +719,9 @@ p { margin: 0; }
 .market-why { font-size: 15px; padding: 8px 0; }
 .market-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 6px; }
 
+/* —— Dự báo đủ ăn trong kế hoạch tháng (F4) —— */
+.food-forecast { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 14px; line-height: 1.45; }
+.food-forecast .seal { flex: none; margin-top: 1px; }
+.food-forecast.tone-warn { color: var(--ochre); }
+.food-forecast.tone-bad { color: var(--cinnabar); font-weight: 600; }
+

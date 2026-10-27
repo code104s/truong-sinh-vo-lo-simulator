@@ -105,6 +105,14 @@ export const VI: Readonly<Record<string, string>> = {
   'ui.hud.health': 'Sức khỏe', 'ui.hud.stamina': 'Thể lực', 'ui.hud.belly': 'Bụng', 'ui.hud.food': 'Lương thực', 'ui.hud.money': 'Tiền', 'ui.hud.land': 'Ruộng',
   'ui.hud.parents': 'Cha mẹ nuôi', 'ui.hud.pocket': 'túi riêng {dou} đấu', 'ui.hud.dou': '{dou} đấu', 'ui.hud.coin': '{coin} văn', 'ui.hud.mu': '{mu} mẫu',
   'ui.hud.no_land': 'Chưa có',
+  // Dự báo đủ ăn trong kế hoạch tháng (F4)
+  'ui.food.none': 'Hết cái ăn: tuần này phải mua hay kiếm được ngay.',
+  'ui.food.until': 'Kho đủ ăn tới {until} (khoảng {weeks} tuần).',
+  'ui.food.until_money': 'Kho đủ ăn tới {grain}; tính cả tiền mua thêm thì tới {until} (khoảng {weeks} tuần).',
+  'ui.food.money_only': 'Kho đã hết; tiền mua được cái ăn tới {until} (khoảng {weeks} tuần).',
+  'ui.food.long': 'Kho và tiền đủ ăn vài năm.',
+  'ui.food.harvest_ok': 'Kịp tới mùa gặt ({harvest}).',
+  'ui.food.harvest_short': 'Hết trước mùa gặt ({harvest}): cần kiếm thêm cái ăn.',
   // Chợ (F2)
   'ui.market.title': 'Chợ {place}', 'ui.market.buy_price': 'Mua vào', 'ui.market.sell_price': 'Bán ra', 'ui.market.per_dou': '{coin} văn/đấu',
   'ui.market.supply': 'Lương ở chợ', 'ui.market.trend': 'Giá', 'ui.market.open': 'Mua bán lương thực',
@@ -140,7 +148,7 @@ export const VI: Readonly<Record<string, string>> = {
 
   // —— Lịch ——
   'date.full': 'Năm {year} · {month} · {tenDay}',
-  'date.short': 'Năm {year}, {month}',
+  'date.short': 'Năm {year}, {month}', 'date.inline': '{tenDay} {month} năm {year}',
   'month.1': 'tháng Giêng', 'month.2': 'tháng Hai', 'month.3': 'tháng Ba', 'month.4': 'tháng Tư',
   'month.5': 'tháng Năm', 'month.6': 'tháng Sáu', 'month.7': 'tháng Bảy', 'month.8': 'tháng Tám',
   'month.9': 'tháng Chín', 'month.10': 'tháng Mười', 'month.11': 'tháng Một', 'month.12': 'tháng Chạp',

@@ -1,6 +1,8 @@
 import { t } from '@tsvl/content';
-import { ACTION_GROUPS, type ActionOption, type ActionProgress, type MonthPlan, type PlanSlot, type TravelOption } from '@tsvl/shared';
+import { ACTION_GROUPS, type ActionOption, type ActionProgress, type HouseholdView, type MonthPlan, type PlanSlot, type Tick, type TravelOption } from '@tsvl/shared';
 import { useEffect, useState } from 'preact/hooks';
+import { foodForecast } from '../app/forecast';
+import { inlineDate } from '../app/format';
 import { planDirty, planInvalid } from '../app/plan';
 import type { WorldInfo } from '../app/state';
 import { ACTION_CHAR } from '../ui/icons';
@@ -9,6 +11,8 @@ import { Seal } from '../ui/ink';
 interface Props {
   plan: MonthPlan | null; draft: MonthPlan; active: ActionProgress | null; slotIndex: number;
   actions: ActionOption[]; travel: TravelOption[]; world: WorldInfo | null; locked: boolean;
+  /** Hộ và tick hiện tại, cho dự báo "đủ ăn tới…" (F4). */
+  household: HouseholdView; tick: Tick;
   onDraft: (plan: MonthPlan) => void; onApply: () => void; onUndo: () => void;
 }
 
@@ -28,11 +32,29 @@ function CostChips({ option, risk, slots }: { option: ActionOption; risk?: strin
 }
 
 /**
+ * Dự báo "đủ ăn tới…" (F4): kho riêng, rồi kho cộng tiền mua thêm ở giá chợ đang đứng. Kế hoạch có làm ruộng thì nói
+ * thêm có kịp mùa gặt không. Theo bản nháp, nên đổi ô ruộng là thấy ngay.
+ */
+function FoodForecastLine({ household, tick, farming }: { household: HouseholdView; tick: Tick; farming: boolean }) {
+  const f = foodForecast(household, tick, farming);
+  if (!f) return null;
+  return (
+    <p class={`food-forecast tone-${f.tone}`} role="status">
+      <Seal char="糧" tone={f.tone === 'good' ? 'jade' : f.tone === 'warn' ? 'ochre' : 'red'} />
+      <span>
+        {t(f.key, { grain: inlineDate(f.grainUntil), until: inlineDate(f.foodUntil), weeks: f.weeks })}
+        {f.harvest && <> {t(f.harvest.inTime ? 'ui.food.harvest_ok' : 'ui.food.harvest_short', { harvest: inlineDate(f.harvest.at) })}</>}
+      </span>
+    </p>
+  );
+}
+
+/**
  * Kế hoạch tháng dạng thẻ tuần (đề xuất giao diện P0). Bấm thẻ mở bảng chọn. Chỉ chặn kế hoạch sai về ý nghĩa
  * (hành động không có, đi mà không có đích); khóa của lúc này chỉ cảnh báo vì sim xét lại từng ô khi chạy (ADR 0008).
  * Bản nháp do màn Đời người giữ, để bấm tua là áp dụng luôn.
  */
-export function ActionPlanner({ plan, draft, active, slotIndex, actions, travel, world, locked, onDraft, onApply, onUndo }: Props) {
+export function ActionPlanner({ plan, draft, active, slotIndex, actions, travel, world, locked, household, tick, onDraft, onApply, onUndo }: Props) {
   const [picking, setPicking] = useState<number | null>(null);
   useEffect(() => { if (locked) setPicking(null); }, [locked]);
   const dirty = planDirty(draft, plan);
@@ -46,6 +68,7 @@ export function ActionPlanner({ plan, draft, active, slotIndex, actions, travel,
   return (
     <section class="planner" aria-label={t('ui.plan.title')}>
       <div class="planner-head"><span class="section-title">{t('ui.plan.title')}</span><span class="muted small">{t('ui.plan.repeat')}</span></div>
+      <FoodForecastLine household={household} tick={tick} farming={draft.slots.some((s) => s.action === 'action.farm')} />
       {active && <p class="small active-action" role="status">{t('ui.plan.active', { action: t(active.action), remaining: active.remaining, total: active.total })}</p>}
       <div class="weeks">
         {draft.slots.map((slot, i) => {

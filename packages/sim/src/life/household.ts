@@ -151,8 +151,12 @@ export function hungerDamage(c: CharacterState, healthRng: Rng): number {
 }
 
 /** Kho + tiền quy ra lương theo giá mua (văn/đấu) của chợ đang đứng, nuôi được bao nhiêu tuần. */
+export function foodWeeks(h: HouseholdState, ration: number, buyPricePerDou: number): number {
+  return Math.floor((h.grain + Math.floor((h.money * GRAIN_PER_DOU) / Math.max(1, buyPricePerDou))) / ration);
+}
+
 export function foodWeeksBand(h: HouseholdState, ration: number, buyPricePerDou: number): FoodWeeksBand {
-  const weeks = Math.floor((h.grain + Math.floor((h.money * GRAIN_PER_DOU) / Math.max(1, buyPricePerDou))) / ration);
+  const weeks = foodWeeks(h, ration, buyPricePerDou);
   return weeks < 1 ? 'none' : weeks < 9 ? 'short' : weeks < 36 ? 'season' : 'year';
 }
 
@@ -161,6 +165,7 @@ export function householdView(c: CharacterState, tick: Tick, buyPricePerDou: num
   return {
     independent: h.independent, money: h.money, grain: h.grain, landMu: h.landMu, tenure: h.tenure,
     hungerBand: hungerBand(h.hunger), foodWeeksBand: foodWeeksBand(h, rationOf(c, tick), buyPricePerDou),
+    grainWeeks: Math.floor(h.grain / rationOf(c, tick)), foodWeeks: foodWeeks(h, rationOf(c, tick), buyPricePerDou),
   };
 }
 

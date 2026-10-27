@@ -35,6 +35,10 @@ export interface HouseholdView {
   /** Mức đói; bộ đếm đói thật là trường ẩn. */
   hungerBand: HungerBand;
   foodWeeksBand: FoodWeeksBand;
+  /** Kho riêng đủ ăn bao nhiêu tuần nữa, chưa tính tiền (F4). */
+  grainWeeks: number;
+  /** Kho cộng tiền quy ra lương theo giá mua ở chợ đang đứng, đủ ăn bao nhiêu tuần (F4); `foodWeeksBand` là dải của số này. */
+  foodWeeks: number;
 }
 
 /** Chợ quận đang đứng. Giá do mô phỏng (ADR 0012). */
@@ -59,6 +63,8 @@ export const vHouseholdView: Validator<HouseholdView> = obj<HouseholdView>({
   tenure: oneOf(TENURES),
   hungerBand: oneOf(HUNGER_BANDS),
   foodWeeksBand: oneOf(FOOD_WEEKS_BANDS),
+  grainWeeks: nat,
+  foodWeeks: nat,
 });
 
 export const vMarketView: Validator<MarketView> = obj<MarketView>({

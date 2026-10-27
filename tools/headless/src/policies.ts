@@ -1,4 +1,4 @@
-import type { ActionOption, CalendarDate, CharacterView, EventCostTag, MarketView, MonthPlan, PendingEvent, SettlementKind, TravelOption } from '@tsvl/shared';
+import { HARVEST_MONTH, type ActionOption, type CalendarDate, type CharacterView, type EventCostTag, type MarketView, type MonthPlan, type PendingEvent, type SettlementKind, type TravelOption } from '@tsvl/shared';
 import { hash32, Rng } from '@tsvl/sim';
 
 export const POLICIES = ['lazy', 'balanced', 'overwork', 'scholar', 'wanderer'] as const;
@@ -21,7 +21,6 @@ export const SELL_ABOVE = 720;
 export const MONEY_RESERVE = 300;
 /** Dưới chừng ấy tuần ăn (kho + tiền dư quy ra lương) thì bỏ việc riêng, đi làm kiếm ăn. */
 export const SURVIVAL_WEEKS = 12;
-const HARVEST_MONTH = 9;
 
 const household = (c: PolicyContext) => c.character.household;
 /** Kho cộng tiền dư (ngoài phần giữ) quy ra lương theo giá mua, tính bằng tuần ăn. */

@@ -294,3 +294,10 @@ Lý do: v0.3 thêm kinh tế phàm nhân, hộ và đói, sự kiện có lựa 
 ### 2026-10-27 — v0.3 S5
 - `PendingEvent.choices`: **2–4 lựa chọn** (`MIN_CHOICES`, `MAX_CHOICES`), thay cho "ít nhất 1". Một lựa chọn thì không còn là lựa chọn: viết thành sự kiện không lựa chọn (kể và áp hậu quả ngay, không dừng tua). Hơn bốn thì thẻ sự kiện phải cuộn và lựa chọn nhạt. Giới hạn tính trên mọi lựa chọn hiện ra, kể cả lựa chọn bị khóa vì tính cách hay thiếu tiền.
 - Nhánh bị ảnh hưởng: **Sim** — mọi sự kiện có lựa chọn phải có 2–4 lựa chọn (test duyệt tuyển tập). **FE** — không đổi.
+
+### 2026-10-27 — v0.3 F4
+Lý do: kế hoạch tháng hiện dự báo "đủ ăn tới…". Số tuần ăn do sim tính, cùng công thức với dải `foodWeeksBand`, để giao diện không chép luật khẩu phần.
+- `HouseholdView` thêm `grainWeeks` (kho riêng đủ ăn bao nhiêu tuần) và `foodWeeks` (kho cộng tiền quy ra lương theo giá mua ở chợ đang đứng). Cả hai là số tự nhiên, suy ra được từ `grain`, `money` và giá chợ người chơi đã thấy, nên không lộ thêm gì.
+- `calendar.ts` thêm `HARVEST_MONTH` (9; trước ở `sim/economy/market.ts`, sim xuất lại) và `weeksToHarvest(tick)`.
+- Không đổi `PROTOCOL_VERSION`, `SAVE_VERSION`: view không nằm trong save; worker và giao diện ra cùng một bản.
+- Nhánh bị ảnh hưởng: **Sim** — `householdView` điền hai số mới; digest không đổi. **FE** — `ActionPlanner` hiện dự báo.

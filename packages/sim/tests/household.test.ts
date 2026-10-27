@@ -143,7 +143,9 @@ describe('ra riêng và hộ người chơi thấy', () => {
     const l = adult('view', (c) => { c.household.independent = true; c.household.grain = 100; c.household.hunger = 5; });
     const v = l.view();
     expect(vCharacterView.check(v, '$')).toBeNull();
-    expect(v.household).toMatchObject({ independent: true, grain: 100, hungerBand: 'starving', foodWeeksBand: 'season' });
+    expect(v.household).toMatchObject({ independent: true, grain: 100, hungerBand: 'starving', foodWeeksBand: 'season', grainWeeks: 10 });
+    // F4: số tuần ăn khớp dải; tiền quy ra lương theo giá mua chợ đang đứng
+    expect(v.household.foodWeeks).toBe(Math.floor((100 + Math.floor((v.household.money * 10) / l.market().buyPrice)) / 10));
     expect(JSON.stringify(v)).not.toContain('"hunger"');
   });
 

@@ -10,6 +10,15 @@ export type Tick = number;
 /** 0 thượng tuần, 1 trung tuần, 2 hạ tuần. */
 export type TenDay = 0 | 1 | 2;
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
+/** Lịch nông (ADR 0012): mọi quận gặt đầu tháng Chín. Ở đây để sim và giao diện cùng một mốc (dự báo "đủ ăn tới…", F4). */
+export const HARVEST_MONTH = 9;
+
+/** Số tuần từ tick này tới tuần đầu của mùa gặt kế tiếp (đang ở tuần gặt thì là 0). */
+export function weeksToHarvest(tick: Tick): number {
+  const inYear = tick % TICKS_PER_YEAR;
+  const harvest = (HARVEST_MONTH - 1) * TICKS_PER_MONTH;
+  return (harvest - inYear + TICKS_PER_YEAR) % TICKS_PER_YEAR;
+}
 
 export interface CalendarDate {
   tick: Tick;

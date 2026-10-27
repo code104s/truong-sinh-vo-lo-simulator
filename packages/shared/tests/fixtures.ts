@@ -46,7 +46,7 @@ export const sampleBirthplace: Birthplace = {
 };
 
 export const sampleHousehold: HouseholdView = {
-  independent: true, money: 320, grain: 140, landMu: 6, tenure: 'owner', hungerBand: 'fed', foodWeeksBand: 'season',
+  independent: true, money: 320, grain: 140, landMu: 6, tenure: 'owner', hungerBand: 'fed', foodWeeksBand: 'season', grainWeeks: 14, foodWeeks: 14,
 };
 
 export const sampleMarket: MarketView = { county: 0, buyPrice: 46, sellPrice: 34, supply: 'normal', trend: 'rising', maxBuy: 5000, maxSell: 800 };

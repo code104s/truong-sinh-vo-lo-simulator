@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   HIDDEN_CHARACTER_KEYS, TICKS_PER_YEAR,
-  ageYearsAt, base64ToBytes, bytesToBase64, calendarOf, decodeSave, encodeSave, isMonthStart, isYearStart,
+  ageYearsAt, base64ToBytes, HARVEST_MONTH, weeksToHarvest, bytesToBase64, calendarOf, decodeSave, encodeSave, isMonthStart, isYearStart,
   parseCommand, parseWorkerMessage, vCharacterView, vHouseholdView, vMarketView, vPendingEvent,
 } from '../src/index';
 import {
@@ -31,6 +31,16 @@ describe('lịch', () => {
     expect(TICKS_PER_YEAR).toBe(36);
     expect(ageYearsAt(10, 10 + 35)).toBe(0);
     expect(ageYearsAt(10, 10 + 36)).toBe(1);
+  });
+
+  it('số tuần tới mùa gặt (đầu tháng Chín, F4)', () => {
+    const harvest = (HARVEST_MONTH - 1) * 3; // tick 24 của mỗi năm
+    expect(calendarOf(harvest)).toMatchObject({ month: HARVEST_MONTH, tenDay: 0 });
+    expect(weeksToHarvest(harvest)).toBe(0);
+    expect(weeksToHarvest(harvest - 1)).toBe(1);
+    expect(weeksToHarvest(harvest + 1)).toBe(35);
+    expect(weeksToHarvest(0)).toBe(24);
+    expect(weeksToHarvest(36 * 5 + harvest)).toBe(0);
   });
 
   it('từ chối tick không hợp lệ', () => {

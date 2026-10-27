@@ -1,6 +1,9 @@
 // Chợ quận: dân nền tổng hợp, kho lương, quỹ tiền, giá theo tháng, buôn giữa quận kề (ADR 0012).
 // Toàn số nguyên. Lương thực: thăng; tiền: văn; giá: văn/đấu (1 đấu = 10 thăng).
-import { calendarOf, GRAIN_PER_DOU, type MarketView, type SupplyBand, type Tick } from '@tsvl/shared';
+import { calendarOf, GRAIN_PER_DOU, HARVEST_MONTH, type MarketView, type SupplyBand, type Tick } from '@tsvl/shared';
+
+/** Tháng gặt nằm ở lịch chung (shared), xuất lại cho mã sim cũ. */
+export { HARVEST_MONTH };
 import type { RegionLogic } from '@tsvl/worldgen';
 import { clamp, idiv, lerpTable, mulDiv } from '../core/math';
 import type { Rng } from '../core/rng';
@@ -50,7 +53,6 @@ export const MONEY_PER_MOUTH = 100;
 export const BASE_YIELD_PCT = 107;
 /** Hao hụt kho mỗi tháng (‰). */
 export const SPOILAGE_PERMILLE = 5;
-export const HARVEST_MONTH = 9;
 
 export const PRICE_BASE = 40;
 /** Giá (% giá gốc) theo số tháng dự trữ × 1000. */
