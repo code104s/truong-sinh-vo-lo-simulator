@@ -2,7 +2,7 @@
 import { ageYearsAt, GRAIN_PER_DOU, type FoodWeeksBand, type HouseholdView, type HungerBand, type LogEntry, type SupplyBand, type Tenure, type Tick } from '@tsvl/shared';
 import { mulDiv } from '../core/math';
 import type { Rng } from '../core/rng';
-import type { CountyEconomy } from '../economy/market';
+import { buyGrain, type CountyEconomy } from '../economy/market';
 import type { CharacterState } from './character';
 import type { Background } from './params';
 
@@ -109,7 +109,7 @@ const BAND_RANK: Record<HungerBand, number> = { fed: 0, hungry: 1, starving: 2, 
  * - Chưa ra riêng: cha mẹ nuôi; quận nhà đói kém thì có thể bị bỏ đói theo xuất thân (luồng economy).
  * - Đã ra riêng: ăn từ kho của mình; thiếu thì tự mua ở chợ quận đang đứng nếu còn tiền (`buy` trả số thăng mua được).
  */
-export function feedPhase(c: CharacterState, tick: Tick, homeSupply: SupplyBand, economyRng: Rng, log: Log, buy: (need: number) => number = () => 0): void {
+export function feedPhase(c: CharacterState, tick: Tick, homeSupply: SupplyBand, economyRng: Rng, log: Log, market: CountyEconomy | null = null): void {
   const h = c.household;
   const ration = rationOf(c, tick);
   let eaten: number;
@@ -119,7 +119,7 @@ export function feedPhase(c: CharacterState, tick: Tick, homeSupply: SupplyBand,
     const child = ageYearsAt(c.birthTick, tick) < COMING_OF_AGE;
     eaten = child && homeSupply === 'famine' && economyRng.chance(FAMINE_SKIP_PPM[c.background]) ? 0 : ration;
   } else {
-    if (h.grain < ration) buy(ration - h.grain);
+    if (h.grain < ration && market) buyGrain(market, h, ration - h.grain);
     eaten = Math.min(h.grain, ration);
     h.grain -= eaten;
   }
@@ -178,3 +178,20 @@ export function householdView(c: CharacterState, tick: Tick, buyPricePerDou: num
 
 /** Hồi thể lực khi đói còn một nửa (ADR 0013). */
 export const hungerStaminaPct = (h: HouseholdState) => (h.hunger > 0 ? 50 : 100);
+
+/** Ở lại làm cho nhà tới hẹn thì phần chia lớn hơn một nửa (ADR 0013). */
+export const STAY_SHARE_PCT = 150;
+
+/**
+ * Đầu năm, người hẹn ở lại làm cho nhà (lập thân "ở lại", ADR 0013): tới tuổi hẹn thì ra riêng với phần chia lớn hơn,
+ * chưa tới thì nộp nửa túi, nửa kho về quận nhà. Người chơi và NPC dùng chung. Trả phần chia khi vừa ra riêng, null nếu chưa.
+ */
+export function stayAtHomeYear(c: CharacterState, home: CountyEconomy, tick: Tick): { money: number; grain: number; landMu: number } | null {
+  const h = c.household;
+  if (h.independent || h.stayUntil === 0) return null;
+  if (ageYearsAt(c.birthTick, tick) >= h.stayUntil) return becomeIndependent(c, home, { sharePct: STAY_SHARE_PCT });
+  const money = Math.floor(h.money / 2), grain = Math.floor(h.grain / 2);
+  h.money -= money; home.money += money;
+  h.grain -= grain; home.grain += grain;
+  return null;
+}

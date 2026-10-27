@@ -5,6 +5,7 @@ import { hash32 } from './hash';
 export type RngState = readonly [number, number, number, number];
 
 const TWO32 = 0x100000000;
+const u32ok = (x: number): boolean => Number.isSafeInteger(x) && x >= 0 && x < TWO32;
 
 export class Rng {
   private constructor(
@@ -29,7 +30,8 @@ export class Rng {
   }
 
   static fromState(s: RngState): Rng {
-    for (const x of s) if (!Number.isSafeInteger(x) || x < 0 || x >= TWO32) throw new RangeError(`trạng thái RNG sai: ${s.join(',')}`);
+    // Kiểm từng phần tử, không dựng iterator: luồng riêng của NPC dựng lại mỗi tuần (đường nóng v0.4)
+    if (s.length !== 4 || !u32ok(s[0]) || !u32ok(s[1]) || !u32ok(s[2]) || !u32ok(s[3])) throw new RangeError(`trạng thái RNG sai: ${s.join(',')}`);
     return new Rng(s[0], s[1], s[2], s[3]);
   }
 

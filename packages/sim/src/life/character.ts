@@ -67,11 +67,26 @@ export interface CharacterState {
   alive: boolean;
 }
 
+/**
+ * Có tình trạng loại này / mức nặng này không. Vòng lặp thay cho `conditions.some(closure)`: đường nóng của NPC gọi
+ * nhiều lần mỗi tuần, mỗi closure lại tốn công dựng (v0.4).
+ */
+export function hasCondition(c: CharacterState, kind: Condition['kind']): boolean {
+  for (const x of c.conditions) if (x.kind === kind) return true;
+  return false;
+}
+export function hasSeverity(c: CharacterState, severity: Condition['severity']): boolean {
+  for (const x of c.conditions) if (x.severity === severity) return true;
+  return false;
+}
+
 /** Số 1..10 dạng chuông: 1 + ba lần int(0..3). */
 const bell10 = (r: Rng) => 1 + r.int(0, 3) + r.int(0, 3) + r.int(0, 3);
 
+const TRAIT_BY_ID: ReadonlyMap<string, (typeof TRAITS)[number]> = new Map(TRAITS.map((t) => [t.id, t]));
+
 export function traitDef(id: string) {
-  const t = TRAITS.find((d) => d.id === id);
+  const t = TRAIT_BY_ID.get(id);
   if (!t) throw new Error(`thiên phú lạ: ${id}`);
   return t;
 }
@@ -137,8 +152,8 @@ export const lifespanCap = (c: CharacterState) => c.lifespanBase + c.lifespanBon
 const band5 = (v: number, ids: readonly [string, string, string, string, string]) => ids[clamp(idiv(v - 1, 2), 0, 4)]!;
 
 export function healthBandOf(c: CharacterState): HealthBand {
-  const grave = c.conditions.some((x) => x.severity === 'grave');
-  const serious = c.conditions.some((x) => x.severity !== 'mild');
+  const grave = hasSeverity(c, 'grave');
+  const serious = grave || hasSeverity(c, 'serious');
   if (c.health < 150 || (grave && c.health < 300)) return 'dying';
   if (serious || c.health < 350) return 'ill';
   if (c.health < 600) return 'weak';

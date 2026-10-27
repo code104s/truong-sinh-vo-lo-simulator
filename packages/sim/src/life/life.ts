@@ -1,7 +1,7 @@
 // Một đời người: vòng tick theo pha có nhịp (ADR 0002), tua, nhật ký, snapshot (ADR 0004).
 import {
   GRAIN_PER_DOU, TICKS_PER_MONTH, TICKS_PER_YEAR, ageYearsAt, calendarOf, isMonthStart, isYearStart,
-  type AdvanceMode, type Birthplace, type CharacterView, type LifeSummary, type LogEntry, type MarketView, type NewLifeConfig, type PendingEvent, type Tick, type MonthPlan, type SupplyBand,
+  type AdvanceMode, type Birthplace, type CharacterView, type LifeSummary, type LogEntry, type MarketView, type NpcView, type NewLifeConfig, type PendingEvent, type Tick, type MonthPlan, type SupplyBand,
 } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { digestOf } from '../core/digest';
@@ -10,13 +10,13 @@ import { idiv, mulDiv } from '../core/math';
 import { RngStreams, type RngStreamsSnapshot } from '../core/rng';
 import { createCharacter, toView, type CharacterState } from './character';
 import { agingPhase, consequencesPhase, eventsPhase, type Death } from './health';
-import { becomeIndependent, feedPhase } from './household';
+import { feedPhase, stayAtHomeYear } from './household';
 import { harvestPlayer } from '../economy/farming';
 import { EVENTS } from '../events/catalog';
 import { choose as chooseEvent, makeContext, newEventsState, pendingView, rollEvent, type EventsState } from '../events/engine';
 import { headTax, HEAD_TAX, tradeGrain } from '../economy/income';
 import {
-  buyGrain, buyPrice, countyMoney, createEconomy, economyMonth, epidemicAt, HARVEST_MONTH, labelDisasters, marketView, rollWeather, supplyOf, type EconomyState,
+  buyPrice, countyMoney, createEconomy, economyMonth, epidemicAt, HARVEST_MONTH, marketView, supplyOf, worldYearStart, type EconomyState,
 } from '../economy/market';
 import { AGE_MILESTONES, UNTIL_EVENT_MAX_TICKS } from './params';
 import { staminaMax } from './stamina';
@@ -24,13 +24,17 @@ import { decaySkills } from './skills';
 import { ACTION_MIN_AGE, actionOptions, validatePlan } from './actions';
 import { playerPhase, type PlayerState } from './player';
 import { previewTravel } from './travel';
+import { npcPhase } from '../npc/phase';
+import { seedPopulation } from '../npc/population';
+import { newNpcWorld, npcMoney, npcViews, type NpcWorldState } from '../npc/state';
 
 /**
  * Đổi khi hình snapshot đổi, để save cũ bị từ chối rõ ràng (lỗi VERSION) thay vì lỗi schema. 0.3.1: hộ thêm nợ vay,
- * tai họa, lập thân (S6–S7) và bộ đếm năm đói (F5).
+ * tai họa, lập thân (S6–S7) và bộ đếm năm đói (F5). 0.4.0: NPC trong snapshot, luồng `npc-world` (v0.4 Bước 0).
  */
-export const SIM_VERSION = '0.3.1';
-export const STREAMS = ['accident', 'actions', 'character', 'economy', 'events', 'health', 'illness', 'names', 'travel', 'weather'] as const;
+export const SIM_VERSION = '0.4.0';
+/** `npc-world`: tạo dân số ban đầu và trẻ sinh mới (ADR 0016); mỗi NPC còn có luồng riêng trong NpcState. */
+export const STREAMS = ['accident', 'actions', 'character', 'economy', 'events', 'health', 'illness', 'names', 'npc-world', 'travel', 'weather'] as const;
 
 export interface LifeSnapshot extends PlayerState {
   simVersion: string;
@@ -42,6 +46,8 @@ export interface LifeSnapshot extends PlayerState {
   economy: EconomyState;
   /** Sự kiện có lựa chọn: đang chờ, thời gian chờ, cờ một lần (ADR 0014). */
   events: EventsState;
+  /** Người có tên quanh người chơi (ADR 0015, 0016); rỗng tới S1. */
+  npcs: NpcWorldState;
   rng: RngStreamsSnapshot;
   death: Death | null;
 }
@@ -77,8 +83,12 @@ export class Life {
     agingPhase(character, birthTick);
     character.health = character.healthMax;
     character.stamina = staminaMax(character, birthTick);
+    // Người có tên quanh mình (ADR 0016): sinh cùng lúc với người chơi, từ luồng npc-world
+    const economy = createEconomy(logic, birthTick);
+    const npcs = newNpcWorld(lifeRoot(config), config.regionId);
+    seedPopulation(npcs, economy, logic, streams.get('npc-world'), birthTick, birthplace.county);
     // Tuần sinh coi như đã qua: tick kế tiếp là tuần sau khi sinh
-    const life = new Life({ simVersion: SIM_VERSION, config, tick: birthTick + 1, character, economy: createEconomy(logic, birthTick), events: newEventsState(), rng: streams.snapshot(), death: null, plan: null, active: null, planWarned: false }, streams, [], logic);
+    const life = new Life({ simVersion: SIM_VERSION, config, tick: birthTick + 1, character, economy, events: newEventsState(), npcs, rng: streams.snapshot(), death: null, plan: null, active: null, planWarned: false }, streams, [], logic);
     life.push({ tick: birthTick, key: 'log.birth', params: { birthplace: birthplace.name, background: `background.${character.background}` }, importance: 'major' });
     return life;
   }
@@ -142,8 +152,11 @@ export class Life {
     const entries: LogEntry[] = [];
     const log = (e: Omit<LogEntry, 'tick'>) => entries.push({ tick: t, ...e });
 
-    // 1 Thế giới: thời tiết (năm), chợ quận (tháng). 2 Thế lực, 3 NPC: chưa có
+    // 1 Thế giới: thời tiết (năm), chợ quận (tháng). 2 Thế lực: chưa có (v0.6). 3 NPC (ADR 0015): chưa có NPC tới S1
     this.worldPhase(t, log);
+    const firstNew = this.s.npcs.nextId;
+    npcPhase(this.s.npcs, this.s.economy, this.logic, t, c.location);
+    this.npcNews(t, firstNew, log);
     // 4 Sự kiện (tuần): bệnh, tai nạn, rồi sự kiện có lựa chọn
     const here = this.s.economy.counties[c.location]!;
     const epidemic = epidemicAt(here, t) && !(c.household.shieldUntil > t);
@@ -155,7 +168,7 @@ export class Life {
     // 6 Hậu quả: ăn (tuần), lão hóa (năm), diễn tiến (tuần), tử vong (cuối pha)
     if (!death) {
       const market = this.s.economy.counties[c.location]!;
-      feedPhase(c, t, this.homeSupply(), this.streams.get('economy'), log, (need) => buyGrain(market, c.household, need));
+      feedPhase(c, t, this.homeSupply(), this.streams.get('economy'), log, market);
       if (isYearStart(t)) { agingPhase(c, t); decaySkills(c, t); }
       death = consequencesPhase(c, t, this.streams.get('health'), log, action.carePct);
     }
@@ -179,6 +192,26 @@ export class Life {
     return death;
   }
 
+  /**
+   * Tin sinh, mất của người có tên ở quận đang đứng hoặc quận nhà (v0.4 S6). Người mất báo đúng tuần mất (NPC tầng L1
+   * tính trước cả tháng nên có tuần mất sau tuần này). Người đã gặp trong sự kiện thì tin quan trọng, và tin về họ tới
+   * được người chơi dù họ mất ở quận nào (F4: màn tổng kết kể "những người đã đi trước").
+   */
+  private npcNews(t: Tick, firstNew: number, log: (e: Omit<LogEntry, 'tick'>) => void): void {
+    const c = this.s.character, met = this.s.events.met;
+    const born = this.s.npcs.nextId > firstNew;
+    for (const n of this.s.npcs.people) {
+      // Tuần thường không có ai sinh, mất: xét điều kiện rẻ trước
+      const dead = n.death?.tick === t, newborn = born && !n.death && Number(n.id.slice(1)) >= firstNew;
+      if (!dead && !newborn) continue;
+      const x = n.character;
+      const known = dead && met.includes(n.id);
+      if (!known && x.location !== c.location && x.home !== c.home) continue;
+      if (dead) log({ key: 'log.npc.death', params: { name: x.name, age: ageYearsAt(x.birthTick, t), cause: `death.${n.death!.cause}` }, importance: known ? 'major' : 'minor' });
+      else log({ key: 'log.npc.birth', params: { name: x.name }, importance: 'minor' });
+    }
+  }
+
   /** Tình hình lương thực của quận nhà, nơi hộ cha mẹ sống (ADR 0013). */
   private homeSupply(): SupplyBand {
     return supplyOf(this.s.economy.counties[this.s.character.home]!);
@@ -189,8 +222,7 @@ export class Life {
     const eco = this.s.economy;
     const c = this.s.character;
     if (isYearStart(t)) {
-      rollWeather(eco, this.streams.get('weather'));
-      labelDisasters(eco, this.streams.get('weather'), t);
+      worldYearStart(eco, this.streams.get('weather'), t);
       this.stayAtHome(t, log);
       const debtBefore = c.household.taxDebt;
       const paid = headTax(c, eco.counties[c.home]!, t);
@@ -249,17 +281,8 @@ export class Life {
   /** Lập thân "ở lại" (ADR 0013): mỗi đầu năm nửa túi về quỹ, kho quận nhà; tới tuổi hẹn thì ra riêng với phần chia lớn hơn. */
   private stayAtHome(t: Tick, log: (e: Omit<LogEntry, 'tick'>) => void): void {
     const c = this.s.character;
-    const h = c.household;
-    if (h.independent || h.stayUntil === 0) return;
-    const home = this.s.economy.counties[c.home]!;
-    if (ageYearsAt(c.birthTick, t) >= h.stayUntil) {
-      const got = becomeIndependent(c, home, { sharePct: STAY_SHARE_PCT });
-      log({ key: 'log.coming_of_age.leave_late', params: { money: got.money, grain: idiv(got.grain, GRAIN_PER_DOU), land: got.landMu }, importance: 'major' });
-      return;
-    }
-    const money = idiv(h.money, 2), grain = idiv(h.grain, 2);
-    h.money -= money; home.money += money;
-    h.grain -= grain; home.grain += grain;
+    const got = stayAtHomeYear(c, this.s.economy.counties[c.home]!, t);
+    if (got) log({ key: 'log.coming_of_age.leave_late', params: { money: got.money, grain: idiv(got.grain, GRAIN_PER_DOU), land: got.landMu }, importance: 'major' });
   }
 
   /** Lệnh TRADE (ADR 0012): mua (> 0) hoặc bán (< 0) thăng ở chợ đang đứng, không tốn ô. Trả lý do từ chối hoặc null. */
@@ -274,9 +297,19 @@ export class Life {
     return marketView(this.s.economy, this.s.character.location);
   }
 
+  /** Người có tên ở quận đang đứng (ADR 0016, Q8), sắp theo id. */
+  people(): NpcView[] {
+    return npcViews(this.s.npcs, this.s.character.location, this.s.tick);
+  }
+
+  /** Người có tên đã mất còn trong danh sách (giữ một năm rồi dọn, S4), mọi quận: id, tuổi lúc mất, nguyên nhân. Cho đo đạc. */
+  npcDeaths(): { id: string; tick: Tick; ageYears: number; cause: string }[] {
+    return this.s.npcs.people.filter((n) => n.death).map((n) => ({ id: n.id, tick: n.death!.tick, ageYears: ageYearsAt(n.character.birthTick, n.death!.tick), cause: n.death!.cause }));
+  }
+
   /** Sổ cái: tổng tiền của vùng (quỹ quận + túi người chơi), không đổi qua mọi tick (ADR 0012). */
   totalMoney(): number {
-    return countyMoney(this.s.economy) + this.s.character.household.money;
+    return countyMoney(this.s.economy) + this.s.character.household.money + npcMoney(this.s.npcs);
   }
 
   /** Tick đích của một chế độ tua: dừng ở ranh giới lịch (ADR 0002). */
@@ -328,7 +361,7 @@ export class Life {
   }
 
   private context(t: Tick) {
-    return makeContext(this.s.character, this.s.events, this.s, this.s.economy, this.logic, t);
+    return makeContext(this.s.character, this.s.events, this.s, this.s.economy, this.logic, t, this.s.npcs);
   }
 
   /** Sự kiện đang chờ chọn như người chơi thấy; null nếu không có. */
@@ -363,8 +396,8 @@ export class Life {
   }
 }
 
-/** Ở lại làm cho nhà tới hẹn thì phần chia lớn hơn một nửa (ADR 0013). */
-export const STAY_SHARE_PCT = 150;
+/** Phần chia khi ở lại tới hẹn: hằng ở household.ts (dùng chung với NPC), xuất lại cho mã cũ. */
+export { STAY_SHARE_PCT } from './household';
 
 /** Lựa chọn đầu tiên đang mở; luôn có vì lựa chọn cuối là lối ra không điều kiện (ADR 0014). */
 export const firstOpenChoice = (p: PendingEvent): string => p.choices.find((ch) => ch.locked === null)!.id;

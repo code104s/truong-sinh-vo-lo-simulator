@@ -11,9 +11,21 @@ export const REST_STAMINA_BONUS = 240;
 export const EXHAUSTION_DAMAGE = 24;
 const AGE_FACTOR = [[0, 500], [200, 1000], [650, 1000], [1000, 500]] as const;
 
+/**
+ * Nhớ một giá trị gần nhất: trong một tuần, một người hỏi trần thể lực 5–6 lần (độ mệt khi ốm, khi gặp nạn, khi làm,
+ * khi học nghề, khi hồi sức). Khóa gồm mọi đầu vào nên kết quả y như tính lại; chỉ là đường nóng của NPC (v0.4).
+ */
+const memo: { c: CharacterState | null; tick: Tick; birth: number; span: number; con: number; martial: number; value: number } = { c: null, tick: 0, birth: 0, span: 0, con: 0, martial: 0, value: 0 };
+
 export function staminaMax(c: CharacterState, tick: Tick): number {
-  const ratio = idiv((tick - c.birthTick) * 1000, c.lifespanBase + c.lifespanBonus);
-  return clamp(mulDiv(STAMINA_BASE + c.constitution * STAMINA_PER_CONSTITUTION + idiv(c.skillXp.martial, 1000) * 8, lerpTable(AGE_FACTOR, ratio), 1000), 250, 1000);
+  const span = c.lifespanBase + c.lifespanBonus;
+  const m = memo;
+  if (m.c === c && m.tick === tick && m.birth === c.birthTick && m.span === span && m.con === c.constitution && m.martial === c.skillXp.martial) return m.value;
+  const ratio = idiv((tick - c.birthTick) * 1000, span);
+  const value = clamp(mulDiv(STAMINA_BASE + c.constitution * STAMINA_PER_CONSTITUTION + idiv(c.skillXp.martial, 1000) * 8, lerpTable(AGE_FACTOR, ratio), 1000), 250, 1000);
+  // Ghi đè tại chỗ, không cấp phát
+  m.c = c; m.tick = tick; m.birth = c.birthTick; m.span = span; m.con = c.constitution; m.martial = c.skillXp.martial; m.value = value;
+  return value;
 }
 
 export function staminaBand(c: CharacterState, tick: Tick): StaminaBand {

@@ -138,11 +138,17 @@ describe('tất định và lưu/tải (nghiệm thu Sim)', () => {
     // v0.3 S6: 29 sự kiện, tai họa và dịch theo quận, nợ vay (ADR 0014); đời mẫu nay gặp sự kiện (chọn lựa chọn đầu tiên đang mở).
     // v0.3 S7: bật lập thân; đời mẫu chọn "ở lại" (lựa chọn đầu), hai mươi tuổi ra riêng, chỉ nghỉ nên chết đói sớm.
     // v0.3 F5: hộ thêm bộ đếm năm đói cho màn tổng kết, SIM_VERSION 0.3.1 → digest đổi; tuổi và nguyên nhân chết giữ nguyên.
+    // v0.4 Bước 0: snapshot thêm danh sách NPC (rỗng), luồng npc-world, SIM_VERSION 0.4.0 → digest đổi; tuổi và nguyên nhân chết giữ nguyên.
+    // v0.4 S1: dân số NPC ban đầu theo hạn mức, trừ khỏi dân nền, người lớn nhận phần chia từ quỹ quận (ADR 0016) → digest đổi; tuổi và nguyên nhân chết giữ nguyên.
+    // v0.4 S2: NPC ở quận người chơi sống mỗi tuần (tầng L0), người lớn có kho dành dụm theo tuổi → digest đổi.
+    // v0.4 S4: snapshot NPC thêm seed gốc, vùng; trẻ sinh giữ hạn mức, lập thân NPC, nghề đổi theo kỹ năng → digest đổi.
+    // v0.4 S6: sự kiện gọi người thật (thẻ, lựa chọn đổi túi, kho, thương tích NPC), trạng thái sự kiện thêm người đã gặp,
+    // nhật ký thêm tin sinh, mất → digest đổi; tuổi và nguyên nhân chết giữ nguyên.
     expect(out).toMatchInlineSnapshot(`
       [
-        "21 starvation a6a0684ae169773d",
-        "21 starvation 073e11be6516b45f",
-        "21 starvation c5128a56c945e57d",
+        "21 starvation 020b6087f56abe47",
+        "21 starvation 91e1efaf76723ee4",
+        "21 starvation 8550625d5831c891",
       ]
     `);
   });

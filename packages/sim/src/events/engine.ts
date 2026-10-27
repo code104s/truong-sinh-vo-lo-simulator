@@ -6,6 +6,7 @@ import type { Rng } from '../core/rng';
 import type { CharacterState } from '../life/character';
 import type { PlayerState } from '../life/player';
 import type { EconomyState } from '../economy/market';
+import { newNpcWorld, type NpcState, type NpcWorldState } from '../npc/state';
 
 /** Mọi thứ một sự kiện được đọc và (qua hàm có sổ cái ở effects.ts) được đổi. */
 export interface EventContext {
@@ -17,6 +18,10 @@ export interface EventContext {
   logic: RegionLogic;
   tick: Tick;
   age: number;
+  /** Người có tên quanh người chơi (v0.4, ADR 0016); rỗng thì sự kiện dùng người vô danh như v0.3. */
+  npcs: NpcWorldState;
+  /** Người thật trong chuyện, nếu sự kiện đã chọn được (`cast`); null là người vô danh. */
+  npc: NpcState | null;
 }
 
 export interface ChoiceOutcome {
@@ -47,6 +52,11 @@ export interface EventDef {
   variant?: (ctx: EventContext) => string | null;
   params?: (ctx: EventContext) => Record<string, string | number>;
   figure?: (ctx: EventContext, rng: Rng) => EventFigure | null;
+  /**
+   * Chọn người thật trong chuyện khi có người hợp (ADR 0016, S6). Chạy trước `variant`, `params`, `figure` (chúng đọc
+   * `ctx.npc`). Không có người hợp thì null: sự kiện dùng người vô danh như v0.3.
+   */
+  cast?: (ctx: EventContext, rng: Rng) => NpcState | null;
   /** 2–4 lựa chọn; lựa chọn cuối là lối ra, không bao giờ bị khóa. */
   choices: ChoiceDef[];
 }
@@ -58,6 +68,8 @@ export interface PendingState {
   variant: string | null;
   params: Record<string, string | number>;
   figure: EventFigure | null;
+  /** Người thật trong chuyện (id NPC), null là người vô danh. */
+  npcId: string | null;
 }
 
 export interface EventsState {
@@ -71,9 +83,11 @@ export interface EventsState {
   lastChoiceTick: number;
   /** Dấu vết sự kiện để lại cho về sau, vd. "heard_immortal" (v0.8 cửa ngõ tu tiên dùng). */
   flags: string[];
+  /** NPC người chơi đã gặp trong sự kiện: tin người ấy mất là tin lớn (S6). */
+  met: string[];
 }
 
-export const newEventsState = (): EventsState => ({ pending: null, nextInstance: 0, lastFired: {}, once: [], lastChoiceTick: -1_000, flags: [] });
+export const newEventsState = (): EventsState => ({ pending: null, nextInstance: 0, lastFired: {}, once: [], lastChoiceTick: -1_000, flags: [], met: [] });
 
 const PPM = 1_000_000;
 const TICKS_PER_MONTH = 3;
@@ -83,8 +97,14 @@ export function sortedCatalog(defs: readonly EventDef[]): EventDef[] {
   return [...defs].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
-export function makeContext(c: CharacterState, events: EventsState, player: PlayerState, eco: EconomyState, logic: RegionLogic, tick: Tick): EventContext {
-  return { c, events, player, eco, logic, tick, age: ageYearsAt(c.birthTick, tick) };
+/** `npcs`: người có tên của đời (Life truyền vào); bỏ trống thì mọi sự kiện dùng người vô danh. */
+export function makeContext(c: CharacterState, events: EventsState, player: PlayerState, eco: EconomyState, logic: RegionLogic, tick: Tick, npcs: NpcWorldState = newNpcWorld()): EventContext {
+  return { c, events, player, eco, logic, tick, age: ageYearsAt(c.birthTick, tick), npcs, npc: null };
+}
+
+/** Ngữ cảnh kèm người thật của sự kiện đang chờ (đọc lại theo id, kể cả người đã mất). */
+function withPending(ctx: EventContext, p: PendingState): EventContext {
+  return p.npcId ? { ...ctx, npc: ctx.npcs.people.find((n) => n.id === p.npcId) ?? null } : ctx;
 }
 
 /**
@@ -110,14 +130,18 @@ export function rollEvent(state: EventsState, catalog: readonly EventDef[], ctx:
   for (const [def, w] of candidates) {
     acc += w;
     if (roll >= acc) continue;
+    const npc = def.cast?.(ctx, rng) ?? null;
+    const cast = npc ? { ...ctx, npc } : ctx;
     const pending: PendingState = {
       instance: state.nextInstance++,
       eventId: def.id,
       tick: ctx.tick,
-      variant: def.variant?.(ctx) ?? null,
-      params: def.params?.(ctx) ?? {},
-      figure: def.figure?.(ctx, rng) ?? null,
+      variant: def.variant?.(cast) ?? null,
+      params: def.params?.(cast) ?? {},
+      figure: def.figure?.(cast, rng) ?? null,
+      npcId: npc?.id ?? null,
     };
+    if (npc && !state.met.includes(npc.id)) state.met.push(npc.id);
     state.pending = pending;
     state.lastFired[def.id] = ctx.tick;
     state.lastChoiceTick = ctx.tick;
@@ -138,6 +162,7 @@ export function pendingView(state: EventsState, catalog: readonly EventDef[], ct
   const p = state.pending;
   if (!p) return null;
   const def = defOf(catalog, p.eventId);
+  ctx = withPending(ctx, p);
   return {
     instance: p.instance, eventId: p.eventId, variant: p.variant, params: { ...p.params }, figure: p.figure ? { ...p.figure } : null,
     choices: def.choices.map((ch) => ({ id: ch.id, costs: [...ch.costs], locked: ch.available?.(ctx) ?? null })),
@@ -154,6 +179,7 @@ export function choose(state: EventsState, catalog: readonly EventDef[], ctx: Ev
   const def = defOf(catalog, p.eventId);
   const choice = def.choices.find((ch) => ch.id === choiceId);
   if (!choice) return 'không có lựa chọn này';
+  ctx = withPending(ctx, p);
   const lock = choice.available?.(ctx) ?? null;
   if (lock) return `lựa chọn đang bị khóa (${lock})`;
   const out = choice.apply(ctx, rng);

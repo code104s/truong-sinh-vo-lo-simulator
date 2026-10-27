@@ -6,8 +6,8 @@ function assertSafe(x: number, what: string): void {
 
 /** Chia lấy phần nguyên, làm tròn về 0. */
 export function idiv(a: number, b: number): number {
-  assertSafe(a, 'idiv a');
-  assertSafe(b, 'idiv b');
+  if (!Number.isSafeInteger(a)) assertSafe(a, 'idiv a');
+  if (!Number.isSafeInteger(b)) assertSafe(b, 'idiv b');
   if (b === 0) throw new RangeError('idiv: chia cho 0');
   return Math.trunc(a / b);
 }
@@ -15,8 +15,10 @@ export function idiv(a: number, b: number): number {
 /** a * b / c làm tròn về 0, kiểm tra tích còn an toàn. */
 export function mulDiv(a: number, b: number, c: number): number {
   const p = a * b;
-  assertSafe(p, 'mulDiv tích');
-  return idiv(p, c);
+  if (!Number.isSafeInteger(p)) assertSafe(p, 'mulDiv tích');
+  if (!Number.isSafeInteger(c)) assertSafe(c, 'idiv b');
+  if (c === 0) throw new RangeError('idiv: chia cho 0');
+  return Math.trunc(p / c);
 }
 
 export function clamp(x: number, lo: number, hi: number): number {

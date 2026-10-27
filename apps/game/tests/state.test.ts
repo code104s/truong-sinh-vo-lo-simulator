@@ -10,11 +10,19 @@ const map = { W: 1, H: 1, origin: { x: 0, y: 0 }, kmPerCell: 6, elevation: new F
 const region = { id: regionId('r0'), name: 'Vị Kinh Châu', nameHan: '渭京州', realmName: 'Lương', kmPerCell: 6, landKm2: 1 };
 const world: WorkerMessage = { type: 'WORLD', reqId: 1, worldSeed: 's', region, map, birthplaces: [] };
 const character = { name: 'A', alive: true } as CharacterView;
-const state: WorkerMessage = { type: 'STATE', reqId: 2, date: { tick: 1, year: 1, month: 1, tenDay: 1, season: 'spring' }, character, running: false, plan: null, active: null, slotIndex: 1, actions: [], travel: [], market: null, pending: null };
+const state: WorkerMessage = { type: 'STATE', reqId: 2, date: { tick: 1, year: 1, month: 1, tenDay: 1, season: 'spring' }, character, running: false, plan: null, active: null, slotIndex: 1, actions: [], travel: [], market: null, pending: null, people: [] };
 const entry = { tick: 1, key: 'log.birth', params: {}, importance: 'major' as const };
 
 describe('máy trạng thái màn', () => {
-  it('tải save của bản sim khác: báo như save bản cũ, về màn chính', () => {
+  it('v0.4: STATE mang người trong quận; đời mới thì xóa', () => {
+    const npc = { id: 'n3', name: 'Lý Thị Hoa', gender: 'female' as const, ageYears: 34, occupation: 'occupation.farmer', healthBand: 'healthy' as const, portrait: { ageBand: 'adult' as const, class: 'common' as const, key: 'n3' } };
+    let s = run([msg({ ...(state as Extract<WorkerMessage, { type: 'STATE' }>), people: [npc] })]);
+    expect(s.people).toEqual([npc]);
+    s = run([{ type: 'newLifeStart' }], s);
+    expect(s.people).toEqual([]);
+  });
+
+    it('tải save của bản sim khác: báo như save bản cũ, về màn chính', () => {
     const s = run([{ type: 'loadStart' }, msg({ type: 'ERROR', reqId: 3, code: 'VERSION', message: 'save của sim 0.3.0, bản này là 0.3.1' })]);
     expect(s.screen).toBe('menu');
     expect(s.error).toBe(t('ui.save.outdated_sim'));

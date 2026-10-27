@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { birthplaceId, regionId, vPendingEvent, type WorkerMessage } from '@tsvl/shared';
+import { ageYearsAt, birthplaceId, regionId, vPendingEvent, type WorkerMessage } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { Life, Rng, SimHost, replaySave } from '../src/index';
 import { pastComingOfAge } from './auto';
@@ -265,5 +265,96 @@ describe('văn bản sự kiện', () => {
       for (const re of BANNED) expect(text, `${key}: ${re}`).not.toMatch(re);
       if (key.includes('.choice.')) expect(text.split(/\s+/).length, key).toBeLessThanOrEqual(10);
     }
+  });
+});
+
+describe('người thật trong sự kiện (v0.4 S6)', () => {
+  /** Dựng trạng thái mẫu để sự kiện gọi được người thật; trả trạng thái và người được chọn sẵn (theo `cast`). */
+  function namedFixture(eventId: string): { s: LifeSnapshot; ctx: ReturnType<typeof makeContext>; def: EventDef } {
+    const def = EVENTS.find((d) => d.id === eventId)!;
+    const s = richSnap('calm', false);
+    const alive = (county: number) => s.npcs.people.filter((n) => !n.death && n.character.location === county && ageYearsAt(n.character.birthTick, s.tick) >= 20);
+    if (eventId === 'event.beggar') { const h = alive(0)[0]!.character.household; h.independent = true; h.hunger = 2; h.grain = 0; h.money = 0; }
+    if (eventId === 'event.market_brawl') s.character.location = 1;
+    if (eventId === 'event.village_funeral') { const n = alive(0)[0]!; n.character.alive = false; n.death = { tick: s.tick - 5, cause: 'old_age', detail: 'old_age.natural' }; }
+    if (eventId === 'event.wandering_physician') alive(1)[0]!.occupation = 'physician';
+    if (eventId === 'event.grain_broker') { const n = alive(1)[0]!; n.occupation = 'merchant'; n.character.household.money = 100_000; }
+    const ctx = makeContext(s.character, s.events, s, s.economy, region, s.tick, s.npcs);
+    ctx.npc = def.cast!(ctx, Rng.fromSeed(1));
+    return { s, ctx, def };
+  }
+  const NAMED = ['event.beggar', 'event.grain_broker', 'event.market_brawl', 'event.village_funeral', 'event.wandering_physician'];
+
+  it('năm sự kiện gọi người thật: biến thể "named" có tên, thẻ là người ấy, mọi khóa văn bản đủ', async () => {
+    const { t } = await import('@tsvl/content');
+    const MISSING = /⟨|\{\w+\}/;
+    expect(EVENTS.filter((d) => d.cast).map((d) => d.id)).toEqual(NAMED);
+    for (const id of NAMED) {
+      const { ctx, def } = namedFixture(id);
+      const npc = ctx.npc!;
+      expect(npc, id).not.toBeNull();
+      expect(def.variant!(ctx), id).toBe('named');
+      const params = def.params!(ctx);
+      expect(params.name, id).toBe(npc.character.name);
+      expect(t(`${id}.body.named`, params), id).not.toMatch(MISSING);
+      expect(t(`${id}.body.named`, params), id).toContain(npc.character.name);
+      expect(def.figure!(ctx, Rng.fromSeed(2))?.npcId, id).toBe(npc.id);
+      for (const ch of def.choices) {
+        expect(t(`${id}.choice.${ch.id}`, params), `${id}/${ch.id}`).not.toMatch(MISSING);
+        for (let i = 0; i < 20; i++) {
+          const f = namedFixture(id);
+          const out = ch.apply(f.ctx, Rng.fromSeed(i));
+          expect(t(`${id}.result.${out.result}`, { ...params, ...out.params }), `${id}.result.${out.result}`).not.toMatch(MISSING);
+        }
+      }
+    }
+  });
+
+  it('không có người hợp thì sự kiện về người vô danh như v0.3', () => {
+    const s = richSnap('calm', false);
+    const ctx = makeContext(s.character, s.events, s, s.economy, region, s.tick, s.npcs);
+    for (const id of ['event.village_funeral', 'event.grain_broker']) {
+      const def = EVENTS.find((d) => d.id === id)!;
+      expect(def.cast!(ctx, Rng.fromSeed(1)), id).toBeNull();
+      expect(def.variant?.(ctx) ?? null, id).toBeNull();
+    }
+  });
+
+  it('lựa chọn tác động lên người thật: gạo, bạc qua tay người ấy, tiền không sinh ra mất đi; lảng đi thì người ấy bị thương', () => {
+    const money = (f: { s: LifeSnapshot }) => f.s.character.household.money + f.s.npcs.people.reduce((a, n) => a + n.character.household.money, 0) + f.s.economy.counties.reduce((a, c) => a + c.money, 0);
+    // Cho người xin ăn: gạo sang kho người ấy
+    let f = namedFixture('event.beggar');
+    const grain0 = f.ctx.npc!.character.household.grain, mine = f.s.character.household.grain;
+    EVENTS.find((d) => d.id === 'event.beggar')!.choices.find((c) => c.id === 'give')!.apply(f.ctx, Rng.fromSeed(1));
+    expect(f.ctx.npc!.character.household.grain - grain0).toBe(mine - f.s.character.household.grain);
+    expect(f.ctx.npc!.character.household.grain).toBeGreaterThan(grain0);
+    // Bán cho thương lái: bạc từ túi thương nhân, lúa vào kho thương nhân, quỹ quận không đổi
+    f = namedFixture('event.grain_broker');
+    const before = money(f), purse = f.ctx.npc!.character.household.money, county = f.s.economy.counties[0]!.money;
+    const out = EVENTS.find((d) => d.id === 'event.grain_broker')!.choices.find((c) => c.id === 'sell')!.apply(f.ctx, Rng.fromSeed(1));
+    expect(out.params!.money).toBeGreaterThan(0);
+    expect(purse - f.ctx.npc!.character.household.money).toBe(out.params!.money);
+    expect(f.s.economy.counties[0]!.money).toBe(county);
+    expect(money(f)).toBe(before);
+    // Ẩu đả: lảng đi thì người ấy bị đánh
+    f = namedFixture('event.market_brawl');
+    expect(EVENTS.find((d) => d.id === 'event.market_brawl')!.choices.find((c) => c.id === 'walk_away')!.apply(f.ctx, Rng.fromSeed(1)).result).toBe('walk_away_named');
+    expect(f.ctx.npc!.character.conditions.some((c) => c.kind === 'injury')).toBe(true);
+  });
+
+  it('sự kiện chờ ghi id người thật, người ấy vào danh sách đã gặp; tải lại vẫn đọc ra người ấy, chọn xong nhật ký có tên', () => {
+    const { s, ctx, def } = namedFixture('event.village_funeral');
+    // Trọng số dưới một triệu: thử vài seed tới khi sự kiện ra
+    let p = null;
+    for (let i = 0; !p; i++) p = rollEvent(s.events, [def], ctx, Rng.fromSeed(i));
+    expect(p.npcId).toBe(ctx.npc!.id);
+    expect(p.figure?.npcId).toBe(ctx.npc!.id);
+    expect(s.events.met).toEqual([ctx.npc!.id]);
+    const l = Life.restore(s, [], region);
+    expect(vPendingEvent.check(l.pendingEvent(), '$')).toBeNull();
+    expect(l.pendingEvent()!.figure?.npcId).toBe(ctx.npc!.id);
+    expect(l.choose(p.instance, 'stay_away')).toBeNull();
+    expect(l.log.at(-1)).toMatchObject({ key: 'event.village_funeral.result.stay_away' });
+    expect(l.log.at(-1)!.params.name).toBe(ctx.npc!.character.name);
   });
 });

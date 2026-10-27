@@ -1,6 +1,6 @@
 // Validate snapshot sim khi tải save (ADR 0004): save hỏng hoặc bị sửa tay thì từ chối trước khi chạy.
 import {
-  arr, bool, intRange, lit, nat, nonEmpty, nullable, obj, oneOf, record, str,
+  arr, bool, intRange, lit, nat, nonEmpty, nullable, obj, oneOf, opt, record, str, vNpcId, vRegionId, type EventFigure,
   DEATH_CAUSES, FIGURE_AGES, FIGURE_CLASSES, GENDERS, SETTLEMENT_KINDS, TENURES, int, union, vBirthplaceId, vNewLifeConfig, vMonthPlan, vPlanSlot, vTravelPreview, type Validator,
 } from '@tsvl/shared';
 import type { RngState, RngStreamsSnapshot } from '../core/rng';
@@ -13,6 +13,7 @@ import type { ActiveAction } from './player';
 import { HUNGER_MAX, type HouseholdState } from './household';
 import { DISASTERS, type CountyEconomy, type EconomyState } from '../economy/market';
 import type { EventsState, PendingState } from '../events/engine';
+import { NPC_TIERS, OCCUPATIONS, type NpcState, type NpcWorldState } from '../npc/state';
 
 const skillRecord = (value: Validator<number>) => obj<Record<Skill, number>>({ farming: value, hunting: value, crafting: value, literacy: value, martial: value, trade: value });
 
@@ -25,14 +26,15 @@ const severity = oneOf(['mild', 'serious', 'grave'] as const);
 const vCharacter = obj<CharacterState>({
   name: nonEmpty,
   gender: oneOf(GENDERS),
-  birthTick: nat,
+  // NPC già sinh trước năm 1 của lịch thế giới: tick sinh âm (ADR 0016)
+  birthTick: int,
   birthplaceId: vBirthplaceId,
   birthplaceKind: oneOf(SETTLEMENT_KINDS),
   home: nat,
   location: nat,
   stamina: intRange(0, 1000),
   skillXp: skillRecord(intRange(0, 10_000)),
-  skillLastUsed: skillRecord(nat),
+  skillLastUsed: skillRecord(int),
   background: oneOf(BACKGROUNDS),
   personality: oneOf(PERSONALITIES) as Validator<string>,
   constitution: intRange(1, 10),
@@ -53,6 +55,9 @@ const vCharacter = obj<CharacterState>({
   alive: bool,
 });
 
+const vDeath = obj<Death>({ tick: nat, cause: oneOf(DEATH_CAUSES), detail: str });
+const vActive = obj<ActiveAction>({ slot: vPlanSlot, remaining: intRange(1, 1000), total: intRange(1, 1000), preview: nullable(vTravelPreview) });
+
 export const vLifeSnapshot = obj<LifeSnapshot>({
   simVersion: lit(SIM_VERSION) as Validator<string>,
   config: vNewLifeConfig,
@@ -68,13 +73,22 @@ export const vLifeSnapshot = obj<LifeSnapshot>({
   events: obj<EventsState>({
     pending: nullable(obj<PendingState>({
       instance: nat, eventId: nonEmpty, tick: nat, variant: nullable(nonEmpty), params: record(union(str, int)),
-      figure: nullable(obj({ gender: oneOf(GENDERS), ageBand: oneOf(FIGURE_AGES), class: oneOf(FIGURE_CLASSES) })),
+      figure: nullable(obj<EventFigure>({ gender: oneOf(GENDERS), ageBand: oneOf(FIGURE_AGES), class: oneOf(FIGURE_CLASSES), npcId: opt(vNpcId) })),
+      npcId: nullable(vNpcId),
     })),
-    nextInstance: nat, lastFired: record(int), once: arr(nonEmpty), lastChoiceTick: int, flags: arr(nonEmpty),
+    nextInstance: nat, lastFired: record(int), once: arr(nonEmpty), lastChoiceTick: int, flags: arr(nonEmpty), met: arr(vNpcId),
+  }),
+  npcs: obj<NpcWorldState>({
+    root: u32, regionId: vRegionId,
+    nextId: intRange(1, Number.MAX_SAFE_INTEGER),
+    people: arr(obj<NpcState>({
+      id: vNpcId, character: vCharacter, occupation: oneOf(OCCUPATIONS), tier: oneOf(NPC_TIERS), rng: vRngState, death: nullable(vDeath),
+      plan: nullable(vMonthPlan), active: nullable(vActive), planWarned: bool,
+    })),
   }),
   rng: obj<RngStreamsSnapshot>({ root: u32, streams: record(vRngState) }),
-  death: nullable(obj<Death>({ tick: nat, cause: oneOf(DEATH_CAUSES), detail: str })),
+  death: nullable(vDeath),
   plan: nullable(vMonthPlan),
-  active: nullable(obj<ActiveAction>({ slot: vPlanSlot, remaining: intRange(1, 1000), total: intRange(1, 1000), preview: nullable(vTravelPreview) })),
+  active: nullable(vActive),
   planWarned: bool,
 });

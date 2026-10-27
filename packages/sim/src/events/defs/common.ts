@@ -1,11 +1,12 @@
 // Điều kiện và tiện ích dùng chung cho các sự kiện. Chỉ đọc trạng thái; đổi trạng thái thì qua effects.ts.
-import { calendarOf, GRAIN_PER_DOU, type EventFigure, type Season } from '@tsvl/shared';
+import { ageYearsAt, calendarOf, GRAIN_PER_DOU, type EventFigure, type Season } from '@tsvl/shared';
 import { mulDiv } from '../../core/math';
 import type { Rng } from '../../core/rng';
 import { sellPrice, type CountyEconomy } from '../../economy/market';
 import { FARM_YIELD_PER_WEEK, farmSkillPct } from '../../economy/farming';
-import { routeTerrainPct } from '../../life/travel';
+import { nearestTownFrom, routeTerrainPct } from '../../life/travel';
 import type { EventContext } from '../engine';
+import { npcFigure, type NpcState } from '../../npc/state';
 
 export const figure = (rng: Rng, ageBand: EventFigure['ageBand'], cls: EventFigure['class']): EventFigure => ({ gender: rng.int(0, 1) === 0 ? 'male' : 'female', ageBand, class: cls });
 export const man = (ageBand: EventFigure['ageBand'], cls: EventFigure['class']): EventFigure => ({ gender: 'male', ageBand, class: cls });
@@ -38,14 +39,30 @@ export function cropValue(ctx: EventContext): number {
 export const sellValue = (ce: CountyEconomy, grain: number, pct = 100) => mulDiv(mulDiv(grain, sellPrice(ce), GRAIN_PER_DOU), pct, 100);
 
 /** Quận trấn hoặc thành gần nhất (theo khoảng cách trị sở), không kể quận đang đứng; null nếu không có. */
-export function nearestTown(ctx: EventContext): number | null {
-  const km = ctx.logic.seatKm[ctx.c.location]!;
-  let best = -1;
-  for (let i = 0; i < ctx.logic.settlementKind.length; i++) {
-    if (ctx.logic.settlementKind[i] === 'village' || i === ctx.c.location) continue;
-    if (best < 0 || km[i]! < km[best]!) best = i;
-  }
-  return best < 0 ? null : best;
-}
+export const nearestTown = (ctx: EventContext): number | null => nearestTownFrom(ctx.logic, ctx.c.location);
 
 export const percentOf = (n: number, pct: number) => mulDiv(n, pct, 100);
+
+/** NPC còn sống ở quận người chơi đang đứng, theo id (S6: người thật trong sự kiện). */
+export const peopleHere = (ctx: EventContext): NpcState[] => ctx.npcs.people.filter((n) => n.death === null && n.character.location === ctx.c.location);
+/** Tuổi một NPC lúc này. */
+export const npcAge = (ctx: EventContext, n: NpcState): number => ageYearsAt(n.character.birthTick, ctx.tick);
+/** Người trong thẻ: NPC thật nếu sự kiện đã chọn được, không thì người vô danh do `fallback` dựng. */
+export const castOr = (fallback: (ctx: EventContext, rng: Rng) => EventFigure | null) => (ctx: EventContext, rng: Rng): EventFigure | null =>
+  (ctx.npc ? npcFigure(ctx.npc, ctx.tick) : fallback(ctx, rng));
+/** Tham số lời kể: tên người thật nếu có. */
+export const npcName = (ctx: EventContext): Record<string, string | number> => (ctx.npc ? { name: ctx.npc.character.name } : {});
+/** Chọn ngẫu nhiên một người trong danh sách (rút RNG chỉ khi có người). */
+export const pickOne = (xs: readonly NpcState[], rng: Rng): NpcState | null => (xs.length ? xs[rng.int(0, xs.length - 1)]! : null);
+
+/** NPC còn sống thỏa điều kiện, gần quận người chơi nhất (km giữa trị sở; bằng nhau thì id đứng trước). Không rút RNG. */
+export function nearestWith(ctx: EventContext, ok: (n: NpcState) => boolean): NpcState | null {
+  const km = ctx.logic.seatKm[ctx.c.location];
+  let best: NpcState | null = null, bestKm = Number.MAX_SAFE_INTEGER;
+  for (const n of ctx.npcs.people) {
+    if (n.death || !ok(n)) continue;
+    const d = n.character.location === ctx.c.location ? 0 : km?.[n.character.location] ?? Number.MAX_SAFE_INTEGER - 1;
+    if (d < bestKm) { best = n; bestKm = d; }
+  }
+  return best;
+}

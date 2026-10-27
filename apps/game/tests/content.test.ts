@@ -29,6 +29,8 @@ describe('chuỗi nội dung phủ hết đầu ra của sim', () => {
         for (const id of [v.background, v.personality, v.constitution, v.aptitude, `health.${v.healthBand}`, `gender.${v.gender}`, `stamina.${v.staminaBand}`, ...v.skills.flatMap((s) => [s.id, s.rank]), ...v.traits, ...v.conditions.map((c) => c.id), ...v.conditions.map((c) => `severity.${c.severity}`)]) {
           expect(hasKey(id), id).toBe(true);
         }
+        // Người trong quận (v0.4): nghề, dải sức khỏe dịch được
+        for (const v of life.people()) for (const id of [v.occupation, `health.${v.healthBand}`]) expect(hasKey(id), id).toBe(true);
         for (const option of life.actions()) for (const id of [option.id, option.cost.stamina, option.cost.risk, option.cost.money, ...option.gains, ...(option.locked ? [option.locked] : [])]) expect(hasKey(id), id).toBe(true);
       }
       for (const e of life.log) {

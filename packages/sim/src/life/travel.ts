@@ -49,3 +49,14 @@ export function routeTerrainPct(logic: RegionLogic, route: readonly number[]): n
   }
   return factor;
 }
+
+/** Trấn hay thành gần nhất (theo km giữa trị sở) tính từ một quận, khác quận ấy; null nếu vùng không có. */
+export function nearestTownFrom(logic: RegionLogic, county: number): number | null {
+  const km = logic.seatKm[county]!;
+  let best = -1;
+  for (let i = 0; i < logic.settlementKind.length; i++) {
+    if (logic.settlementKind[i] === 'village' || i === county) continue;
+    if (best < 0 || km[i]! < km[best]!) best = i;
+  }
+  return best < 0 ? null : best;
+}

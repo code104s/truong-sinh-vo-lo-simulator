@@ -17,6 +17,7 @@ export const EVENTS_VI: Readonly<Record<string, string>> = {
   'event.beggar.title': 'Người xin ăn',
   'event.beggar.body': 'Một người rách rưới đứng trước cửa, chìa cái bát mẻ. Nhìn qua là biết đã mấy hôm không có gì vào bụng.',
   'event.beggar.body.winter': 'Gió bấc thổi rát mặt. Một người rách rưới co ro trước cửa, chìa cái bát mẻ, môi tím tái.',
+  'event.beggar.body.named': '{name} trong làng đứng trước cửa, chìa cái bát mẻ. Nhà hết gạo đã mấy hôm, mặt mũi hốc hác.',
   'event.beggar.choice.give': 'Đong cho một đấu gạo',
   'event.beggar.choice.share_meal': 'Nấu bữa cơm nóng, giữ lại qua đêm',
   'event.beggar.choice.refuse': 'Đóng cửa, coi như không thấy',
@@ -44,6 +45,7 @@ export const EVENTS_VI: Readonly<Record<string, string>> = {
 
   'event.market_brawl.title': 'Ẩu đả ở chợ',
   'event.market_brawl.body': 'Giữa chợ, hai gã bán thịt cãi nhau vì một chỗ ngồi, rồi xông vào nhau. Đòn gánh vung lên, thúng mủng đổ lăn lóc, người xung quanh dạt ra.',
+  'event.market_brawl.body.named': 'Giữa chợ, {name} cãi nhau với một gã bán thịt vì một chỗ ngồi, rồi xông vào nhau. Đòn gánh vung lên, người xung quanh dạt ra.',
   'event.market_brawl.choice.break_up': 'Chen vào can hai bên',
   'event.market_brawl.choice.join': 'Xắn tay áo, đánh cho ra lẽ',
   'event.market_brawl.choice.walk_away': 'Lảng sang dãy hàng khác',
@@ -52,13 +54,15 @@ export const EVENTS_VI: Readonly<Record<string, string>> = {
   'event.market_brawl.result.join': 'Đánh một trận ra trò, gã kia phải xin thôi. Tay chân ê ẩm mấy ngày.',
   'event.market_brawl.result.join_hurt': 'Xông vào đánh, bị đánh lại sưng mặt, rách tay.',
   'event.market_brawl.result.walk_away': 'Lảng sang dãy hàng khác. Tiếng chửi bới xa dần sau lưng.',
+  'event.market_brawl.result.walk_away_named': 'Lảng sang dãy hàng khác. Chiều nghe tin {name} bị đánh sưng mặt, phải nằm mấy hôm.',
 
   'event.village_funeral.title': 'Đám tang trong làng',
   'event.village_funeral.body': 'Ông cụ đầu xóm mất đêm qua. Sáng ra tiếng kèn đám ma vọng khắp làng, nhà nhà kéo nhau sang phúng viếng.',
+  'event.village_funeral.body.named': '{name} mất, thọ {age} tuổi. Tiếng kèn đám ma vọng khắp làng, nhà nhà kéo nhau sang phúng viếng.',
   'event.village_funeral.choice.condolence': 'Mang {gift} văn sang phúng viếng',
   'event.village_funeral.choice.help': 'Sang khiêng đòn, đào huyệt',
   'event.village_funeral.choice.stay_away': 'Không sang',
-  'event.village_funeral.result.condolence': 'Thắp nén hương, đặt {gift} văn lên ban thờ. Con cháu ông cụ cúi đầu đáp lễ.',
+  'event.village_funeral.result.condolence': 'Thắp nén hương, đặt {gift} văn lên ban thờ. Con cháu người mất cúi đầu đáp lễ.',
   'event.village_funeral.result.help': 'Khiêng đòn ra đồng, đào huyệt tới trưa. Chiều về tay còn dính đất.',
   'event.village_funeral.result.stay_away': 'Không sang. Tiếng kèn kéo dài tới chiều thì tắt.',
 
@@ -83,7 +87,8 @@ export const EVENTS_VI: Readonly<Record<string, string>> = {
 
   'event.grain_broker.title': 'Thương lái ép giá',
   'event.grain_broker.body': 'Gặt xong chưa ráo mồ hôi, thương lái đã dắt la vào làng. Gã trả {offer} văn một đấu, rẻ hơn giá chợ, nhưng trả bạc ngay tại sân, khỏi phải gánh đi đâu.',
-  'event.grain_broker.choice.sell': 'Bán hai mươi đấu cho gã',
+  'event.grain_broker.body.named': 'Gặt xong chưa ráo mồ hôi, thương lái {name} đã dắt la vào làng. Trả {offer} văn một đấu, rẻ hơn giá chợ, nhưng trả bạc ngay tại sân, khỏi phải gánh đi đâu.',
+  'event.grain_broker.choice.sell': 'Bán hai mươi đấu ngay tại sân',
   'event.grain_broker.choice.haul': 'Gánh lên trấn bán lấy giá cao',
   'event.grain_broker.choice.keep': 'Giữ lại, để dành ăn dần',
   'event.grain_broker.result.sell': 'Bán hai mươi đấu được {money} văn. Bạc trắng trong tay, kho vơi một góc.',
@@ -238,7 +243,8 @@ export const EVENTS_VI: Readonly<Record<string, string>> = {
   // —— Sức khỏe ——
   'event.wandering_physician.title': 'Thầy thuốc qua làng',
   'event.wandering_physician.body': 'Một thầy thuốc đeo hòm thuốc đi ngang làng, nghe có người ốm thì ghé xem mạch. Ông bảo chữa dứt thì mất {fee} văn.',
-  'event.wandering_physician.choice.pay': 'Trả {fee} văn, nhờ ông chữa',
+  'event.wandering_physician.body.named': 'Thầy thuốc {name} đeo hòm thuốc đi ngang làng, nghe có người ốm thì ghé xem mạch. Bảo chữa dứt thì mất {fee} văn.',
+  'event.wandering_physician.choice.pay': 'Trả {fee} văn, nhờ chữa',
   'event.wandering_physician.choice.herbs': 'Xin bài lá thuốc, tự hái tự sắc',
   'event.wandering_physician.result.pay': 'Thầy thuốc bắt mạch, châm cứu, để lại thang thuốc. Mấy hôm sau bệnh dứt hẳn.',
   'event.wandering_physician.result.herbs_ok': 'Tự hái lá theo lời thầy dặn, uống vài thang thấy đỡ dần.',

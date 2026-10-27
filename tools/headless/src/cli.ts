@@ -1,9 +1,10 @@
 // CLI mô phỏng không giao diện (GDD 3.2 O). Dùng cùng SimHost với worker trong trình duyệt.
 //   pnpm sim life --seed tsvl-01 --birthplace "Phố Kỳ" [--life-seed N] [--save-at TICK --out f.json] [--load f.json] [--quiet]
-//   pnpm sim batch --seeds 1000 [--worlds 10] [--threads K] [--policy balanced|all] [--out report.json]
+//   pnpm sim batch --seeds 1000 [--worlds 10] [--threads K] [--policy balanced|all] [--out report.json]   (K luồng sinh vùng và chạy đời; 1 = tuần tự)
 //   pnpm sim replay --save file.json
 //   pnpm sim regions --seeds 100 [--threads K] [--once]
 //   pnpm sim economy --seeds 10 [--years 100] [--threads K]   (chợ quận không người chơi, ADR 0012)
+//   pnpm sim world --seeds 10 [--years 100] [--threads K] [--all-l0]   (thế giới tự chạy có NPC, không người chơi; v0.4 Q11)
 import { readFileSync, writeFileSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { resolve } from 'node:path';
@@ -12,12 +13,60 @@ import { parseArgs } from 'node:util';
 import { isMainThread, parentPort, Worker } from 'node:worker_threads';
 import { t } from '@tsvl/content';
 import { calendarOf, decodeSave, encodeSave, type Birthplace, type Command, type LogEntry, type RegionId, type SettlementKind, type Tick, type WorkerMessage } from '@tsvl/shared';
-import { digestOf, replaySave, SimHost, simulateEconomy } from '@tsvl/sim';
+import { digestOf, replaySave, SimHost, simulateEconomy, simulateWorld } from '@tsvl/sim';
 import { buildRegion, regionIdentity, type RegionLogic } from '@tsvl/worldgen';
-import { runPolicyBatch } from './batch';
+import { runLife, runPolicyBatch, sequentialRunner, type BatchRegion, type LifeResult, type LifeRunner, type TravelCache } from './batch';
+import type { PolicyName } from './policies';
 
-// —— Luồng phụ: sinh vùng ——
-interface RegionJob { seed: string }
+// —— Luồng phụ: sinh vùng, chạy đời trong batch ——
+interface RegionJob { kind?: 'region'; seed: string }
+/** Một đoạn đời [from, to) của một chiến lược; vùng gửi kèm (nhỏ: logic số nguyên và nơi sinh). */
+interface LivesJob { kind: 'lives'; regions: BatchRegion[]; policy: PolicyName; from: number; to: number }
+/** Mỗi luồng giữ bộ đệm đích đi được riêng (thuần nên không đổi kết quả). */
+const workerTravelCache: TravelCache = new Map();
+function livesJob(j: LivesJob): LifeResult[] {
+  const out: LifeResult[] = [];
+  for (let i = j.from; i < j.to; i++) out.push(runLife(j.regions, j.policy, i, workerTravelCache));
+  return out;
+}
+
+/** Số đời mỗi việc: nhỏ để các luồng xong gần cùng lúc (đời dài ngắn khác nhau). */
+const LIVES_PER_JOB = 20;
+
+/**
+ * Chạy đời song song trên K luồng (v0.4: batch có NPC chậm 15 lần). Các đời độc lập nhau nên kết quả từng đời giống hệt
+ * chạy tuần tự; gộp theo thứ tự đời nên báo cáo cũng giống hệt. K = 1 thì chạy tuần tự trên luồng chính.
+ */
+function parallelRunner(regions: BatchRegion[], threads: number): LifeRunner {
+  if (threads <= 1) return sequentialRunner(regions);
+  // Chỉ gửi phần cần cho mô phỏng, không gửi bản đồ
+  const slim = regions.map((r) => ({ seed: r.seed, regionId: r.regionId, birthplaces: r.birthplaces, logic: r.logic }));
+  return (policy, n) => new Promise<LifeResult[]>((resolveAll, reject) => {
+    const jobs: LivesJob[] = [];
+    for (let from = 0; from < n; from += LIVES_PER_JOB) jobs.push({ kind: 'lives', regions: slim, policy, from, to: Math.min(n, from + LIVES_PER_JOB) });
+    const out: LifeResult[] = new Array(n);
+    let next = 0, done = 0;
+    const k = Math.max(1, Math.min(threads, jobs.length));
+    for (let w = 0; w < k; w++) {
+      const worker = new Worker(new URL(import.meta.url), { execArgv: process.execArgv });
+      let current: LivesJob | null = null;
+      const feed = () => {
+        if (next >= jobs.length) { current = null; return void worker.terminate(); }
+        current = jobs[next++]!;
+        worker.postMessage(current);
+      };
+      worker.on('message', (rs: LifeResult[]) => {
+        rs.forEach((x, i) => { out[current!.from + i] = x; });
+        done++;
+        process.stderr.write(`\r  ${policy}: ${Math.min(n, done * LIVES_PER_JOB)}/${n} đời`);
+        if (done === jobs.length) { process.stderr.write('\n'); resolveAll(out); }
+        feed();
+      });
+      worker.on('error', reject);
+      feed();
+    }
+  });
+}
 interface RegionResult { logic: RegionLogic | null; seed: string; ok: boolean; error?: string; digest: string; regionId: RegionId; birthplaces: Birthplace[]; counties: number; landKm2: number; size: [number, number]; ms: number }
 
 function regionJob({ seed }: RegionJob): RegionResult {
@@ -110,6 +159,7 @@ async function main() {
       threads: { type: 'string', default: String(Math.max(1, cpus().length - 1)) },
       once: { type: 'boolean', default: false },
       years: { type: 'string', default: '100' },
+      'all-l0': { type: 'boolean', default: false },
     },
   });
   switch (cmd) {
@@ -127,8 +177,10 @@ async function main() {
       return regionsCmd(Number(a.seeds), Number(a.threads), a.once ?? false);
     case 'economy':
       return economyCmd(Number(a.seeds), Number(a.years), Number(a.threads));
+    case 'world':
+      return worldCmd(Number(a.seeds), Number(a.years), Number(a.threads), a['all-l0'] ?? false);
     default:
-      console.log('Dùng: pnpm sim life|batch|regions|replay|economy …  (xem đầu tools/headless/src/cli.ts)');
+      console.log('Dùng: pnpm sim life|batch|regions|replay|economy|world …  (xem đầu tools/headless/src/cli.ts)');
       process.exit(cmd ? 1 : 0);
   }
 }
@@ -208,7 +260,7 @@ async function batchCmd(n: number, worldsWanted: number, threads: number, policy
   const regions = await regionPool(Array.from({ length: worlds }, (_, i) => ({ seed: `batch-${String(i + 1).padStart(2, '0')}` })), threads);
   const bad = regions.filter((r) => !r.ok);
   if (bad.length) throw new Error(`sinh vùng lỗi: ${bad.map((r) => `${r.seed}: ${r.error}`).join('; ')}`);
-  runPolicyBatch(regions, n, policy, out);
+  await runPolicyBatch(regions, n, policy, out, parallelRunner(regions, threads));
 }
 
 // —— regions ——
@@ -273,9 +325,72 @@ async function economyCmd(n: number, years: number, threads: number) {
   if (!pass) process.exitCode = 1;
 }
 
+// —— world ——
+/**
+ * Thế giới tự chạy (v0.4 Q11): đúng pha Thế giới và pha NPC của đời người chơi, không có người chơi. Bước 0: khung và
+ * số đo nền; tiêu chí dân số NPC (mục 6 v0.4) thêm ở S7 khi đã có NPC.
+ */
+/** Tiêu chí thế giới tự chạy (nghiệm thu v0.4 mục 6). */
+const WORLD_QUOTA_PCT = [70, 130] as const;
+const WORLD_DEATH_AGE = [50, 65] as const;
+const WORLD_CAUSES = ['illness', 'old_age', 'accident', 'starvation'];
+const WORLD_STARVATION_MAX_PCT = 10;
+const WORLD_UNDER16_PCT = [25, 45] as const;
+const WORLD_SPECIALIST_YEARS_PCT = 80;
+
+async function worldCmd(n: number, years: number, threads: number, allL0: boolean) {
+  if (!Number.isInteger(n) || n <= 0 || !Number.isInteger(years) || years <= 0) throw new Error('seeds/years phải là số nguyên dương');
+  const seeds = Array.from({ length: n }, (_, i) => `tsvl-${String(i + 1).padStart(2, '0')}`);
+  console.log(`Thế giới tự chạy ${years} năm × ${n} vùng, không người chơi${allL0 ? ' · mọi NPC ở tầng L0 (tuần)' : ''}`);
+  const regions = await regionPool(seeds.map((seed) => ({ seed })), threads);
+  let ledgerBad = 0, ticks = 0, ms = 0, deathAges = 0, starvedNormal = 0, minQ = Number.MAX_SAFE_INTEGER, maxQ = 0, kids = 0, physYears = 0, merchYears = 0;
+  let famines = 0, countyYears = 0, lowMoney = 0, minPrice = Number.MAX_SAFE_INTEGER, maxPrice = 0, negative = 0;
+  const deaths: Record<string, number> = {};
+  for (const r of regions) {
+    if (!r.ok) throw new Error(`${r.seed}: ${r.error}`);
+    const t0 = performance.now();
+    const s = simulateWorld(r.logic!, years, r.seed, { regionId: r.regionId, allL0 });
+    const took = performance.now() - t0;
+    ticks += s.ticks; ms += took;
+    if (s.moneyStart !== s.moneyEnd || s.ledgerBreaks > 0) ledgerBad++;
+    famines += s.famines; countyYears += s.counties * years; lowMoney += s.lowMoneyMonthsPermille * s.counties;
+    minPrice = Math.min(minPrice, s.minPricePct); maxPrice = Math.max(maxPrice, s.maxPricePct); if (s.minGrain < 0) negative++;
+    for (const [k, v] of Object.entries(s.deaths)) deaths[k] = (deaths[k] ?? 0) + v;
+    deathAges += s.deathAgeSum; starvedNormal += s.starvationNormalYears;
+    minQ = Math.min(minQ, s.minQuotaPct); maxQ = Math.max(maxQ, s.maxQuotaPct); kids += s.childrenPermille; physYears += s.yearsWithPhysician; merchYears += s.yearsWithMerchant;
+    console.log(`  ${r.seed}: ${s.counties} quận · NPC ${s.npcStart} → ${s.npcEnd} · ${(took * 1000 / s.ticks).toFixed(1)} µs/tick · tiền ${s.moneyStart === s.moneyEnd ? 'bảo toàn' : `LỆCH ${s.moneyEnd - s.moneyStart}`}`);
+  }
+  const died = Object.values(deaths).reduce((x, y) => x + y, 0);
+  console.log(`NPC mất: ${died} · tuổi trung bình lúc mất ${(deathAges / Math.max(1, died)).toFixed(1)} · nguyên nhân ${JSON.stringify(deaths)} · chết đói ${(100 * (deaths.starvation ?? 0) / Math.max(1, died)).toFixed(1)}% (năm thường ${(100 * starvedNormal / Math.max(1, died)).toFixed(1)}%)`);
+  console.log(`Dân số: mỗi quận ${minQ}–${maxQ}% hạn mức (mục tiêu 70–130) · dưới 16 tuổi ${(kids / regions.length / 10).toFixed(1)}% (mục tiêu 25–45) · năm có thầy thuốc ${(100 * physYears / (regions.length * (years - 1))).toFixed(0)}% · có thương nhân ${(100 * merchYears / (regions.length * (years - 1))).toFixed(0)}%`);
+  console.log(`Đo: ${ticks} tick · trung bình ${(ms * 1000 / ticks).toFixed(1)} µs/tick (pha Thế giới + pha NPC)`);
+  const every = famines ? countyYears / famines : Infinity;
+  const lowMoneyPct = lowMoney / (countyYears / years) / 10;
+  console.log(`Kinh tế có NPC: đói kém mỗi quận 1 lần / ${every.toFixed(1)} năm (mục tiêu 8–15) · giá ${minPrice}–${maxPrice}% (70–500) · tháng-quận quỹ cạn ${lowMoneyPct.toFixed(1)}% (≤ 5) · kho âm ${negative} vùng`);
+  console.log(`Sổ cái lệch (kiểm từng tick): ${ledgerBad} vùng`);
+  // Tiêu chí nghiệm thu v0.4 mục 6 (docs/v0.4-giai-doan-a.md): dân số NPC, sổ cái, kinh tế v0.3
+  const meanDeathAge = deathAges / Math.max(1, died), under16Pct = kids / regions.length / 10;
+  const yearsPct = (k: number) => (100 * k) / (regions.length * (years - 1));
+  const failed: string[] = [];
+  if (minQ < WORLD_QUOTA_PCT[0] || maxQ > WORLD_QUOTA_PCT[1]) failed.push(`dân số mỗi quận ${minQ}–${maxQ}% ngoài ${WORLD_QUOTA_PCT.join('–')}%`);
+  if (meanDeathAge < WORLD_DEATH_AGE[0] || meanDeathAge > WORLD_DEATH_AGE[1]) failed.push(`tuổi trung bình lúc mất ${meanDeathAge.toFixed(1)} ngoài ${WORLD_DEATH_AGE.join('–')}`);
+  const noCause = WORLD_CAUSES.filter((k) => !deaths[k]);
+  if (noCause.length) failed.push(`thiếu nguyên nhân chết: ${noCause.join(', ')}`);
+  if (100 * (deaths.starvation ?? 0) > WORLD_STARVATION_MAX_PCT * died) failed.push(`chết đói ${(100 * (deaths.starvation ?? 0) / Math.max(1, died)).toFixed(1)}% > ${WORLD_STARVATION_MAX_PCT}%`);
+  if (under16Pct < WORLD_UNDER16_PCT[0] || under16Pct > WORLD_UNDER16_PCT[1]) failed.push(`dưới 16 tuổi ${under16Pct.toFixed(1)}% ngoài ${WORLD_UNDER16_PCT.join('–')}%`);
+  if (yearsPct(physYears) < WORLD_SPECIALIST_YEARS_PCT) failed.push(`năm có thầy thuốc ${yearsPct(physYears).toFixed(0)}% < ${WORLD_SPECIALIST_YEARS_PCT}%`);
+  if (yearsPct(merchYears) < WORLD_SPECIALIST_YEARS_PCT) failed.push(`năm có thương nhân ${yearsPct(merchYears).toFixed(0)}% < ${WORLD_SPECIALIST_YEARS_PCT}%`);
+  if (ledgerBad) failed.push(`sổ cái lệch ở ${ledgerBad} vùng`);
+  if (negative || minPrice < 70 || maxPrice > 500 || every < 8 || every > 15 || lowMoneyPct > 5) failed.push('kinh tế ngoài tiêu chí v0.3');
+  for (const f of failed) console.log(`  ✗ ${f}`);
+  const pass = failed.length === 0;
+  console.log(pass ? 'KẾT QUẢ: PASS (dân số NPC, sổ cái, kinh tế v0.3)' : 'KẾT QUẢ: FAIL');
+  if (!pass) process.exitCode = 1;
+}
+
 // Khởi động ở cuối file: mọi hằng phía trên đã được khởi tạo
 if (!isMainThread) {
-  parentPort!.on('message', (job: RegionJob) => parentPort!.postMessage(regionJob(job)));
+  parentPort!.on('message', (job: RegionJob | LivesJob) => parentPort!.postMessage(job.kind === 'lives' ? livesJob(job) : regionJob(job)));
 } else {
   main().catch((e: unknown) => {
     console.error(e instanceof Error ? e.message : e);

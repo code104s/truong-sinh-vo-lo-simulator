@@ -1,5 +1,5 @@
-import { HARVEST_MONTH, type ActionOption, type CalendarDate, type CharacterView, type EventCostTag, type MarketView, type MonthPlan, type PendingEvent, type SettlementKind, type TravelOption } from '@tsvl/shared';
-import { hash32, Rng } from '@tsvl/sim';
+import { type ActionOption, type CalendarDate, type CharacterView, type EventCostTag, type MarketView, type MonthPlan, type PendingEvent, type SettlementKind, type TravelOption } from '@tsvl/shared';
+import { earnPlan, foodWeeks as brainFoodWeeks, GRAIN_RESERVE, hash32, MONEY_RESERVE, Rng, tradeDecision, weakPlan, workChoice, type BrainInput } from '@tsvl/sim';
 
 export const POLICIES = ['lazy', 'balanced', 'overwork', 'scholar', 'wanderer'] as const;
 export type PolicyName = (typeof POLICIES)[number];
@@ -11,25 +11,23 @@ export interface PolicyContext {
 }
 
 /**
- * Kinh tế của người chơi máy (v0.3 S7), chỉ đọc view và chợ đang đứng:
- * - giữ một năm ăn trong kho, vì năm đói kém chợ hết lương, có tiền cũng không mua được;
- * - thừa quá hai năm ăn thì bán bớt;
- * - giữ tiền nộp thuế đinh và trả thầy thuốc.
+ * Kinh tế và nhịp làm của người chơi máy dùng chung bộ não nhu cầu với NPC (sim/npc/brain.ts, ADR 0016): giữ một năm
+ * ăn, bán phần thừa, giữ tiền thuế; ruộng chỉ cho ăn lúc gặt nên thiếu ăn thì kiếm cái ăn ngay. Ở đây chỉ còn phần
+ * riêng của từng chiến lược (lười, lao lực, học giả, lang bạt) và cách chọn sự kiện.
  */
-export const GRAIN_RESERVE = 360;
-export const SELL_ABOVE = 720;
-export const MONEY_RESERVE = 300;
-/** Dưới chừng ấy tuần ăn (kho + tiền dư quy ra lương) thì bỏ việc riêng, đi làm kiếm ăn. */
-export const SURVIVAL_WEEKS = 12;
+export { GRAIN_RESERVE, MONEY_RESERVE, SELL_ABOVE, SURVIVAL_WEEKS } from '@tsvl/sim';
 
 const household = (c: PolicyContext) => c.character.household;
-/** Kho cộng tiền dư (ngoài phần giữ) quy ra lương theo giá mua, tính bằng tuần ăn. */
-export function foodWeeks(c: PolicyContext): number {
-  const h = household(c), price = Math.max(1, c.market?.buyPrice ?? 40);
-  return Math.floor((h.grain + Math.floor((Math.max(0, h.money - MONEY_RESERVE) * 10) / price)) / 10);
+/** Những gì người chơi máy thấy, quy về đầu vào của bộ não nhu cầu. */
+export function brainInput(c: PolicyContext): BrainInput {
+  const h = household(c);
+  return {
+    ageYears: c.character.ageYears, healthPct: c.character.healthPct, sick: c.character.conditions.length > 0,
+    independent: h.independent, money: h.money, grain: h.grain, month: c.date.month,
+    usable: (id) => c.actions.some((a) => a.id === id && !a.locked), market: c.market ?? null,
+  };
 }
-const weeksToHarvest = (d: CalendarDate) => ((HARVEST_MONTH - d.month + 12) % 12 || 12) * 3;
-const struggling = (c: PolicyContext) => household(c).independent && foodWeeks(c) < SURVIVAL_WEEKS;
+export const foodWeeks = (c: PolicyContext) => brainFoodWeeks(brainInput(c));
 /**
  * Học, ngao du là việc riêng: chỉ làm khi đã dành được hai năm ăn, và trước tuổi về già (sau đó dành dụm như người
  * điều độ, để lúc không làm nổi vẫn còn cái ăn).
@@ -40,32 +38,21 @@ const secure = (c: PolicyContext) => c.character.ageYears < SETTLE_AGE && (!hous
 /** Người chơi máy: chỉ đọc view và lựa chọn được sim công bố. */
 export function policyPlan(name: PolicyName, c: PolicyContext): MonthPlan | null {
   if (!c.character.canAct || c.active) return null;
-  const plan: MonthPlan = { slots: [{ action: 'action.rest' }, { action: 'action.rest' }, { action: 'action.rest' }] };
-  const usable = (id: string) => c.actions.some((a) => a.id === id && !a.locked);
+  let plan: MonthPlan = { slots: [{ action: 'action.rest' }, { action: 'action.rest' }, { action: 'action.rest' }] };
+  if (name === 'lazy') return plan;
+  const b = brainInput(c);
+  const usable = b.usable;
   const setAll = (action: string) => { plan.slots = [{ action }, { action }, { action }]; };
   const travelTo = (county: number) => { plan.slots[c.date.tenDay] = { action: 'action.travel', target: county }; };
-  if (name === 'lazy') return plan;
-  // Cái ăn ngay: làm thuê, săn (ra thịt và da), hái lượm. Mùa đông ruộng nghỉ thì làm việc này.
-  const quick = ['action.hire', 'action.hunt', 'action.forage'].find(usable) ?? 'action.rest';
-  const work = usable('action.farm') ? 'action.farm' : quick;
-  // Ruộng chỉ cho ăn lúc gặt: không đủ ăn tới mùa gặt thì một ô kiếm cái ăn ngay; túng hẳn thì cả hai ô
-  const short = work === 'action.farm' && household(c).independent && foodWeeks(c) < weeksToHarvest(c.date);
-  const first = short && struggling(c) ? quick : work;
-  const second = short ? quick : work;
-  const earn = () => { plan.slots = [{ action: first }, { action: second }, { action: 'action.rest' }]; };
-  if (name !== 'overwork' && c.character.healthPct < 50) {
-    // Yếu: có bệnh và còn của thì chữa; hết của thì vẫn phải làm một ô kiếm ăn, nghỉ hai ô (nằm chờ là chết đói)
-    if (c.character.conditions.length > 0 && usable('action.heal') && !struggling(c)) setAll('action.heal');
-    else if (struggling(c)) earn();
-    else if (household(c).independent) plan.slots = [{ action: first }, { action: 'action.rest' }, { action: 'action.rest' }];
-    return plan;
-  }
+  const w = workChoice(b);
+  const earn = () => { plan = earnPlan(w); };
+  if (name !== 'overwork') { const weak = weakPlan(b, w); if (weak) return weak; }
   if (name === 'balanced') earn();
-  if (name === 'overwork') plan.slots = [{ action: first }, { action: second }, { action: work }];
+  if (name === 'overwork') plan.slots = [{ action: w.first }, { action: w.second }, { action: w.work }];
   if (name === 'scholar') {
     // Học phải trả học phí; một ô làm thuê tự nuôi việc học. Chưa đủ một năm ăn thì đi làm; nơi này không có trường thì lên trấn.
     const lock = c.actions.find((a) => a.id === 'action.study')?.locked;
-    const pay = usable('action.hire') ? 'action.hire' : work;
+    const pay = usable('action.hire') ? 'action.hire' : w.work;
     if (!secure(c)) earn();
     else if (usable('action.study')) plan.slots = [{ action: 'action.study' }, { action: 'action.study' }, { action: pay }];
     else if (lock === 'lock.money') setAll(pay);
@@ -85,19 +72,9 @@ export function policyPlan(name: PolicyName, c: PolicyContext): MonthPlan | null
   return plan;
 }
 
-/**
- * Mua bán lương thực đầu tháng (lệnh TRADE, không tốn ô): > 0 mua, < 0 bán, 0 thôi. Chưa ra riêng thì cha mẹ lo;
- * "lười" không mua bán. Không mua lúc đói kém (chợ cạn, giá đỉnh).
- */
+/** Mua bán lương thực đầu tháng (lệnh TRADE, không tốn ô). "Lười" không mua bán. */
 export function policyTrade(name: PolicyName, c: PolicyContext): number {
-  const h = household(c), m = c.market;
-  if (name === 'lazy' || !h.independent || !m) return 0;
-  if (h.grain < GRAIN_RESERVE && m.supply !== 'famine') {
-    const afford = Math.floor(((h.money - MONEY_RESERVE) * 10) / Math.max(1, m.buyPrice)) - 1;
-    return Math.max(0, Math.min(GRAIN_RESERVE - h.grain, afford, m.maxBuy));
-  }
-  if (h.grain > SELL_ABOVE) return -Math.min(h.grain - SELL_ABOVE, m.maxSell);
-  return 0;
+  return name === 'lazy' ? 0 : tradeDecision(brainInput(c));
 }
 
 /** Cái giá của một lựa chọn, theo hoàn cảnh lúc này: thứ đang thiếu thì đắt. */

@@ -2,9 +2,9 @@
 import { GRAIN_PER_DOU, TICKS_PER_YEAR } from '@tsvl/shared';
 import { idiv } from '../../core/math';
 import { HARVEST_MONTH, sellPrice, supplyOf } from '../../economy/market';
-import { heal, loseGrain, moveGrain, occupy, payTo, receiveFrom, spendStamina, wound } from '../effects';
+import { heal, loseGrain, moveGrain, occupy, payTo, receiveFrom, spendStamina, wound, sellGrainTo } from '../effects';
 import type { EventDef } from '../engine';
-import { figure, here, inVillage, man, month, nearestTown, percentOf, personality, sellValue } from './common';
+import { figure, here, inVillage, man, month, nearestTown, percentOf, personality, sellValue, castOr, nearestWith, npcName } from './common';
 
 /** Đấu đổi tay mỗi lần mua bán trong sự kiện (20 đấu = 200 thăng). */
 export const DEAL_GRAIN = 200;
@@ -51,13 +51,18 @@ export const grainBroker: EventDef = {
   category: 'economy',
   weight: (ctx) => ((month(ctx) === 9 || month(ctx) === 10) && inVillage(ctx) && ctx.c.household.grain >= 300 ? 150_000 : 0),
   cooldownTicks: 30,
-  params: (ctx) => ({ offer: percentOf(sellPrice(here(ctx)), BROKER_PCT) }),
-  figure: () => man('adult', 'rich'),
+  // Người thật (S6): thương nhân NPC gần nhất đủ bạc mua; mua bán đi qua túi, kho người ấy
+  cast: (ctx) => nearestWith(ctx, (n) => n.occupation === 'merchant' && n.character.household.money >= sellValue(here(ctx), DEAL_GRAIN, BROKER_PCT)),
+  variant: (ctx) => (ctx.npc ? 'named' : null),
+  params: (ctx) => ({ offer: percentOf(sellPrice(here(ctx)), BROKER_PCT), ...npcName(ctx) }),
+  figure: castOr(() => man('adult', 'rich')),
   choices: [
     {
       id: 'sell', costs: ['grain'],
       apply: (ctx) => {
-        const got = receiveFrom(ctx, ctx.c.location, sellValue(here(ctx), DEAL_GRAIN, BROKER_PCT));
+        const value = sellValue(here(ctx), DEAL_GRAIN, BROKER_PCT);
+        if (ctx.npc) return { result: 'sell', params: { money: sellGrainTo(ctx, ctx.npc, DEAL_GRAIN, value) } };
+        const got = receiveFrom(ctx, ctx.c.location, value);
         moveGrain(ctx, ctx.c.location, -DEAL_GRAIN);
         return { result: 'sell', params: { money: got } };
       },

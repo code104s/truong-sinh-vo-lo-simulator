@@ -241,7 +241,8 @@ describe('hậu quả của đói', () => {
 
   it('đủ ăn trở lại thì hết đói và hồi sức', () => {
     const l = adult('recover', (c) => { c.household.independent = true; c.household.grain = 500; c.household.hunger = 6; });
-    l.advance('month'); l.advance('month'); l.advance('month');
+    // Sự kiện có lựa chọn có thể chen vào (S6: sự kiện gọi người thật làm đổi chuỗi RNG): chọn đường cuối để đi tiếp
+    for (let k = 0; k < 3; k++) autoAdvance(l, 'month', lastChoice);
     expect(l.character.household.hunger).toBe(0);
     expect(l.log.some((e) => e.key === 'log.hunger.recovered')).toBe(true);
   });

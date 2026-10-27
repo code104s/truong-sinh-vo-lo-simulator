@@ -2,7 +2,7 @@
 import { t } from '@tsvl/content';
 import type {
   Birthplace, BirthplaceId, CalendarDate, CharacterView, LifeSummary, LogEntry, RegionMapData, RegionSummary, WorkerMessage, WorldSeed, MonthPlan, ActionOption, ActionProgress, TravelOption, TravelPreview,
-  MarketView, PendingEvent,
+  MarketView, NpcView, PendingEvent,
 } from '@tsvl/shared';
 
 export type Screen = 'menu' | 'settings' | 'loading' | 'birthplace' | 'life' | 'summary';
@@ -36,12 +36,14 @@ export interface AppState {
   plan: MonthPlan | null; active: ActionProgress | null; actions: ActionOption[]; travel: TravelOption[]; travelPreview: TravelPreview | null;
   /** Chợ quận đang đứng và sự kiện chờ chọn (ADR 0012, 0014); giao diện có ở F2, F3. */
   market: MarketView | null; pending: PendingEvent | null;
+  /** Người có tên ở quận đang đứng (v0.4, ADR 0016); rỗng tới S1. */
+  people: NpcView[];
 }
 
 export const initialState: AppState = {
   screen: 'menu', ready: false, hasSave: false, loadingSave: false, progress: null, world: null, selected: null,
   date: null, character: null, log: [], interrupt: null, summary: null, running: false, error: null, seedInput: '',
-  plan: null, active: null, actions: [], travel: [], travelPreview: null, market: null, pending: null,
+  plan: null, active: null, actions: [], travel: [], travelPreview: null, market: null, pending: null, people: [],
 };
 
 export type Action =
@@ -74,7 +76,7 @@ export function reduce(s: AppState, a: Action): AppState {
     case 'loadStart':
       return { ...s, screen: 'loading', progress: null, loadingSave: true, log: [], interrupt: null, summary: null, character: null, error: null };
     case 'newLifeStart':
-      return { ...s, log: [], interrupt: null, summary: null, character: null, running: false, plan: null, active: null, actions: [], travel: [], travelPreview: null, market: null, pending: null };
+      return { ...s, log: [], interrupt: null, summary: null, character: null, running: false, plan: null, active: null, actions: [], travel: [], travelPreview: null, market: null, pending: null, people: [] };
     case 'select':
       return { ...s, selected: a.id };
     case 'advanceStart':
@@ -109,7 +111,7 @@ function onMessage(s: AppState, m: WorkerMessage): AppState {
     }
     case 'STATE': {
       const toLife = s.screen === 'loading' || s.screen === 'birthplace';
-      return { ...s, date: m.date, character: m.character, plan: m.plan, active: m.active, actions: m.actions, travel: m.travel, travelPreview: null, market: m.market, pending: m.pending, loadingSave: false, screen: toLife ? 'life' : s.screen };
+      return { ...s, date: m.date, character: m.character, plan: m.plan, active: m.active, actions: m.actions, travel: m.travel, travelPreview: null, market: m.market, pending: m.pending, people: m.people, loadingSave: false, screen: toLife ? 'life' : s.screen };
     }
     case 'INTERRUPT':
       return { ...s, interrupt: m.entry, running: false };

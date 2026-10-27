@@ -1,9 +1,12 @@
 import { ageYearsAt, isYearStart, TICKS_PER_MONTH, TICKS_PER_YEAR, type LogEntry, type MonthPlan, type PlanSlot, type Tick, type TravelPreview } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
-import type { RngStreams } from '../core/rng';
+import type { Rng, RngStreams } from '../core/rng';
+
+/** Nguồn RNG theo tên luồng: người chơi dùng các luồng của đời; NPC dùng một luồng riêng cho mọi tên (ADR 0015). */
+export type RngSource = Pick<RngStreams, 'get'>;
 import { mulDiv } from '../core/math';
 import { ACTION_MIN_AGE, actionDef, slotLock, type ActionDef } from './actions';
-import type { CharacterState } from './character';
+import { hasCondition, type CharacterState } from './character';
 import { type Death } from './health';
 import { ACCIDENT_FATAL_PPM } from './params';
 import { gainSkill, skillRiskPct } from './skills';
@@ -30,7 +33,7 @@ const REST: PlanSlot = { action: 'action.rest' };
 export const TRANSIENT_LOCKS: ReadonlySet<string> = new Set(['lock.winter', 'lock.stamina', 'lock.health', 'lock.hunger', 'lock.money', 'lock.no_work']);
 
 /** Pha 5. Mỗi ô chỉ trừ giá một lần; hành động đang dở tiếp tục qua ranh tháng. */
-export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic: RegionLogic, eco: EconomyState, rng: RngStreams, log: Log): { death: Death | null; carePct: number } {
+export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic: RegionLogic, eco: EconomyState, rng: RngSource, log: Log): { death: Death | null; carePct: number } {
   const age = ageYearsAt(c.birthTick, tick);
   if (age < ACTION_MIN_AGE) {
     if (age >= 5 && isYearStart(tick)) {
@@ -83,7 +86,20 @@ function arrive(s: PlayerState, c: CharacterState, county: number, logic: Region
 }
 
 /** Trừ giá, cho kết quả và tính rủi ro của một ô. Việc thường ngày không ghi nhật ký. */
-function perform(d: ActionDef, route: TravelPreview | null, c: CharacterState, tick: Tick, logic: RegionLogic, market: CountyEconomy, rng: RngStreams, log: Log, age: number): { death: Death | null; carePct: number } {
+function perform(d: ActionDef, route: TravelPreview | null, c: CharacterState, tick: Tick, logic: RegionLogic, market: CountyEconomy, rng: RngSource, log: Log, age: number): { death: Death | null; carePct: number } {
+  const { ppm, carePct } = slotEffects(d, route, c, tick, logic, market, rng, log);
+  // Mỗi hệ thống dùng luồng riêng; nguy hiểm đường tính trên dữ liệu nguyên đã lưu.
+  const death = d.riskPpm > 0 ? slotMishap(c, tick, ppm, d.group === 'travel' ? 'accident.travel' : 'accident.action', rng.get(d.group === 'travel' ? 'travel' : 'actions'), log, age) : null;
+  if (death) return { death, carePct };
+  recoverStamina(c, tick, d.group === 'rest');
+  return { death: null, carePct };
+}
+
+/**
+ * Phần tất định và kinh tế của một ô (trừ thể lực, kỹ năng, tuần công, tiền, nghỉ, chữa), trả về rủi ro (ppm) của ô.
+ * Tầng NPC L1 (ADR 0015) gọi ba lần rồi rút rủi ro một lần cho cả tháng.
+ */
+export function slotEffects(d: ActionDef, route: TravelPreview | null, c: CharacterState, tick: Tick, logic: RegionLogic, market: CountyEconomy, rng: RngSource, log: Log): { ppm: number; carePct: number } {
   const tired = fatiguePct(c, tick);
   if (spendStamina(c, d.stamina)) log({ key: 'log.exhaustion', params: {}, importance: 'minor' });
   if (d.skill) gainSkill(c, d.skill, tick);
@@ -97,18 +113,19 @@ function perform(d: ActionDef, route: TravelPreview | null, c: CharacterState, t
     c.health = Math.min(c.healthMax, c.health + 100); carePct = 50;
     for (const condition of c.conditions) condition.weeksLeft = Math.max(1, condition.weeksLeft - 1);
   }
-  // Mỗi hệ thống dùng luồng riêng; nguy hiểm đường tính trên dữ liệu nguyên đã lưu.
-  const r = rng.get(d.group === 'travel' ? 'travel' : 'actions');
   const terrain = route ? routeTerrainPct(logic, route.route) : 100;
   let ppm = mulDiv(mulDiv(mulDiv(d.riskPpm, terrain, 100), tired, 100), moneyRiskPct, 100);
   if (d.skill) ppm = mulDiv(ppm, skillRiskPct(c, d.skill), 100);
-  if (d.riskPpm > 0 && r.chance(ppm)) {
-    if (r.chance(mulDiv(ACCIDENT_FATAL_PPM, skillRiskPct(c, 'martial'), 100))) return { death: { tick, cause: 'accident', detail: d.group === 'travel' ? 'accident.travel' : 'accident.action' }, carePct };
-    if (!c.conditions.some((x) => x.kind === 'injury')) {
-      c.conditions.push({ id: 'injury.wound', kind: 'injury', severity: 'mild', weeksLeft: r.int(1, 3) });
-      log({ key: 'log.injury.onset', params: { injury: 'injury.wound', age }, importance: 'major' });
-    }
+  return { ppm, carePct };
+}
+
+/** Rút rủi ro của ô (hay của cả tháng ở tầng L1): chết vì tai nạn, hoặc bị thương nhẹ. */
+export function slotMishap(c: CharacterState, tick: Tick, ppm: number, fatal: string, r: Rng, log: Log, age: number): Death | null {
+  if (!r.chance(ppm)) return null;
+  if (r.chance(mulDiv(ACCIDENT_FATAL_PPM, skillRiskPct(c, 'martial'), 100))) return { tick, cause: 'accident', detail: fatal };
+  if (!hasCondition(c, 'injury')) {
+    c.conditions.push({ id: 'injury.wound', kind: 'injury', severity: 'mild', weeksLeft: r.int(1, 3) });
+    log({ key: 'log.injury.onset', params: { injury: 'injury.wound', age }, importance: 'major' });
   }
-  recoverStamina(c, tick, d.group === 'rest');
-  return { death: null, carePct };
+  return null;
 }

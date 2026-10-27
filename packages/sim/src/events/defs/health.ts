@@ -2,7 +2,7 @@
 import { HEAL_FEE } from '../../economy/income';
 import { catchIllness, heal, hurt, loseGrain, payTo } from '../effects';
 import type { EventDef } from '../engine';
-import { figure, ill, inTown, inVillage, man } from './common';
+import { figure, ill, inTown, inVillage, man, castOr, nearestWith, npcName } from './common';
 
 /** Phí thầy thuốc giỏi đi ngang: bằng phí chữa bệnh nặng ở trấn, nhưng tới tận nơi. */
 export const WANDERING_PHYSICIAN_FEE = HEAL_FEE.serious + 50;
@@ -15,8 +15,11 @@ export const wanderingPhysician: EventDef = {
   // Thầy thuốc giỏi chỉ đi ngang làng; ở trấn, thành thì đã có thầy thuốc
   weight: (ctx) => (ctx.age >= 12 && ill(ctx) && inVillage(ctx) ? 60_000 : 0),
   cooldownTicks: 108,
-  params: () => ({ fee: WANDERING_PHYSICIAN_FEE }),
-  figure: (_ctx, rng) => figure(rng, rng.int(0, 1) === 0 ? 'adult' : 'old', 'common'),
+  // Người thật (S6): thầy thuốc NPC ở trấn, thành gần nhất (theo km giữa trị sở)
+  cast: (ctx) => nearestWith(ctx, (n) => n.occupation === 'physician'),
+  variant: (ctx) => (ctx.npc ? 'named' : null),
+  params: (ctx) => ({ fee: WANDERING_PHYSICIAN_FEE, ...npcName(ctx) }),
+  figure: castOr((_ctx, rng) => figure(rng, rng.int(0, 1) === 0 ? 'adult' : 'old', 'common')),
   choices: [
     {
       id: 'pay', costs: ['money'],

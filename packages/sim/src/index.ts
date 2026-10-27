@@ -3,10 +3,12 @@ export { Rng, RngStreams, type RngState, type RngStreamsSnapshot } from './core/
 export { hash32, hashString, hash64Hex } from './core/hash';
 export { canonical, digestOf } from './core/digest';
 export { idiv, mulDiv, clamp, lerpTable, sortedEntries } from './core/math';
-export { Life, SIM_VERSION, firstOpenChoice, lifeRoot, type LifeSnapshot, type AdvanceResult } from './life/life';
+export { Life, SIM_VERSION, STREAMS, firstOpenChoice, lifeRoot, type LifeSnapshot, type AdvanceResult } from './life/life';
 export { toView, type CharacterState } from './life/character';
 export { BACKGROUNDS, type Background } from './life/params';
 export { EVENT_IDS } from './events/catalog';
 export type { Death } from './life/health';
 export { simulateEconomy, type EconomyRunStats } from './economy/simulate';
+export { simulateWorld, type WorldRunStats } from './npc/world';
 export { HANDLED_LIMIT, SimHost, replaySave, type Emit, type HostOptions } from './host';
+export { earnPlan, needsPlan, foodWeeks, GRAIN_RESERVE, MONEY_RESERVE, SELL_ABOVE, SURVIVAL_WEEKS, tradeDecision, weakPlan, workChoice, type BrainInput, type WorkChoice } from './npc/brain';

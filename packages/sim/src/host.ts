@@ -217,7 +217,7 @@ export class SimHost {
     this.emit({ type: 'STATE', reqId, date: calendarOf(life.displayTick), character: life.view(), running: false, plan: life.plan,
       active: a ? { action: a.slot.action, remaining: a.remaining, total: a.total, ...(a.slot.target === undefined ? {} : { target: a.slot.target }) } : null,
       slotIndex: calendarOf(life.displayTick).tenDay, actions: life.view().canAct ? life.actions() : [], travel: life.view().canAct ? life.travel() : [],
-      market: life.market(), pending: life.pendingEvent() });
+      market: life.market(), pending: life.pendingEvent(), people: life.people() });
   }
 
   save(): SaveFile {

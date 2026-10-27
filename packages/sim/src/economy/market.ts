@@ -149,6 +149,12 @@ export const epidemicAt = (ce: CountyEconomy, tick: Tick) => ce.epidemicFrom <= 
  * Pha Thế giới, đầu tháng: thu hoạch (tháng thu hoạch), dân nền ăn, hao hụt, buôn quận kề, niêm yết giá.
  * Dân nền thiếu ăn chưa chết (v0.4 có NPC); kho chỉ chạm 0.
  */
+/** Pha Thế giới đầu năm, dùng chung cho đời người chơi và thế giới tự chạy: thời tiết năm, rồi gọi tên tai họa (G3). */
+export function worldYearStart(eco: EconomyState, rng: Rng, yearStart: Tick): void {
+  rollWeather(eco, rng);
+  labelDisasters(eco, rng, yearStart);
+}
+
 export function economyMonth(eco: EconomyState, logic: RegionLogic, tick: Tick): void {
   const harvest = calendarOf(tick).month === HARVEST_MONTH;
   for (const ce of eco.counties) {

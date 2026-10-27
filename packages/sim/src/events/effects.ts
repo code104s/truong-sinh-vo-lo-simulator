@@ -2,6 +2,7 @@
 import { actionDef } from '../life/actions';
 import { staminaMax } from '../life/stamina';
 import type { EventContext } from './engine';
+import type { NpcState } from '../npc/state';
 
 /** Trả tiền vào quỹ một quận; trả về số đã trả (không vượt túi). */
 export function payTo(ctx: EventContext, county: number, amount: number): number {
@@ -84,4 +85,27 @@ export function catchIllness(ctx: EventContext, id: string, severity: 'mild' | '
 
 export function addFlag(ctx: EventContext, flag: string): void {
   if (!ctx.events.flags.includes(flag)) ctx.events.flags.push(flag);
+}
+
+// —— Tác động lên NPC thật trong sự kiện (S6, ADR 0016): đi qua túi, kho của người ấy, sổ cái giữ nguyên ——
+
+/** Đưa lương từ kho người chơi sang kho NPC; trả số thăng đã đưa. */
+export function giveGrainTo(ctx: EventContext, n: NpcState, amount: number): number {
+  const g = Math.max(0, Math.min(amount, ctx.c.household.grain));
+  ctx.c.household.grain -= g; n.character.household.grain += g;
+  return g;
+}
+
+/** Lương từ kho người chơi sang kho NPC theo chiều ngược (bán cho NPC): NPC trả tiền từ túi mình. Trả số văn nhận. */
+export function sellGrainTo(ctx: EventContext, n: NpcState, grain: number, money: number): number {
+  const g = Math.max(0, Math.min(grain, ctx.c.household.grain));
+  const pay = Math.max(0, Math.min(money, n.character.household.money));
+  ctx.c.household.grain -= g; n.character.household.grain += g;
+  n.character.household.money -= pay; ctx.c.household.money += pay;
+  return pay;
+}
+
+/** NPC bị thương nhẹ (không chồng thương). */
+export function woundNpc(n: NpcState, weeks: number): void {
+  if (!n.character.conditions.some((x) => x.kind === 'injury')) n.character.conditions.push({ id: 'injury.wound', kind: 'injury', severity: 'mild', weeksLeft: weeks });
 }

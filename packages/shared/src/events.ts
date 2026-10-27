@@ -1,7 +1,7 @@
 // Sự kiện đang chờ người chơi chọn (ADR 0014). Chỉ kiểu và validate, không có luật.
 import { GENDERS, type Gender } from './character';
-import { vChoiceId, vContentId, type ChoiceId, type ContentId } from './contentId';
-import { arr, brand, int, nat, nonEmpty, nullable, obj, oneOf, record, str, union, type Validator } from './schema';
+import { vChoiceId, vContentId, vNpcId, type ChoiceId, type ContentId, type NpcId } from './contentId';
+import { arr, brand, int, nat, nonEmpty, nullable, obj, oneOf, opt, record, str, union, type Validator } from './schema';
 
 /** Id sự kiện, vd. "event.harvest_bad". */
 export type EventId = string;
@@ -26,11 +26,13 @@ export interface EventChoiceView {
 export const FIGURE_AGES = ['child', 'young', 'adult', 'old'] as const;
 export const FIGURE_CLASSES = ['poor', 'common', 'rich', 'official'] as const;
 
-/** Gợi ý chân dung người vô danh trong sự kiện; chỉ để FE trình bày. */
+/** Gợi ý chân dung người trong sự kiện; chỉ để FE trình bày. */
 export interface EventFigure {
   gender: Gender;
   ageBand: (typeof FIGURE_AGES)[number];
   class: (typeof FIGURE_CLASSES)[number];
+  /** Người thật trong chuyện (ADR 0016); không có thì là người vô danh. */
+  npcId?: NpcId;
 }
 
 export interface PendingEvent {
@@ -71,5 +73,5 @@ export const vPendingEvent: Validator<PendingEvent> = obj<PendingEvent>({
   variant: nullable(nonEmpty),
   params: record(union(str, int)),
   choices: vChoices,
-  figure: nullable(obj<EventFigure>({ gender: oneOf(GENDERS), ageBand: oneOf(FIGURE_AGES), class: oneOf(FIGURE_CLASSES) })),
+  figure: nullable(obj<EventFigure>({ gender: oneOf(GENDERS), ageBand: oneOf(FIGURE_AGES), class: oneOf(FIGURE_CLASSES), npcId: opt(vNpcId) })),
 });

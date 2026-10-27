@@ -13,3 +13,10 @@ export const CHOICE_ID_RE = /^[a-z][a-z0-9_]*$/;
 export const vChoiceId: Validator<ChoiceId> = {
   check: (u, p) => (typeof u === 'string' && CHOICE_ID_RE.test(u) ? null : `${p}: cần id lựa chọn dạng "ten_lua_chon"`),
 };
+
+/** Id NPC, vd. "n17": theo thứ tự sinh trong một đời, không dùng lại (ADR 0015). Đặt ở đây để events và npc cùng dùng mà không vòng import. */
+export type NpcId = string;
+export const NPC_ID_RE = /^n[1-9][0-9]*$/;
+export const vNpcId: Validator<NpcId> = {
+  check: (u, p) => (typeof u === 'string' && NPC_ID_RE.test(u) ? null : `${p}: cần id NPC dạng "n17"`),
+};

@@ -1,6 +1,6 @@
 import { ageYearsAt, calendarOf, type ActionGroup, type ActionOption, type MonthPlan, type PlanSlot, type SettlementKind, type Tick } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
-import type { CharacterState } from './character';
+import { hasSeverity, type CharacterState } from './character';
 import { isStarving } from './household';
 import type { Skill } from './skills';
 import { previewTravel } from './travel';
@@ -30,7 +30,9 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'action.toil', group: 'livelihood', slots: 1, stamina: 180, riskPpm: 300, hidden: true },
   { id: 'action.shelter', group: 'rest', slots: 1, stamina: 0, riskPpm: 0, hidden: true },
 ];
-export const actionDef = (id: string) => ACTIONS.find((a) => a.id === id);
+/** Tra theo id (bảng dựng một lần; vòng NPC gọi nhiều lần mỗi tuần). */
+const ACTION_BY_ID: ReadonlyMap<string, ActionDef> = new Map(ACTIONS.map((a) => [a.id, a]));
+export const actionDef = (id: string): ActionDef | undefined => ACTION_BY_ID.get(id);
 /** Việc nặng: thể lực tốn từ mức "cao" trở lên. */
 export const HEAVY_STAMINA = 160;
 
@@ -41,7 +43,7 @@ export function actionLock(def: ActionDef, c: CharacterState, tick: Tick, kind: 
   if (ageYearsAt(c.birthTick, tick) < ACTION_MIN_AGE) return 'lock.child';
   if (def.places && !def.places.includes(kind)) return 'lock.place';
   if (def.id === 'action.farm' && calendarOf(tick).season === 'winter') return 'lock.winter';
-  if (def.group !== 'rest' && def.group !== 'heal' && (c.health < 200 || c.conditions.some((s) => s.severity === 'grave'))) return 'lock.health';
+  if (def.group !== 'rest' && def.group !== 'heal' && (c.health < 200 || hasSeverity(c, 'grave'))) return 'lock.health';
   if (c.stamina < (def.minStamina ?? 0)) return 'lock.stamina';
   // Đói lả không làm nổi việc nặng (ADR 0013)
   if (isStarving(c.household) && def.stamina >= HEAVY_STAMINA) return 'lock.hunger';

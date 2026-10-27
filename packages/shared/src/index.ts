@@ -4,6 +4,7 @@ export * from './calendar';
 export * from './character';
 export * from './economy';
 export * from './events';
+export * from './npc';
 export * from './protocol';
 export * from './save';
 export * from './schema';

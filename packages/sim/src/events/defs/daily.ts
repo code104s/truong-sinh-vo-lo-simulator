@@ -1,11 +1,12 @@
 // Sự kiện đời thường (ADR 0014; văn phong: docs/van-phong.md, giọng E).
-import { GRAIN_PER_DOU } from '@tsvl/shared';
+import { ageYearsAt, GRAIN_PER_DOU, TICKS_PER_YEAR } from '@tsvl/shared';
 import { becomeIndependent } from '../../life/household';
 import { gainSkill } from '../../life/skills';
 import { idiv } from '../../core/math';
-import { heal, loseGrain, moveGrain, payTo, refresh, spendStamina, wound } from '../effects';
-import type { EventDef } from '../engine';
-import { figure, inTown, inVillage, man, month, nearestTown, personality, doingNow } from './common';
+import { giveGrainTo, heal, loseGrain, moveGrain, payTo, refresh, spendStamina, wound, woundNpc } from '../effects';
+import type { EventContext, EventDef } from '../engine';
+import { npcFigure, type NpcState } from '../../npc/state';
+import { castOr, figure, inTown, inVillage, man, month, nearestTown, npcAge, npcName, peopleHere, personality, pickOne, doingNow } from './common';
 
 /**
  * Lập thân (G2): viết ở S6, bật ở S7 cùng chiến lược batch có kinh tế (giữ một năm ăn, bán phần thừa, giữ tiền thuế).
@@ -60,19 +61,22 @@ export const beggar: EventDef = {
   // Người xin ăn chỉ tới nhà có cái ăn; mùa đông đói rét nên tới nhiều hơn
   weight: (ctx) => (ctx.age >= 12 && ctx.c.household.grain >= BEGGAR_GIFT ? (month(ctx) >= 10 ? 50_000 : 30_000) : 0),
   cooldownTicks: 48,
-  variant: (ctx) => (month(ctx) >= 10 ? 'winter' : null),
-  figure: (_ctx, rng) => figure(rng, rng.int(0, 1) === 0 ? 'old' : 'child', 'poor'),
+  // Người thật (S6): ai trong quận đang đói, hết gạo; cho thì gạo vào kho người ấy
+  cast: (ctx, rng) => pickOne(peopleHere(ctx).filter((n) => { const h = n.character.household; return h.independent && (h.hunger > 0 || (h.grain < BEGGAR_MEAL && h.money < BEGGAR_MEAL)); }), rng),
+  variant: (ctx) => (ctx.npc ? 'named' : month(ctx) >= 10 ? 'winter' : null),
+  params: npcName,
+  figure: castOr((_ctx, rng) => figure(rng, rng.int(0, 1) === 0 ? 'old' : 'child', 'poor')),
   choices: [
-    { id: 'give', costs: ['grain'], apply: (ctx) => ({ result: 'give', params: { lost: loseGrain(ctx, BEGGAR_GIFT) } }) },
+    { id: 'give', costs: ['grain'], apply: (ctx) => ({ result: 'give', params: { lost: ctx.npc ? giveGrainTo(ctx, ctx.npc, BEGGAR_GIFT) : loseGrain(ctx, BEGGAR_GIFT) } }) },
     {
       id: 'share_meal', costs: ['grain', 'stamina'],
       // Nấu cho bữa nóng, giữ lại qua đêm: chỉ người hiền hậu hay chính trực mới làm
       available: (ctx) => (personality(ctx, 'kind', 'righteous') ? null : 'lock.personality'),
-      apply: (ctx) => { const lost = loseGrain(ctx, BEGGAR_MEAL); spendStamina(ctx, 40); return { result: 'share_meal', params: { lost } }; },
+      apply: (ctx) => { const lost = ctx.npc ? giveGrainTo(ctx, ctx.npc, BEGGAR_MEAL) : loseGrain(ctx, BEGGAR_MEAL); spendStamina(ctx, 40); return { result: 'share_meal', params: { lost } }; },
     },
     {
       id: 'refuse', costs: ['risk'],
-      apply: (ctx, rng) => (rng.chance(200_000) ? { result: 'refuse_stolen', params: { lost: loseGrain(ctx, 5) } } : { result: 'refuse' }),
+      apply: (ctx, rng) => (rng.chance(200_000) ? { result: 'refuse_stolen', params: { lost: ctx.npc ? giveGrainTo(ctx, ctx.npc, 5) : loseGrain(ctx, 5) } } : { result: 'refuse' }),
     },
   ],
 };
@@ -124,7 +128,11 @@ export const marketBrawl: EventDef = {
   // Chợ trấn đông người dễ sinh chuyện; người nóng nảy dễ dính vào hơn
   weight: (ctx) => (ctx.age >= 14 && inTown(ctx) ? (personality(ctx, 'hot_tempered') ? 60_000 : 25_000) : 0),
   cooldownTicks: 72,
-  figure: () => man('young', 'poor'),
+  // Người thật (S6): một người lớn trẻ ở trấn; lảng đi thì người ấy bị đánh bị thương
+  cast: (ctx, rng) => pickOne(peopleHere(ctx).filter((n) => { const a = npcAge(ctx, n); return a >= 16 && a < 50; }), rng),
+  variant: (ctx) => (ctx.npc ? 'named' : null),
+  params: npcName,
+  figure: castOr(() => man('young', 'poor')),
   choices: [
     {
       id: 'break_up', costs: ['stamina', 'risk'],
@@ -139,16 +147,30 @@ export const marketBrawl: EventDef = {
         return { result: 'join' };
       },
     },
-    { id: 'walk_away', costs: ['opportunity'], apply: () => ({ result: 'walk_away' }) },
+    { id: 'walk_away', costs: ['opportunity'], apply: (ctx) => { if (!ctx.npc) return { result: 'walk_away' }; woundNpc(ctx.npc, 2); return { result: 'walk_away_named' }; } },
   ],
 };
+
+/** Người trong quận mất gần nhất, trong vòng một năm (người mất ở lại danh sách một năm, S4). */
+function recentDead(ctx: EventContext): NpcState | null {
+  let best: NpcState | null = null;
+  for (const n of ctx.npcs.people) {
+    if (!n.death || n.death.tick > ctx.tick || n.character.location !== ctx.c.location || ctx.tick - n.death.tick > TICKS_PER_YEAR) continue;
+    if (!best || n.death.tick > best.death!.tick) best = n;
+  }
+  return best;
+}
 
 export const villageFuneral: EventDef = {
   id: 'event.village_funeral',
   category: 'daily',
-  weight: (ctx) => (ctx.age >= 12 && inVillage(ctx) ? 25_000 : 0),
+  // Người thật (S6): người trong quận vừa mất trong năm; có người mất thật thì đám tang dễ xảy ra hơn
+  weight: (ctx) => (ctx.age >= 12 && inVillage(ctx) ? (recentDead(ctx) ? 100_000 : 25_000) : 0),
   cooldownTicks: 72,
-  params: () => ({ gift: FUNERAL_GIFT }),
+  cast: (ctx) => recentDead(ctx),
+  variant: (ctx) => (ctx.npc ? 'named' : null),
+  params: (ctx) => ({ gift: FUNERAL_GIFT, ...npcName(ctx), ...(ctx.npc ? { age: ageYearsAt(ctx.npc.character.birthTick, ctx.npc.death!.tick) } : {}) }),
+  figure: (ctx) => (ctx.npc ? npcFigure(ctx.npc, ctx.npc.death!.tick) : null),
   choices: [
     {
       id: 'condolence', costs: ['money'],

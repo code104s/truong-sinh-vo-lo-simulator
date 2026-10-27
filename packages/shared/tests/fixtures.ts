@@ -1,6 +1,6 @@
 import {
   birthplaceId, regionId,
-  type ActionOption, type Birthplace, type CharacterView, type HouseholdView, type LifeSummary, type LogEntry, type MarketView, type MonthPlan, type PendingEvent,
+  type ActionOption, type Birthplace, type CharacterView, type HouseholdView, type LifeSummary, type LogEntry, type MarketView, type MonthPlan, type NpcView, type PendingEvent,
   type RegionMapData, type RegionSummary, type SaveFile,
 } from '../src/index';
 
@@ -87,6 +87,11 @@ export const sampleCharacter: CharacterView = {
   household: sampleHousehold,
 };
 
+export const sampleNpc: NpcView = {
+  id: 'n1', name: 'Lý Thị Hoa', gender: 'female', ageYears: 34, occupation: 'occupation.farmer', healthBand: 'healthy',
+  portrait: { ageBand: 'adult', class: 'common', key: 'n1' },
+};
+
 export const samplePlan: MonthPlan = { slots: [{ action: 'action.farm' }, { action: 'action.travel', target: 2 }, { action: 'action.rest' }] };
 
 export const sampleOption: ActionOption = {
@@ -114,8 +119,8 @@ export const sampleLife: LifeSummary = {
 export function sampleSave(): SaveFile {
   return {
     format: 'tsvl-save',
-    version: 3,
-    protocolVersion: 3,
+    version: 4,
+    protocolVersion: 4,
     simVersion: '0.1.0',
     worldSeed: 'tsvl-01',
     region: { summary: sampleSummary, map: sampleMap(), birthplaces: [sampleBirthplace], logic: { adjacency: [[0, 1]] } },
