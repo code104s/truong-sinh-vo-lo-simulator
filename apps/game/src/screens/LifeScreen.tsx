@@ -1,5 +1,5 @@
 import { t } from '@tsvl/content';
-import type { AdvanceMode, CalendarDate, CharacterView, LogEntry, MonthPlan, ActionOption, ActionProgress, TravelOption, TravelPreview } from '@tsvl/shared';
+import type { AdvanceMode, CalendarDate, CharacterView, LogEntry, MonthPlan, ActionOption, ActionProgress, PendingEvent, TravelOption, TravelPreview } from '@tsvl/shared';
 import { useEffect, useState } from 'preact/hooks';
 import { logText } from '../app/format';
 import { defaultPlan, planDirty, planInvalid } from '../app/plan';
@@ -8,6 +8,7 @@ import { KIND_CHAR } from '../ui/icons';
 import { InkLandscape, Scroll, Seal } from '../ui/ink';
 import { ActionPlanner } from './ActionPlanner';
 import { Chronicle } from './Chronicle';
+import { EventCard } from './EventCard';
 import { StatusBar } from './StatusBar';
 import { TravelDialog } from './TravelDialog';
 
@@ -27,6 +28,8 @@ interface Props {
   onPause: () => void;
   plan: MonthPlan | null; active: ActionProgress | null; actions: ActionOption[]; travel: TravelOption[]; travelPreview: TravelPreview | null;
   onPlan: (plan: MonthPlan) => void; onPreview: (county: number) => void;
+  /** Sự kiện chờ chọn (ADR 0014): thời gian dừng, mọi nút tua khóa tới khi chọn. */
+  pending: PendingEvent | null; onChoose: (instance: number, choice: string) => void;
 }
 
 const copyPlan = (p: MonthPlan | null): MonthPlan => (p ? { slots: p.slots.map((s) => ({ ...s })) as MonthPlan['slots'] } : defaultPlan());
@@ -60,13 +63,13 @@ function Dossier({ c, world }: { c: CharacterView; world: WorldInfo | null }) {
   );
 }
 
-export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview }: Props) {
+export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview, pending, onChoose }: Props) {
   const [travelOpen, setTravelOpen] = useState(false);
   const [draft, setDraft] = useState<MonthPlan>(copyPlan(plan));
   // Mỗi STATE mang một object kế hoạch mới; chỉ đặt lại bản nháp khi kế hoạch thật sự đổi.
   const planKey = JSON.stringify(plan);
   useEffect(() => setDraft(copyPlan(plan)), [planKey]);
-  const lock = running || busy;
+  const lock = running || busy || !!pending;
   const dirty = c.canAct && planDirty(draft, plan);
   const applicable = dirty && !planInvalid(draft, actions, travel);
   /** Bấm tua khi đang sửa dở: áp dụng bản nháp trước (worker xử lý lệnh theo thứ tự). */
@@ -104,6 +107,7 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
           </div>
         </div>
       </Scroll>
+      {pending && <EventCard pending={pending} date={date} busy={busy} onChoose={(choice) => onChoose(pending.instance, choice)} />}
       {travelOpen && world && <TravelDialog world={world} location={c.location} slotIndex={date.tenDay} plan={plan} options={travel} preview={travelPreview} onPreview={onPreview} onPlan={onPlan} onClose={() => setTravelOpen(false)} />}
     </div>
   );

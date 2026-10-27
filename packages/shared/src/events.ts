@@ -8,6 +8,10 @@ export type EventId = string;
 export const EVENT_ID_RE = /^event\.[a-z0-9_]+$/;
 export { CHOICE_ID_RE, type ChoiceId } from './contentId';
 
+/** Sự kiện có lựa chọn có 2–4 lựa chọn (chốt 2026-10-27): một lựa chọn thì không còn là lựa chọn; hơn bốn thì nhạt và khó đọc giá. */
+export const MIN_CHOICES = 2;
+export const MAX_CHOICES = 4;
+
 export const EVENT_COST_TAGS = ['money', 'grain', 'health', 'stamina', 'time', 'risk', 'opportunity'] as const;
 export type EventCostTag = (typeof EVENT_COST_TAGS)[number];
 
@@ -50,7 +54,7 @@ const vChoices: Validator<EventChoiceView[]> = (() => {
   });
   return {
     check: (u, p) => {
-      if (!Array.isArray(u) || u.length === 0) return `${p}: cần ít nhất một lựa chọn`;
+      if (!Array.isArray(u) || u.length < MIN_CHOICES || u.length > MAX_CHOICES) return `${p}: cần ${MIN_CHOICES}–${MAX_CHOICES} lựa chọn`;
       const e = arr(item).check(u, p);
       if (e) return e;
       const ids = (u as EventChoiceView[]).map((c) => c.id);

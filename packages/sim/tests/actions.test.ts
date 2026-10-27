@@ -6,7 +6,8 @@ import type { RegionLogic } from '@tsvl/worldgen';
 const character = () => Life.create({ worldSeed: 'actions', regionId: regionId('r0'), birthplaceId: birthplaceId('r0/c0') }, { id: birthplaceId('r0/c0'), name: 'Làng', nameHan: '村', kind: 'village', cell: { x: 0, y: 0 }, county: 0 }).snapshot().character;
 describe('danh mục hành động', () => {
   it('đủ 10 hành động (v0.3 thêm buôn bán nhỏ), mọi hành động tốn thời gian và mọi việc ngoài nghỉ có giá khác', () => {
-    expect(ACTIONS).toHaveLength(10);
+    expect(ACTIONS.filter((d) => !d.hidden)).toHaveLength(10);
+    expect(ACTIONS.filter((d) => d.hidden).map((d) => d.id)).toEqual(['action.corvee']); // chỉ sự kiện đặt vào (S5)
     for (const d of ACTIONS) { expect(d.slots).toBeGreaterThan(0); if (d.group !== 'rest') expect(d.stamina + d.riskPpm).toBeGreaterThan(0); }
   });
   it('khóa theo tuổi, nơi ở, mùa, sức khỏe và thể lực', () => {

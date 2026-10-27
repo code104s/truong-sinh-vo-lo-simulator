@@ -122,3 +122,37 @@ Danh mục dự kiến, chi tiết điều kiện và lựa chọn viết ở S6
   - lưu khi đang có sự kiện chờ, tải lại vẫn thấy sự kiện đó.
 - **Sự kiện quan hệ và tu tiên:** GDD 3.2 J có hai nhóm này, nhưng v0.3 chưa có. Quan hệ cần NPC (v0.4–v0.5); tu tiên mở ở v0.8.
 - **Công cụ soạn sự kiện / mod:** hoãn (GDD 4.2).
+
+## Ghi chú triển khai S5 (2026-10-27)
+- **Mã:** `packages/sim/src/events/` gồm `engine.ts` (kích hoạt, chờ, chọn), `effects.ts` (hậu quả có sổ cái), `catalog.ts` (tuyển tập).
+- **Định nghĩa:** `EventDef` đúng như bản nháp, với hai chỗ chốt thêm:
+  - **2–4 lựa chọn** (chủ dự án duyệt 2026-10-27). Một lựa chọn thì viết thành sự kiện không lựa chọn (chưa cần ở S5).
+  - **Lựa chọn cuối là lối ra**, không có điều kiện khóa. `checkCatalog` kiểm khi chạy test.
+- **Kích hoạt:**
+  - Tuyển tập sắp theo id.
+  - Chỉ rút RNG khi có ứng viên, để tuần yên ổn không làm đổi luồng.
+  - Tổng trọng số vượt 1 triệu ppm thì co lại, mỗi tuần tối đa một sự kiện.
+  - Mỗi tháng tối đa một sự kiện có lựa chọn.
+  - Có thời gian chờ theo từng sự kiện và cờ chỉ-một-lần.
+- **Khóa văn bản** dùng thẳng id sự kiện: `event.beggar.title`, `event.beggar.choice.give`, `event.beggar.result.give`. Bản đầu ghép nhầm thành `event.event.…`; đã có test phủ khóa duyệt mọi lựa chọn và mọi nhánh kết quả.
+- **Chờ và chọn:**
+  - `Life.advance` trả `{ status: 'event', pending }`.
+  - Host gửi tin `EVENT`, kèm `STATE.pending`.
+  - `ADVANCE` khi đang chờ trả lỗi `EVENT_PENDING` và không vào nhật ký lệnh.
+  - `CHOOSE` vào nhật ký lệnh và bộ đệm chống trùng; phát lại cho cùng digest, kể cả save lưu khi đang chờ.
+- **Thời gian chiếm bởi lựa chọn** (đi phu) dùng hành động ẩn `action.corvee` (2 ô) qua cơ chế hành động dài của ADR 0008. Hành động ẩn không có trong bảng chọn và không xếp vào kế hoạch được.
+- **Ba sự kiện mẫu:**
+
+  | Sự kiện | Xảy ra khi | Lựa chọn |
+  |---|---|---|
+  | Người xin ăn | túi có lương thực | cho một đấu / nấu cơm giữ qua đêm (chỉ người hiền hậu, chính trực) / đóng cửa (rủi ro bị trộm) |
+  | Thầy thuốc qua làng | đang bệnh, ở làng | trả 150 văn dứt bệnh / tự hái lá thuốc (hên xui) |
+  | Quan sai đòi thuế | đã ra riêng, còn nợ thuế đinh | nộp đủ / đi phu hai tuần / trốn (phúc duyên cao thì ít bị bắt) |
+
+- **Đo tần suất** (tsvl-01, 60 đời, làm ruộng + hái lượm, 2.892 năm sau 12 tuổi): 0,29 sự kiện/năm. Còn xa mục tiêu 4–8 vì mới có ba sự kiện; S6 viết đủ khoảng 30.
+- **Người chơi máy:** mặc định chọn lựa chọn đầu tiên đang mở; "lười" luôn chọn lối ra. `Life.runToDeath` và `pnpm sim life` cũng tự chọn như mặc định.
+- **Giao diện (F3):**
+  - Thẻ sự kiện có chân dung người vô danh lấy từ kho `portraits-npc` theo giới, lứa tuổi, tầng lớp (thiếu thì nới dần), cùng số thứ tự sự kiện thì cùng gương mặt.
+  - Lựa chọn có chip giá; lựa chọn bị khóa vẫn hiện kèm lý do; phím 1–4 để chọn nhanh.
+  - Thẻ không có nút đóng.
+  - Dải "Có biến" vẫn dùng cho tin lớn không cần chọn.

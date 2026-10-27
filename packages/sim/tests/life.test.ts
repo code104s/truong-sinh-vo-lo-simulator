@@ -1,6 +1,7 @@
 import { HIDDEN_CHARACTER_KEYS, TICKS_PER_YEAR, birthplaceId, regionId, vCharacterView, type Birthplace, type NewLifeConfig, type SettlementKind } from '@tsvl/shared';
 import { describe, expect, it } from 'vitest';
 import { Life, lifeRoot } from '../src/index';
+import { autoAdvance } from './auto';
 
 const bp = (n: number, kind: SettlementKind = 'village'): Birthplace => ({ id: birthplaceId(`r0/c${n}`), name: 'Phố Kỳ', nameHan: '浦岐', kind, cell: { x: 1, y: 1 }, county: 0 });
 const cfg = (seed: string, n: number, lifeSeed?: number): NewLifeConfig => ({
@@ -59,7 +60,7 @@ describe('vòng tick và tua', () => {
       const mode = (['week', 'month', 'year'] as const)[k % 3];
       const before = l.tick;
       const target = l.targetOf(mode);
-      const res = l.advance(mode);
+      const res = autoAdvance(l, mode);
       if (res.status === 'done') expect(l.tick).toBe(target);
       else expect(l.tick).toBeLessThanOrEqual(target);
       expect(l.tick).toBeGreaterThan(before);
@@ -72,8 +73,9 @@ describe('vòng tick và tua', () => {
   it('untilEvent dừng ở mục quan trọng và chỉ ở đó', () => {
     const l = life('until', 1, 2);
     for (let k = 0; k < 30 && l.alive; k++) {
-      const res = l.advance('untilEvent');
-      expect(res.status === 'interrupted' || res.status === 'died').toBe(true);
+      const res = autoAdvance(l, 'untilEvent');
+      expect(['interrupted', 'died', 'event']).toContain(res.status);
+      if (res.status === 'event') continue; // sự kiện có lựa chọn cũng là chỗ dừng (ADR 0014)
       const majors = res.entries.filter((e) => e.importance === 'major');
       expect(majors.length).toBeGreaterThan(0);
       // Mọi mục quan trọng thuộc tick cuối cùng đã chạy
@@ -112,7 +114,7 @@ describe('tất định và lưu/tải (nghiệm thu Sim)', () => {
       whole.runToDeath();
       const half = life(s);
       const mid = half.character.birthTick + Math.floor((whole.death!.tick - half.character.birthTick) / 2);
-      while (half.alive && half.tick < mid) half.advance('week');
+      while (half.alive && half.tick < mid) autoAdvance(half, 'week');
       const restored = Life.restore(JSON.parse(JSON.stringify(half.snapshot())), JSON.parse(JSON.stringify(half.log)));
       expect(restored.digest()).toBe(half.digest());
       restored.runToDeath();
@@ -132,11 +134,12 @@ describe('tất định và lưu/tải (nghiệm thu Sim)', () => {
     // v0.3 S2: chợ quận vào snapshot, thời tiết năm; trẻ nhà nghèo có thể đói trong nạn đói (ADR 0012, 0013).
     // v0.3 S3: hộ thêm tuần công, mùa vụ (ADR 0012); 3 đời mẫu không xếp kế hoạch (chỉ nghỉ) nên tuổi và nguyên nhân giữ nguyên.
     // v0.3 S4: thêm kỹ năng buôn bán, nợ thuế vào snapshot (ADR 0012).
+    // v0.3 S5: snapshot thêm trạng thái sự kiện (ADR 0014); đời mẫu chỉ nghỉ, túi không có lương nên không gặp sự kiện mẫu.
     expect(out).toMatchInlineSnapshot(`
       [
-        "75 illness 92a409f29a51d51a",
-        "67 old_age 332acac2517e127a",
-        "71 illness 68e98288e3114dfd",
+        "75 illness a85c6b22723556c6",
+        "67 old_age ae5ed1311c7e184a",
+        "71 illness e65a44cb95613f55",
       ]
     `);
   });

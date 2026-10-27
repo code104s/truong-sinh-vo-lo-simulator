@@ -658,3 +658,44 @@ p { margin: 0; }
 
 /* Cảnh báo khóa lúc này trong kế hoạch tháng: không chặn, chỉ nhắc */
 .plan-warning { color: var(--ochre); }
+
+/* —— Thẻ sự kiện có lựa chọn (ADR 0014, F3): tờ giấy thiếp viền son, chân dung người trong chuyện bên trái —— */
+.event-backdrop { position: fixed; inset: 0; z-index: 35; display: grid; place-items: center; padding: 24px; background: rgba(25, 22, 18, 0.55); animation: event-fade 0.25s ease-out both; }
+.event-card {
+  width: min(780px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  background: var(--paper-tex), linear-gradient(180deg, #f4efe4, #e8e0cf);
+  border: 1px solid rgba(31, 30, 28, 0.4);
+  box-shadow: inset 0 0 0 5px rgba(255, 255, 255, 0.35), inset 0 0 0 6px rgba(158, 43, 31, 0.55), 0 24px 60px rgba(20, 16, 10, 0.5);
+  animation: event-rise 0.3s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.event-figure { display: grid; place-items: start center; padding: 26px 0 20px 22px; }
+.event-figure .portrait, .event-figure .portrait img, .event-figure .portrait svg { width: 140px; }
+.event-figure .portrait img, .event-figure .portrait svg { height: 210px; }
+.event-figure > .seal { width: 64px; height: 64px; font-size: 34px; margin-top: 20px; }
+.event-text { display: flex; flex-direction: column; gap: 10px; padding: 22px 26px 22px 22px; min-width: 0; }
+.event-when { font: 600 12px/1 var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--cinnabar); }
+.event-title { display: flex; align-items: center; gap: 10px; font: 700 26px/1.2 var(--display); }
+.event-title .seal { font-size: 15px; }
+.event-body { font-size: 16px; line-height: 1.65; color: var(--ink); max-width: 60ch; }
+.event-choices { display: flex; flex-direction: column; gap: 6px; }
+.event-choice { display: flex; flex-direction: column; gap: 6px; text-align: left; font: inherit; color: var(--ink); padding: 10px 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.45); cursor: pointer; transition: background 0.12s, border-color 0.12s; }
+.event-choice:hover:not(:disabled) { background: rgba(255, 255, 255, 0.85); border-color: var(--cinnabar); }
+.event-choice:focus-visible { outline: 2px dashed var(--cinnabar); outline-offset: 2px; }
+.event-choice:disabled { cursor: default; }
+.event-choice.locked { opacity: 0.62; }
+.event-choice-text { display: flex; align-items: center; gap: 10px; font: 700 17px/1.3 var(--display); }
+.event-key { display: inline-grid; place-items: center; width: 22px; height: 22px; flex: none; font: 700 12px/1 var(--sans); border: 1px solid rgba(31, 30, 28, 0.45); border-radius: 3px; color: var(--ink-2); }
+.event-why { font-size: 13px; color: var(--ochre); }
+@keyframes event-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes event-rise { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .event-backdrop, .event-card { animation: none; } }
+@media (max-width: 650px) {
+  .event-card { grid-template-columns: 1fr; }
+  .event-figure { padding: 18px 0 0; place-items: center; }
+  .event-figure .portrait, .event-figure .portrait img, .event-figure .portrait svg { width: 100px; }
+  .event-figure .portrait img, .event-figure .portrait svg { height: 150px; }
+}

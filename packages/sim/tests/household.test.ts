@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { birthplaceId, regionId, vCharacterView, type LogEntry } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { Life, Rng } from '../src/index';
+import { autoAdvance } from './auto';
 import { actionOptions } from '../src/life/actions';
 import type { CharacterState } from '../src/life/character';
 import {
@@ -231,7 +232,7 @@ describe('hậu quả của đói', () => {
   it('lưu giữa cơn đói rồi tải lại: chạy tiếp cùng digest', () => {
     const whole = adult('save', (c) => { c.household.independent = true; c.household.grain = 15; });
     const part = adult('save', (c) => { c.household.independent = true; c.household.grain = 15; });
-    for (let i = 0; i < 4; i++) part.advance('week');
+    for (let i = 0; i < 4; i++) autoAdvance(part, 'week');
     const restored = Life.restore(part.snapshot(), part.log, region);
     whole.runToDeath(); restored.runToDeath();
     expect(restored.digest()).toBe(whole.digest());

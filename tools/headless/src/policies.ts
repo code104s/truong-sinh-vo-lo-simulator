@@ -1,4 +1,4 @@
-import type { ActionOption, CalendarDate, CharacterView, MonthPlan, SettlementKind, TravelOption } from '@tsvl/shared';
+import type { ActionOption, CalendarDate, CharacterView, MonthPlan, PendingEvent, SettlementKind, TravelOption } from '@tsvl/shared';
 import { hash32, Rng } from '@tsvl/sim';
 
 export const POLICIES = ['lazy', 'balanced', 'overwork', 'scholar', 'wanderer'] as const;
@@ -37,4 +37,13 @@ export function policyPlan(name: PolicyName, c: PolicyContext): MonthPlan | null
     if (c.date.tick % 3 !== 0) travelTo(c.travel[rng.int(0, c.travel.length - 1)]!.county);
   }
   return plan;
+}
+
+/**
+ * Người chơi máy gặp sự kiện (ADR 0014): mặc định lựa chọn đầu tiên đang mở; "lười" luôn đi lối ra (lựa chọn cuối,
+ * không bao giờ bị khóa) vì lối ra thường là từ chối, cam chịu.
+ */
+export function policyChoose(name: PolicyName, pending: PendingEvent): string {
+  if (name === 'lazy') return pending.choices.at(-1)!.id;
+  return pending.choices.find((c) => c.locked === null)!.id;
 }

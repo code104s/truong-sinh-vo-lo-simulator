@@ -54,6 +54,7 @@ export function App({ client }: { client: SimClient }) {
     const kind = 'reqId' in m && m.reqId !== null ? kinds.current.get(m.reqId) : undefined;
     switch (m.type) {
       case 'INTERRUPT':
+      case 'EVENT':
         runRef.current = false;
         break;
       case 'STATE':
@@ -147,6 +148,8 @@ export function App({ client }: { client: SimClient }) {
           plan={s.plan} active={s.active} actions={s.actions} travel={s.travel} travelPreview={s.travelPreview}
           onPlan={(plan) => { setSaved(false); send({ type: 'SET_PLAN', plan }, 'plan'); }}
           onPreview={(county) => send({ type: 'PREVIEW_TRAVEL', county })}
+          pending={s.pending}
+          onChoose={(instance, choice) => { setSaved(false); send({ type: 'CHOOSE', instance, choice }, 'plan'); }}
         />
       )}
       {s.screen === 'summary' && s.summary && <SummaryScreen summary={s.summary} character={s.character} world={s.world} onBack={() => dispatch({ type: 'go', screen: 'menu' })} />}

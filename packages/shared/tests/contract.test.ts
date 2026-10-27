@@ -245,9 +245,11 @@ describe('v0.3: hộ, chợ, mua bán, sự kiện (ADR 0012–0014)', () => {
 
   it.each([
     ['không có lựa chọn', { choices: [] }],
+    ['chỉ một lựa chọn (không còn là lựa chọn)', { choices: [{ id: 'pay', costs: ['money'], locked: null }] }],
+    ['năm lựa chọn (quá bốn)', { choices: ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, costs: ['time'], locked: null })) }],
     ['mọi lựa chọn đều khóa (ADR 0014: luôn có lối ra)', { choices: samplePending.choices.map((c) => ({ ...c, locked: 'lock.money' })) }],
-    ['lựa chọn không có giá', { choices: [{ id: 'free', costs: [], locked: null }] }],
-    ['giá lạ', { choices: [{ id: 'pay', costs: ['soul'], locked: null }] }],
+    ['lựa chọn không có giá', { choices: [{ id: 'free', costs: [], locked: null }, { id: 'pay', costs: ['money'], locked: null }] }],
+    ['giá lạ', { choices: [{ id: 'pay', costs: ['soul'], locked: null }, { id: 'flee', costs: ['risk'], locked: null }] }],
     ['id lựa chọn trùng', { choices: [{ id: 'pay', costs: ['money'], locked: null }, { id: 'pay', costs: ['time'], locked: null }] }],
     ['id sự kiện sai', { eventId: 'tax_collector' }],
     ['tham số số thực', { params: { amount: 0.5 } }],

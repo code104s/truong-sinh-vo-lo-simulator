@@ -92,7 +92,7 @@ export class SimHost {
       return;
     }
     const cmd = parsed.value;
-    const mutates = cmd.type === 'NEW_LIFE' || cmd.type === 'SET_PLAN' || cmd.type === 'ADVANCE' || cmd.type === 'TRADE';
+    const mutates = cmd.type === 'NEW_LIFE' || cmd.type === 'SET_PLAN' || cmd.type === 'ADVANCE' || cmd.type === 'TRADE' || cmd.type === 'CHOOSE';
     const key = mutates ? canonical(cmd) : '';
     const cached = mutates ? this.handled.get(cmd.reqId) : undefined;
     if (cached) {
@@ -141,11 +141,14 @@ export class SimHost {
       case 'ADVANCE': {
         const life = this.requireLife();
         if (!life.alive) throw new HostError('DEAD', 'nhân vật đã chết');
+        // Chưa chọn thì thời gian không trôi (ADR 0014); lệnh bị từ chối không vào nhật ký lệnh
+        if (life.pendingEvent()) throw new HostError('EVENT_PENDING', 'còn sự kiện chờ chọn');
         this.record({ type: 'ADVANCE', mode: cmd.mode });
         const res = life.advance(cmd.mode);
         if (res.entries.length) this.emit({ type: 'LOG', reqId: cmd.reqId, entries: res.entries });
         if (res.status === 'stuck') throw new HostError('INTERNAL', `tua tới khi có biến vượt giới hạn an toàn ở tick ${life.tick}`);
         if (res.status === 'interrupted') this.emit({ type: 'INTERRUPT', reqId: cmd.reqId, entry: res.entry });
+        if (res.status === 'event') this.emit({ type: 'EVENT', reqId: cmd.reqId, pending: res.pending });
         this.emitState(cmd.reqId);
         if (res.status === 'died') this.emit({ type: 'DIED', reqId: cmd.reqId, summary: life.summary() });
         return;
@@ -171,8 +174,16 @@ export class SimHost {
         this.record({ type: 'TRADE', grain: cmd.grain });
         this.emitState(cmd.reqId); return;
       }
-      case 'CHOOSE':
-        throw new HostError('BAD_COMMAND', 'không có sự kiện nào đang chờ (v0.3 S5)');
+      case 'CHOOSE': {
+        const life = this.requireLife();
+        if (!life.alive) throw new HostError('DEAD', 'nhân vật đã chết');
+        const from = life.log.length;
+        const refused = life.choose(cmd.instance, cmd.choice);
+        if (refused) throw new HostError('BAD_COMMAND', refused);
+        this.record({ type: 'CHOOSE', instance: cmd.instance, choice: cmd.choice });
+        this.emit({ type: 'LOG', reqId: cmd.reqId, entries: life.log.slice(from) });
+        this.emitState(cmd.reqId); return;
+      }
       case 'PAUSE':
         // Tua chạy đồng bộ và xong trong vài mili giây, nên không có gì đang chạy để dừng.
         if (this.life) this.emitState(cmd.reqId);
@@ -206,8 +217,7 @@ export class SimHost {
     this.emit({ type: 'STATE', reqId, date: calendarOf(life.displayTick), character: life.view(), running: false, plan: life.plan,
       active: a ? { action: a.slot.action, remaining: a.remaining, total: a.total, ...(a.slot.target === undefined ? {} : { target: a.slot.target }) } : null,
       slotIndex: calendarOf(life.displayTick).tenDay, actions: life.view().canAct ? life.actions() : [], travel: life.view().canAct ? life.travel() : [],
-      // Sự kiện chờ có ở S5
-      market: life.market(), pending: null });
+      market: life.market(), pending: life.pendingEvent() });
   }
 
   save(): SaveFile {

@@ -3,7 +3,7 @@ export { Rng, RngStreams, type RngState, type RngStreamsSnapshot } from './core/
 export { hash32, hashString, hash64Hex } from './core/hash';
 export { canonical, digestOf } from './core/digest';
 export { idiv, mulDiv, clamp, lerpTable, sortedEntries } from './core/math';
-export { Life, SIM_VERSION, lifeRoot, type LifeSnapshot, type AdvanceResult } from './life/life';
+export { Life, SIM_VERSION, firstOpenChoice, lifeRoot, type LifeSnapshot, type AdvanceResult } from './life/life';
 export { toView, type CharacterState } from './life/character';
 export type { Death } from './life/health';
 export { simulateEconomy, type EconomyRunStats } from './economy/simulate';

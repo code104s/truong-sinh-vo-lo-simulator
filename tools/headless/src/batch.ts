@@ -4,7 +4,7 @@ import { performance } from 'node:perf_hooks';
 import { calendarOf, type Birthplace, type RegionId } from '@tsvl/shared';
 import { Life } from '@tsvl/sim';
 import type { RegionLogic } from '@tsvl/worldgen';
-import { POLICIES, policyPlan, type PolicyName } from './policies';
+import { POLICIES, policyChoose, policyPlan, type PolicyName } from './policies';
 
 interface BatchRegion { seed: string; regionId: RegionId; birthplaces: Birthplace[]; logic: RegionLogic | null }
 /**
@@ -35,6 +35,11 @@ export function runPolicyBatch(regions: BatchRegion[], n: number, selection: str
         const plan = policyPlan(policy, { character: life.view(), date: calendarOf(life.tick), actions: life.actions(), travel: optionsCache.get(key)!, settlements: logic.settlementKind, seed: i, active: !!life.active });
         if (plan) life.setPlan(plan);
         life.advance('week'); ticks++;
+        const pending = life.pendingEvent();
+        if (pending) {
+          const refused = life.choose(pending.instance, policyChoose(policy, pending));
+          if (refused) throw new Error(`${policy}: ${refused}`);
+        }
       }
       if (life.alive) { stuck++; continue; }
       if (life.death!.tick - life.character.birthTick > life.character.lifespanBase + life.character.lifespanBonus) overCap++;

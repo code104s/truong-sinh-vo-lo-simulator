@@ -1,7 +1,8 @@
 import { arr, intRange, nat, obj, oneOf, opt, str, SETTLEMENT_KINDS, type SaveFile, type Validator } from '@tsvl/shared';
 import { FERTILITY_MAX, FERTILITY_MIN, type RegionLogic } from '@tsvl/worldgen';
 import { canonical } from '../core/digest';
-import { validatePlan } from './actions';
+import { actionDef, validatePlan } from './actions';
+import { EVENTS } from '../events/catalog';
 import { STREAMS, type LifeSnapshot } from './life';
 import { previewTravel } from './travel';
 
@@ -32,6 +33,7 @@ export function checkSavedLogic(logic: RegionLogic, save: SaveFile, snap: LifeSn
   if (!bp || bp.county !== c.home || c.location >= n || c.home >= n || snap.tick <= c.birthTick || c.alive !== (snap.death === null)) return 'trạng thái nhân vật không khớp vùng';
   if (STREAMS.some((name) => !snap.rng.streams[name])) return 'thiếu luồng RNG';
   if (snap.economy.counties.length !== n) return 'chợ quận không khớp vùng';
+  if (snap.events.pending && !EVENTS.some((d) => d.id === snap.events.pending!.eventId)) return 'sự kiện chờ không có trong tuyển tập';
   if (snap.plan && !validatePlan(snap.plan, logic)) return 'kế hoạch lưu không hợp lệ';
   if (snap.active) {
     const a = snap.active;
@@ -39,7 +41,7 @@ export function checkSavedLogic(logic: RegionLogic, save: SaveFile, snap: LifeSn
     if (a.slot.action === 'action.travel') {
       const actual = previewTravel(logic, c.location, a.slot.target ?? -1);
       if (!actual || canonical(actual) !== canonical(a.preview) || actual.slots !== a.total) return 'chuyến đi lưu không khớp đường';
-    } else return 'hành động một ô không được lưu dở';
+    } else if (!actionDef(a.slot.action)?.hidden) return 'hành động một ô không được lưu dở';
   }
   if (!save.commandLog.length || save.commandLog[0]!.cmd.type !== 'NEW_LIFE') return 'thiếu lệnh bắt đầu đời';
   let tick = c.birthTick;

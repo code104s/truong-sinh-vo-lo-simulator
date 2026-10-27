@@ -22,7 +22,7 @@ describe('máy trạng thái màn', () => {
   });
 
   it('v0.3: sự kiện chờ chọn dừng tua liên tục; STATE mang chợ và sự kiện', () => {
-    const pending = { instance: 1, eventId: 'event.tax_collector', variant: null, params: {}, choices: [{ id: 'pay', costs: ['money' as const], locked: null }], figure: null };
+    const pending = { instance: 1, eventId: 'event.tax_collector', variant: null, params: {}, choices: [{ id: 'pay', costs: ['money' as const], locked: null }, { id: 'flee', costs: ['risk' as const], locked: null }], figure: null };
     let s = run([{ type: 'run', on: true }, msg({ type: 'EVENT', reqId: 7, pending })]);
     expect(s.running).toBe(false);
     expect(s.pending).toEqual(pending);

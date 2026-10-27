@@ -11,6 +11,8 @@ export const ACTION_MIN_AGE = 12;
 export interface ActionDef {
   id: string; group: ActionGroup; slots: number; stamina: number; riskPpm: number;
   skill?: Skill; places?: readonly SettlementKind[]; minStamina?: number;
+  /** Chỉ sự kiện đặt vào (vd. đi phu trừ thuế); không có trong bảng chọn, không xếp vào kế hoạch được. */
+  hidden?: boolean;
 }
 export const ACTIONS: readonly ActionDef[] = [
   { id: 'action.farm', group: 'livelihood', slots: 1, stamina: 180, riskPpm: 100, skill: 'farming', places: ['village'] },
@@ -23,6 +25,7 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'action.rest', group: 'rest', slots: 1, stamina: 0, riskPpm: 0 },
   { id: 'action.heal', group: 'heal', slots: 1, stamina: 20, riskPpm: 0, places: ['town', 'city'] },
   { id: 'action.travel', group: 'travel', slots: 1, stamina: 100, riskPpm: 300, minStamina: 30 },
+  { id: 'action.corvee', group: 'livelihood', slots: 2, stamina: 180, riskPpm: 500, hidden: true },
 ];
 export const actionDef = (id: string) => ACTIONS.find((a) => a.id === id);
 /** Việc nặng: thể lực tốn từ mức "cao" trở lên. */
@@ -45,7 +48,7 @@ export function actionLock(def: ActionDef, c: CharacterState, tick: Tick, kind: 
 export function actionOptions(c: CharacterState, tick: Tick, logic: RegionLogic, eco: EconomyState): ActionOption[] {
   const kind = logic.settlementKind[c.location]!;
   const market = eco.counties[c.location]!;
-  return ACTIONS.map((d) => ({
+  return ACTIONS.filter((d) => !d.hidden).map((d) => ({
     id: d.id, group: d.group, slots: d.slots,
     cost: { stamina: d.stamina === 0 ? 'cost.none' : d.stamina < 80 ? 'cost.low' : d.stamina < HEAVY_STAMINA ? 'cost.medium' : 'cost.high', risk: d.riskPpm === 0 ? 'risk.none' : d.riskPpm < 300 ? 'risk.low' : d.riskPpm < 1000 ? 'risk.medium' : 'risk.high',
       money: moneyCost(d.id) },
@@ -56,7 +59,7 @@ export function actionOptions(c: CharacterState, tick: Tick, logic: RegionLogic,
 
 /** Điều kiện thời điểm chạy kiểm lại từng tick; ở đây chỉ chặn lệnh không hợp lệ về ý nghĩa. */
 export function validatePlan(plan: MonthPlan, logic: RegionLogic): boolean {
-  return plan.slots.every((s) => !!actionDef(s.action) && (s.action === 'action.travel'
+  return plan.slots.every((s) => !!actionDef(s.action) && !actionDef(s.action)!.hidden && (s.action === 'action.travel'
     ? s.target !== undefined && s.target < logic.counties.length
     : s.target === undefined));
 }

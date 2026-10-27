@@ -1,7 +1,7 @@
 // Một đời người: vòng tick theo pha có nhịp (ADR 0002), tua, nhật ký, snapshot (ADR 0004).
 import {
   GRAIN_PER_DOU, TICKS_PER_MONTH, TICKS_PER_YEAR, ageYearsAt, calendarOf, isMonthStart, isYearStart,
-  type AdvanceMode, type Birthplace, type CharacterView, type LifeSummary, type LogEntry, type MarketView, type NewLifeConfig, type Tick, type MonthPlan, type SupplyBand,
+  type AdvanceMode, type Birthplace, type CharacterView, type LifeSummary, type LogEntry, type MarketView, type NewLifeConfig, type PendingEvent, type Tick, type MonthPlan, type SupplyBand,
 } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { digestOf } from '../core/digest';
@@ -12,6 +12,8 @@ import { createCharacter, toView, type CharacterState } from './character';
 import { agingPhase, consequencesPhase, eventsPhase, type Death } from './health';
 import { feedPhase } from './household';
 import { harvestPlayer } from '../economy/farming';
+import { EVENTS } from '../events/catalog';
+import { choose as chooseEvent, makeContext, newEventsState, pendingView, rollEvent, type EventsState } from '../events/engine';
 import { headTax, HEAD_TAX, tradeGrain } from '../economy/income';
 import {
   buyGrain, buyPrice, countyMoney, createEconomy, economyMonth, HARVEST_MONTH, marketView, rollWeather, supplyOf, type EconomyState,
@@ -34,6 +36,8 @@ export interface LifeSnapshot extends PlayerState {
   character: CharacterState;
   /** Chợ các quận của vùng (ADR 0012); thế giới chạy cùng đời người chơi. */
   economy: EconomyState;
+  /** Sự kiện có lựa chọn: đang chờ, thời gian chờ, cờ một lần (ADR 0014). */
+  events: EventsState;
   rng: RngStreamsSnapshot;
   death: Death | null;
 }
@@ -41,6 +45,8 @@ export interface LifeSnapshot extends PlayerState {
 export type AdvanceResult =
   | { status: 'done'; entries: LogEntry[] }
   | { status: 'interrupted'; entries: LogEntry[]; entry: LogEntry }
+  /** Tua dừng vì có sự kiện cần chọn; ADVANCE bị từ chối cho tới khi chọn (ADR 0014). */
+  | { status: 'event'; entries: LogEntry[]; pending: PendingEvent }
   | { status: 'died'; entries: LogEntry[] }
   | { status: 'stuck'; entries: LogEntry[] };
 
@@ -68,7 +74,7 @@ export class Life {
     character.health = character.healthMax;
     character.stamina = staminaMax(character, birthTick);
     // Tuần sinh coi như đã qua: tick kế tiếp là tuần sau khi sinh
-    const life = new Life({ simVersion: SIM_VERSION, config, tick: birthTick + 1, character, economy: createEconomy(logic, birthTick), rng: streams.snapshot(), death: null, plan: null, active: null, planWarned: false }, streams, [], logic);
+    const life = new Life({ simVersion: SIM_VERSION, config, tick: birthTick + 1, character, economy: createEconomy(logic, birthTick), events: newEventsState(), rng: streams.snapshot(), death: null, plan: null, active: null, planWarned: false }, streams, [], logic);
     life.push({ tick: birthTick, key: 'log.birth', params: { birthplace: birthplace.name, background: `background.${character.background}` }, importance: 'major' });
     return life;
   }
@@ -134,8 +140,9 @@ export class Life {
 
     // 1 Thế giới: thời tiết (năm), chợ quận (tháng). 2 Thế lực, 3 NPC: chưa có
     this.worldPhase(t, log);
-    // 4 Sự kiện (tuần)
+    // 4 Sự kiện (tuần): bệnh, tai nạn, rồi sự kiện có lựa chọn
     let death = eventsPhase(c, t, this.streams.get('illness'), this.streams.get('accident'), log);
+    if (!death) rollEvent(this.s.events, EVENTS, this.context(t), this.streams.get('events'));
     // 5 Người chơi: tuổi thơ hoặc ô kế hoạch tháng (ADR 0008).
     const action = death ? { death, carePct: 0 } : playerPhase(this.s, c, t, this.logic, this.s.economy, this.streams, log);
     death = action.death;
@@ -155,6 +162,7 @@ export class Life {
     if (death) {
       c.alive = false;
       c.conditions = [];
+      this.s.events.pending = null;
       this.s.death = death;
       // Chết vì bệnh mà đang đói: vẫn là bệnh, kể thêm hoàn cảnh (ADR 0013)
       const key = death.cause === 'illness' && c.household.hunger > 0 ? 'log.death.hungry' : 'log.death';
@@ -237,6 +245,7 @@ export class Life {
   /** Tua tới đích, dừng sớm khi có mục nhật ký quan trọng hoặc khi chết. */
   advance(mode: AdvanceMode): AdvanceResult {
     if (!this.alive) throw new Error('đã chết');
+    if (this.s.events.pending) throw new Error('đang có sự kiện chờ chọn');
     const target = this.targetOf(mode);
     const from = this.log.length;
     while (this.s.tick < target) {
@@ -244,6 +253,8 @@ export class Life {
       const death = this.step();
       const entries = this.log.slice(from);
       if (death) return { status: 'died', entries };
+      const pending = this.pendingEvent();
+      if (pending) return { status: 'event', entries, pending };
       const major = this.log.slice(before).find((e) => e.importance === 'major' || e.key === 'log.plan.invalid');
       if (major) return { status: 'interrupted', entries, entry: major };
     }
@@ -251,10 +262,32 @@ export class Life {
     return mode === 'untilEvent' ? { status: 'stuck', entries } : { status: 'done', entries };
   }
 
-  /** Chạy tới khi chết (CLI, batch). */
-  runToDeath(maxTicks = 200 * TICKS_PER_YEAR): void {
+  /** Chạy tới khi chết (CLI, test). Gặp sự kiện thì chọn bằng `pick`; mặc định lựa chọn đầu tiên đang mở. */
+  runToDeath(maxTicks = 200 * TICKS_PER_YEAR, pick: (p: PendingEvent) => string = firstOpenChoice): void {
     const end = this.s.tick + maxTicks;
-    while (this.alive && this.s.tick < end) this.step();
+    while (this.alive && this.s.tick < end) {
+      this.step();
+      const pending = this.pendingEvent();
+      if (pending) {
+        const refused = this.choose(pending.instance, pick(pending));
+        if (refused) throw new Error(`runToDeath: ${refused}`);
+      }
+    }
+  }
+
+  private context(t: Tick) {
+    return makeContext(this.s.character, this.s, this.s.economy, this.logic, t);
+  }
+
+  /** Sự kiện đang chờ chọn như người chơi thấy; null nếu không có. */
+  pendingEvent(): PendingEvent | null {
+    return pendingView(this.s.events, EVENTS, this.context(this.s.tick));
+  }
+
+  /** Lệnh CHOOSE (ADR 0014). Trả lý do từ chối, hoặc null khi đã áp hậu quả. */
+  choose(instance: number, choice: string): string | null {
+    if (!this.alive) return 'đã chết';
+    return chooseEvent(this.s.events, EVENTS, this.context(this.s.tick), instance, choice, this.streams.get('events'), (e) => this.push({ tick: this.displayTick, ...e }));
   }
 
   summary(): LifeSummary {
@@ -275,6 +308,9 @@ export class Life {
     };
   }
 }
+
+/** Lựa chọn đầu tiên đang mở; luôn có vì lựa chọn cuối là lối ra không điều kiện (ADR 0014). */
+export const firstOpenChoice = (p: PendingEvent): string => p.choices.find((ch) => ch.locked === null)!.id;
 
 function structuredCloneSnapshot(s: LifeSnapshot): LifeSnapshot {
   return JSON.parse(JSON.stringify(s)) as LifeSnapshot;

@@ -1,7 +1,7 @@
 // Validate snapshot sim khi tải save (ADR 0004): save hỏng hoặc bị sửa tay thì từ chối trước khi chạy.
 import {
   arr, bool, intRange, lit, nat, nonEmpty, nullable, obj, oneOf, record, str,
-  DEATH_CAUSES, GENDERS, SETTLEMENT_KINDS, TENURES, vBirthplaceId, vNewLifeConfig, vMonthPlan, vPlanSlot, vTravelPreview, type Validator,
+  DEATH_CAUSES, FIGURE_AGES, FIGURE_CLASSES, GENDERS, SETTLEMENT_KINDS, TENURES, int, union, vBirthplaceId, vNewLifeConfig, vMonthPlan, vPlanSlot, vTravelPreview, type Validator,
 } from '@tsvl/shared';
 import type { RngState, RngStreamsSnapshot } from '../core/rng';
 import type { CharacterState, Condition, SpiritRoot } from './character';
@@ -12,6 +12,7 @@ import type { Skill } from './skills';
 import type { ActiveAction } from './player';
 import { HUNGER_MAX, type HouseholdState } from './household';
 import type { CountyEconomy, EconomyState } from '../economy/market';
+import type { EventsState, PendingState } from '../events/engine';
 
 const skillRecord = (value: Validator<number>) => obj<Record<Skill, number>>({ farming: value, hunting: value, crafting: value, literacy: value, martial: value, trade: value });
 
@@ -58,6 +59,13 @@ export const vLifeSnapshot = obj<LifeSnapshot>({
   economy: obj<EconomyState>({
     regionWeatherPct: intRange(0, 200),
     counties: arr(obj<CountyEconomy>({ mouths: intRange(1, Number.MAX_SAFE_INTEGER), grain: nat, money: nat, weatherPct: intRange(0, 200), price: nat, prevPrice: nat })),
+  }),
+  events: obj<EventsState>({
+    pending: nullable(obj<PendingState>({
+      instance: nat, eventId: nonEmpty, tick: nat, variant: nullable(nonEmpty), params: record(union(str, int)),
+      figure: nullable(obj({ gender: oneOf(GENDERS), ageBand: oneOf(FIGURE_AGES), class: oneOf(FIGURE_CLASSES) })),
+    })),
+    nextInstance: nat, lastFired: record(int), once: arr(nonEmpty), lastChoiceTick: int,
   }),
   rng: obj<RngStreamsSnapshot>({ root: u32, streams: record(vRngState) }),
   death: nullable(obj<Death>({ tick: nat, cause: oneOf(DEATH_CAUSES), detail: str })),

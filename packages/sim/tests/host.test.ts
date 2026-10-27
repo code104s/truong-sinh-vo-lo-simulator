@@ -2,6 +2,7 @@ import { decodeSave, encodeSave, parseWorkerMessage, type Command, type SaveFile
 import { buildRegion, type RegionBundle } from '@tsvl/worldgen';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { HANDLED_LIMIT, SimHost, replaySave, Rng } from '../src/index';
+import { hostAdvance } from './auto';
 
 let region: RegionBundle;
 beforeAll(() => {
@@ -32,7 +33,7 @@ const newLife = (send: ReturnType<typeof host>['send'], bpIndex = 1) => {
 /** Tua theo năm tới khi chết; trả về tóm tắt. */
 function liveOut(send: ReturnType<typeof host>['send']) {
   for (let k = 0; k < 5000; k++) {
-    const msgs = send({ type: 'ADVANCE', mode: 'year' });
+    const msgs = hostAdvance(send, 'year');
     const died = msgs.find((m) => m.type === 'DIED');
     if (died && died.type === 'DIED') return died.summary;
     expect(msgs.some((m) => m.type === 'ERROR')).toBe(false);
@@ -82,7 +83,7 @@ describe('SimHost', () => {
   it('SAVE giữa đời → LOAD ở host mới (qua JSON) → chạy tiếp cùng digest; bản đồ lấy từ save', () => {
     const a = host();
     newLife(a.send, 3);
-    for (let k = 0; k < 20; k++) a.send({ type: 'ADVANCE', mode: 'year' });
+    for (let k = 0; k < 20; k++) hostAdvance(a.send, 'year');
     const saved = a.send({ type: 'SAVE' }).find((m) => m.type === 'SAVED') as Extract<WorkerMessage, { type: 'SAVED' }>;
     const text = encodeSave(saved.save);
     const whole = liveOut(a.send);
@@ -94,10 +95,10 @@ describe('SimHost', () => {
     c.handle({ type: 'LOAD', reqId: 1, save: (decoded as { value: SaveFile }).value });
     expect(out.map((m) => m.type)).toEqual(['WORLD', 'LOG', 'STATE']);
     let summary = null;
+    let rid = 1;
+    const csend = (cmd: Record<string, unknown>) => { const from = out.length; c.handle({ ...cmd, reqId: ++rid } as unknown as Command); return out.slice(from); };
     for (let k = 0; k < 5000 && !summary; k++) {
-      out.length = 0;
-      c.handle({ type: 'ADVANCE', reqId: 2 + k, mode: 'year' });
-      const d = out.find((m) => m.type === 'DIED');
+      const d = hostAdvance(csend, 'year').find((m) => m.type === 'DIED');
       if (d && d.type === 'DIED') summary = d.summary;
     }
     expect(summary!.digest).toBe(whole.digest);
@@ -161,7 +162,7 @@ describe('SimHost — v0.2', () => {
     let target: { county: number; slots: number } | undefined;
     for (let bp = 0; bp < region.birthplaces.length && !target; bp++) {
       newLife(a.send, bp);
-      while (a.h.current.life!.alive && !a.h.current.life!.view().canAct) a.send({ type: 'ADVANCE', mode: 'year' });
+      while (a.h.current.life!.alive && !a.h.current.life!.view().canAct) hostAdvance(a.send, 'year');
       if (a.h.current.life!.alive) target = a.h.current.life!.travel().find((p) => p.slots > 1);
     }
     expect(target).toBeDefined();
@@ -180,17 +181,18 @@ describe('SimHost — v0.2', () => {
     for (let i = 0; i < 10; i++) {
       const worldSeed = `replay-${i}`;
       const local = { ...region, worldSeed };
-      const a = new SimHost((m) => { if (m.type === 'ERROR') throw new Error(m.message); }, { buildRegion: () => local });
+      const got: WorkerMessage[] = [];
+      const a = new SimHost((m) => { if (m.type === 'ERROR') throw new Error(m.message); got.push(m); }, { buildRegion: () => local });
       let id = 0;
-      const call = (c: Record<string, unknown>) => a.handle({ ...c, reqId: ++id });
+      const call = (c: Record<string, unknown>) => { const from = got.length; a.handle({ ...c, reqId: ++id }); return got.slice(from); };
       call({ type: 'GEN_WORLD', worldSeed });
       call({ type: 'NEW_LIFE', config: { worldSeed, regionId: local.summary.id, birthplaceId: local.birthplaces[0]!.id, lifeSeed: i } });
-      while (a.current.life!.alive && !a.current.life!.view().canAct) call({ type: 'ADVANCE', mode: 'year' });
+      while (a.current.life!.alive && !a.current.life!.view().canAct) hostAdvance(call, 'year');
       const rng = Rng.fromSeed(i);
       for (let k = 0; k < 80 && a.current.life!.alive; k++) {
         const choices = a.current.life!.actions().filter((x) => !x.locked && x.id !== 'action.travel');
         call({ type: 'SET_PLAN', plan: { slots: [0, 1, 2].map(() => ({ action: choices[rng.int(0, choices.length - 1)]!.id })) } });
-        call({ type: 'ADVANCE', mode: 'week' });
+        hostAdvance(call, 'week');
       }
       const saved = a.save(); expect(replaySave(saved)).toBe(saved.digest);
       const decoded = decodeSave(encodeSave(saved)); if (!decoded.ok) throw new Error(decoded.error);
@@ -237,12 +239,12 @@ describe('SimHost — v0.3 S4: lệnh TRADE', () => {
   it('mua bán được ghi vào nhật ký lệnh, phát lại cùng digest; lệnh bị từ chối không ghi, không đổi đời', () => {
     const { h, send } = host();
     newLife(send, 3);
-    while (!h.current.life!.view().canAct) send({ type: 'ADVANCE', mode: 'year' });
+    while (!h.current.life!.view().canAct) hostAdvance(send, 'year');
     // Làm thuê/hái lượm vài tháng để có tiền và lương trong túi
     const kind = region.logic.settlementKind[h.current.life!.character.location];
     const work = kind === 'village' ? 'action.forage' : 'action.hire';
     send({ type: 'SET_PLAN', plan: { slots: [{ action: work }, { action: work }, { action: work }] } });
-    for (let i = 0; i < 4; i++) send({ type: 'ADVANCE', mode: 'month' });
+    for (let i = 0; i < 4; i++) hostAdvance(send, 'month');
     const hh = h.current.life!.character.household;
     const before = (send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>).save;
     expect(send({ type: 'TRADE', grain: hh.grain + 1 })[0]).toMatchObject({ type: 'ERROR', code: 'BAD_COMMAND' });

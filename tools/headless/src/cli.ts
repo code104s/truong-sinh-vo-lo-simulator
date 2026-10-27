@@ -168,11 +168,18 @@ function lifeCmd(a: { seed?: string; birthplace?: string; 'life-seed'?: string; 
   const v = life.view();
   console.log(`Nhân vật: ${v.name} · ${t(`gender.${v.gender}`)} · xuất thân ${t(v.background)} · ${t(v.personality)} · thể chất ${t(v.constitution)} · ngộ tính ${t(v.aptitude)}${v.traits.length ? ` · ${v.traits.map((x) => t(x)).join(', ')}` : ''}`);
 
+  /** Tua; gặp sự kiện có lựa chọn thì chọn lựa chọn đầu tiên đang mở như người chơi máy mặc định (ADR 0014). */
+  const advance = (mode: 'week' | 'year') => {
+    const ms = call({ type: 'ADVANCE', mode });
+    collect(ms);
+    for (const m of ms) if (m.type === 'EVENT') collect(call({ type: 'CHOOSE', instance: m.pending.instance, choice: m.pending.choices.find((c) => c.locked === null)!.id }));
+    return ms;
+  };
   const startTick = life.tick;
   const t1 = performance.now();
   if (a['save-at']) {
     const at = Number(a['save-at']);
-    while (life.alive && life.tick < at) collect(call({ type: 'ADVANCE', mode: 'week' }));
+    while (life.alive && life.tick < at) advance('week');
     if (life.alive) {
       const saved = call({ type: 'SAVE' }).find((m) => m.type === 'SAVED');
       if (!saved || saved.type !== 'SAVED') throw new Error('không lưu được');
@@ -183,9 +190,7 @@ function lifeCmd(a: { seed?: string; birthplace?: string; 'life-seed'?: string; 
   }
   let summary = null;
   while (!summary) {
-    const ms = call({ type: 'ADVANCE', mode: 'year' });
-    collect(ms);
-    for (const m of ms) if (m.type === 'DIED') summary = m.summary;
+    for (const m of advance('year')) if (m.type === 'DIED') summary = m.summary;
   }
   const lifeMs = performance.now() - t1;
   if (!a.quiet) for (const e of log) console.log(`  ${shortDate(e.tick).padEnd(22)} ${e.importance === 'major' ? '' : '· '}${logText(e)}`);

@@ -1,7 +1,7 @@
 // Mọi khóa nội dung mà sim sinh ra đều có chuỗi tiếng Việt (kiểm tra bằng 300 đời thật, không liệt kê tay).
 import { hasKey, t } from '@tsvl/content';
 import { calendarOf, birthplaceId, regionId, type Birthplace, type SettlementKind } from '@tsvl/shared';
-import { Life } from '@tsvl/sim';
+import { firstOpenChoice, Life } from '@tsvl/sim';
 import { describe, expect, it } from 'vitest';
 import { dateText, logText } from '../src/app/format';
 
@@ -15,12 +15,21 @@ describe('chuỗi nội dung phủ hết đầu ra của sim', () => {
       const bp: Birthplace = { id: birthplaceId(`r0/c${i % 5}`), name: 'Phố Kỳ', nameHan: '浦岐', kind: kinds[i % 3]!, cell: { x: 0, y: 0 }, county: 0 };
       const life = Life.create({ worldSeed: 'content', regionId: regionId('r0'), birthplaceId: bp.id, lifeSeed: i }, bp);
       while (life.alive) {
-        life.advance('year');
+        const res = life.advance('year');
+        // Thẻ sự kiện: tựa, lời kể, lựa chọn, giá, lý do khóa đều dịch được; rồi chọn như người chơi máy mặc định
+        if (res.status === 'event') {
+          const p = res.pending;
+          const texts = [t(`${p.eventId}.title`, p.params), t(p.variant ? `${p.eventId}.body.${p.variant}` : `${p.eventId}.body`, p.params),
+            ...p.choices.flatMap((c) => [t(`${p.eventId}.choice.${c.id}`, p.params), ...c.costs.map((tag) => t(`event.cost.${tag}`)), ...(c.locked ? [t(c.locked)] : [])])];
+          for (const text of texts) expect(text, p.eventId).not.toMatch(MISSING);
+          seen.add(p.eventId);
+          life.choose(p.instance, firstOpenChoice(p));
+        }
         const v = life.view();
         for (const id of [v.background, v.personality, v.constitution, v.aptitude, `health.${v.healthBand}`, `gender.${v.gender}`, `stamina.${v.staminaBand}`, ...v.skills.flatMap((s) => [s.id, s.rank]), ...v.traits, ...v.conditions.map((c) => c.id), ...v.conditions.map((c) => `severity.${c.severity}`)]) {
           expect(hasKey(id), id).toBe(true);
         }
-        for (const option of life.actions()) for (const id of [option.id, option.cost.stamina, option.cost.risk, ...option.gains, ...(option.locked ? [option.locked] : [])]) expect(hasKey(id), id).toBe(true);
+        for (const option of life.actions()) for (const id of [option.id, option.cost.stamina, option.cost.risk, option.cost.money, ...option.gains, ...(option.locked ? [option.locked] : [])]) expect(hasKey(id), id).toBe(true);
       }
       for (const e of life.log) {
         seen.add(e.key);

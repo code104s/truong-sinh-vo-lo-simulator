@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { birthplaceId, regionId, type MonthPlan } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { Life } from '../src/index';
+import { autoAdvance } from './auto';
 import { restPlan } from '../src/life/actions';
 
 const region: RegionLogic = {
@@ -77,7 +78,7 @@ describe('pha người chơi', () => {
   it('việc thường ngày không ghi nhật ký (hồi quy: 94% nhật ký là "Dành một tuần để…")', () => {
     const l = adult(); const from = l.log.length;
     l.setPlan({ slots: [{ action: 'action.forage' }, { action: 'action.forage' }, { action: 'action.rest' }] });
-    for (let k = 0; k < 5 && l.alive; k++) l.advance('year');
+    for (let k = 0; k < 5 && l.alive; k++) autoAdvance(l, 'year');
     const entries = l.log.slice(from);
     expect(entries.some((e) => e.key === 'log.action.done')).toBe(false);
     expect(entries.length).toBeLessThan(60); // 5 năm ≈ 180 ô; trước đây mỗi ô một dòng
