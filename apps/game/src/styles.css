@@ -725,3 +725,11 @@ p { margin: 0; }
 .food-forecast.tone-warn { color: var(--ochre); }
 .food-forecast.tone-bad { color: var(--cinnabar); font-weight: 600; }
 
+/* —— Màn tổng kết (F5): của cải lúc nhắm mắt, ngã rẽ —— */
+.estate { align-self: stretch; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.estate .attrs { font-size: 14px; }
+.estate .hungry { color: var(--cinnabar); }
+.summary .date-bar { justify-content: space-between; flex-wrap: wrap; }
+.entry.turn .entry-date { line-height: 1.3; }
+.turn-title { display: block; font: 700 15px/1.3 var(--display); color: var(--cinnabar); margin-bottom: 2px; }
+

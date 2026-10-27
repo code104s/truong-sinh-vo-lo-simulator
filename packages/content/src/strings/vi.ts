@@ -38,6 +38,7 @@ export const VI: Readonly<Record<string, string>> = {
   'ui.travel.choose': 'Chọn điểm đến', 'ui.travel.here': 'Đang ở: {place}', 'ui.travel.hint': 'Chọn một quận để xem đường đi và cái giá trước khi lên đường.',
   'ui.travel.cost': '{days} ngày đường · {slots} ô thời gian · {risk}', 'ui.travel.confirm': 'Đưa vào ô kế tiếp',
   'ui.save.outdated': 'Đời đang dở được lưu bằng bản cũ (save v{version}), bản này không tải được. Hãy bắt đầu đời mới, hoặc xóa nó trong Thiết lập.',
+  'ui.save.outdated_sim': 'Đời đang dở được lưu bằng một bản thử cũ hơn, bản này không tải được. Hãy bắt đầu đời mới, hoặc xóa nó trong Thiết lập.',
   'ui.error': 'Có lỗi: {message}',
   'ui.back': 'Về màn chính',
 
@@ -213,5 +214,8 @@ export const VI: Readonly<Record<string, string>> = {
   'ui.summary.cause': 'Nguyên do: {cause} ({detail})',
   'ui.summary.place': 'Sinh ra ở {place}',
   'ui.summary.milestones': 'Những mốc trong đời',
+  'ui.summary.estate': 'Lúc nhắm mắt', 'ui.summary.hunger': 'Năm phải nhịn đói', 'ui.summary.hunger_years': '{count} năm', 'ui.summary.hunger_none': 'Chưa từng',
+  'ui.summary.turning': 'Ngã rẽ', 'ui.summary.turning_count': '{count} lần chọn', 'ui.summary.turning_none': 'Đời này chưa phải chọn ngã nào.',
+  'ui.summary.at_age': '{age} tuổi',
   'ui.summary.digest': 'Dấu đời (digest): {digest}',
 };

@@ -106,6 +106,8 @@ export const sampleLife: LifeSummary = {
   causeDetail: 'illness.consumption',
   birthplaceId: birthplaceId('r1/c3'),
   milestones: [{ ...sampleLog, importance: 'major' }],
+  estate: { money: 1200, grain: 340, landMu: 6, tenure: 'owner' },
+  hungerYears: 3,
   digest: '0123456789abcdef',
 };
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { birthplaceId, regionId, vCharacterView, type LogEntry } from '@tsvl/shared';
+import { birthplaceId, regionId, vCharacterView, vLifeSummary, type LogEntry } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { Life, Rng } from '../src/index';
 import { autoAdvance, lastChoice } from './auto';
@@ -53,6 +53,29 @@ describe('đói: dải mức và khẩu phần (ADR 0013)', () => {
     feedPhase(c, tick, 'normal', rng, (e) => log.push(e)); // không còn gì
     expect(c.household.hunger).toBe(5);
     expect(log.map((e) => [e.key, e.importance])).toEqual([['log.hunger.starving', 'major']]);
+  });
+
+  it('F5: đếm năm tuổi có tuần ăn thiếu, mỗi năm một lần; tổng kết mang của cải và số năm đói', () => {
+    const c = child('commoner');
+    c.household.independent = true; c.birthTick = 0;
+    const rng = Rng.fromSeed(1), noop = () => {};
+    const eat = (tick: number, grain: number) => { c.household.grain = grain; feedPhase(c, tick, 'normal', rng, noop); };
+    eat(20 * 36, RATION_ADULT);
+    expect(c.household.hungerYears).toBe(0);
+    eat(20 * 36 + 1, 0); eat(20 * 36 + 2, 4);
+    expect([c.household.hungerYears, c.household.lastHungerYear]).toEqual([1, 20]);
+    eat(21 * 36, RATION_ADULT); // đủ ăn: không tính dù bụng còn đói
+    expect(c.household.hungerYears).toBe(1);
+    eat(23 * 36 + 5, 0);
+    expect(c.household.hungerYears).toBe(2);
+
+    const l = adult('summary', (x) => { x.household.independent = true; x.household.grain = 0; x.household.money = 0; x.household.landMu = 4; x.household.tenure = 'owner'; });
+    while (l.alive) autoAdvance(l, 'year', lastChoice);
+    const sum = l.summary();
+    expect(vLifeSummary.check(sum, '$')).toBeNull();
+    expect(sum.cause).toBe('starvation');
+    expect(sum.hungerYears).toBeGreaterThanOrEqual(1);
+    expect(sum.estate).toEqual({ money: l.character.household.money, grain: l.character.household.grain, landMu: 4, tenure: 'owner' });
   });
 
   it('trẻ dưới 12 ăn nửa khẩu phần', () => {

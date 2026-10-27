@@ -25,7 +25,11 @@ import { ACTION_MIN_AGE, actionOptions, validatePlan } from './actions';
 import { playerPhase, type PlayerState } from './player';
 import { previewTravel } from './travel';
 
-export const SIM_VERSION = '0.3.0';
+/**
+ * Đổi khi hình snapshot đổi, để save cũ bị từ chối rõ ràng (lỗi VERSION) thay vì lỗi schema. 0.3.1: hộ thêm nợ vay,
+ * tai họa, lập thân (S6–S7) và bộ đếm năm đói (F5).
+ */
+export const SIM_VERSION = '0.3.1';
 export const STREAMS = ['accident', 'actions', 'character', 'economy', 'events', 'health', 'illness', 'names', 'travel', 'weather'] as const;
 
 export interface LifeSnapshot extends PlayerState {
@@ -352,6 +356,8 @@ export class Life {
       causeDetail: d.detail,
       birthplaceId: c.birthplaceId,
       milestones: this.log.filter((e) => e.importance === 'major'),
+      estate: { money: c.household.money, grain: c.household.grain, landMu: c.household.landMu, tenure: c.household.tenure },
+      hungerYears: c.household.hungerYears,
       digest: this.digest(),
     };
   }

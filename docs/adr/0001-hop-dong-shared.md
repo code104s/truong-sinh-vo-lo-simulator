@@ -301,3 +301,15 @@ Lý do: kế hoạch tháng hiện dự báo "đủ ăn tới…". Số tuần �
 - `calendar.ts` thêm `HARVEST_MONTH` (9; trước ở `sim/economy/market.ts`, sim xuất lại) và `weeksToHarvest(tick)`.
 - Không đổi `PROTOCOL_VERSION`, `SAVE_VERSION`: view không nằm trong save; worker và giao diện ra cùng một bản.
 - Nhánh bị ảnh hưởng: **Sim** — `householdView` điền hai số mới; digest không đổi. **FE** — `ActionPlanner` hiện dự báo.
+
+### 2026-10-27 — v0.3 F5
+Lý do: màn tổng kết kể được của cải lúc chết và cái đói của một đời.
+- `LifeSummary` thêm:
+  - `estate { money, grain, landMu, tenure }`: túi, kho, ruộng lúc nhắm mắt;
+  - `hungerYears`: số năm tuổi có ít nhất một tuần không đủ khẩu phần, kể cả lúc còn nhỏ bị bỏ đói.
+- Ngã rẽ không cần trường mới: giao diện rút từ `milestones` những dòng kết quả sự kiện (`<id sự kiện>.result.<kết quả>`, ADR 0014).
+- Không đổi `PROTOCOL_VERSION`, `SAVE_VERSION`. Tổng kết không nằm trong save. "Sổ các đời" chưa đọc lại tổng kết đã lưu nên không vướng bản cũ.
+- `SIM_VERSION` 0.3.0 → **0.3.1**. Hình snapshot đã đổi từ S6 (nợ vay, tai họa, lập thân) mà chưa tăng số, nên save cũ bị từ chối bằng lỗi schema khó hiểu. Nay bị từ chối bằng lỗi `VERSION`; giao diện báo như save bản cũ (`ui.save.outdated_sim`) và cho bắt đầu đời mới. Quy ước từ đây: đổi hình snapshot thì tăng `SIM_VERSION`.
+- Nhánh bị ảnh hưởng:
+  - **Sim:** hộ thêm `hungerYears`, `lastHungerYear` (ẩn, có trong schema snapshot), đếm ở `feedPhase`. Digest pin đổi; tuổi và nguyên nhân chết giữ nguyên.
+  - **FE:** màn tổng kết mới.

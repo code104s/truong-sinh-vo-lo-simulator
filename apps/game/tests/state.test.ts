@@ -1,4 +1,5 @@
 import { birthplaceId, regionId, type CharacterView, type WorkerMessage } from '@tsvl/shared';
+import { t } from '@tsvl/content';
 import { describe, expect, it } from 'vitest';
 import { initialState, reduce, type Action, type AppState } from '../src/app/state';
 
@@ -13,7 +14,15 @@ const state: WorkerMessage = { type: 'STATE', reqId: 2, date: { tick: 1, year: 1
 const entry = { tick: 1, key: 'log.birth', params: {}, importance: 'major' as const };
 
 describe('máy trạng thái màn', () => {
-  it('lỗi phía giao diện (save bản cũ) hiện ra và đóng được', () => {
+  it('tải save của bản sim khác: báo như save bản cũ, về màn chính', () => {
+    const s = run([{ type: 'loadStart' }, msg({ type: 'ERROR', reqId: 3, code: 'VERSION', message: 'save của sim 0.3.0, bản này là 0.3.1' })]);
+    expect(s.screen).toBe('menu');
+    expect(s.error).toBe(t('ui.save.outdated_sim'));
+    // Lỗi VERSION ngoài lúc tải (không xảy ra) vẫn hiện nguyên văn
+    expect(run([msg({ type: 'ERROR', reqId: 3, code: 'VERSION', message: 'x' })]).error).toBe('VERSION: x');
+  });
+
+    it('lỗi phía giao diện (save bản cũ) hiện ra và đóng được', () => {
     let s = run([{ type: 'error', message: 'save cũ' }]);
     expect(s.error).toBe('save cũ');
     expect(s.screen).toBe('menu');
@@ -62,7 +71,7 @@ describe('máy trạng thái màn', () => {
     expect(s.interrupt).toBeNull();
     s = run([msg({ type: 'INTERRUPT', reqId: 5, entry }), { type: 'advanceStart' }], s);
     expect(s.interrupt).toBeNull();
-    const summary = { config: { worldSeed: 's', regionId: regionId('r0'), birthplaceId: birthplaceId('r0/c1') }, name: 'A', birthTick: 0, deathTick: 9, ageYears: 0, cause: 'illness' as const, causeDetail: 'illness.cold', birthplaceId: birthplaceId('r0/c1'), milestones: [], digest: 'x' };
+    const summary = { config: { worldSeed: 's', regionId: regionId('r0'), birthplaceId: birthplaceId('r0/c1') }, name: 'A', birthTick: 0, deathTick: 9, ageYears: 0, cause: 'illness' as const, causeDetail: 'illness.cold', birthplaceId: birthplaceId('r0/c1'), milestones: [], estate: { money: 0, grain: 0, landMu: 0, tenure: 'none' as const }, hungerYears: 0, digest: 'x' };
     s = run([{ type: 'hasSave', value: true }, msg({ type: 'DIED', reqId: 4, summary })], s);
     expect(s.screen).toBe('summary');
     expect(s.running).toBe(false);

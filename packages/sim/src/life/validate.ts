@@ -48,7 +48,8 @@ const vCharacter = obj<CharacterState>({
   conditions: arr(obj<Condition>({ id: nonEmpty, kind: oneOf(['illness', 'injury'] as const), severity, weeksLeft: nat })),
   household: obj<HouseholdState>({ independent: bool, money: nat, grain: nat, landMu: nat, tenure: oneOf(TENURES), hunger: intRange(0, HUNGER_MAX),
     farmWeeks: intRange(0, 36), farmCounty: intRange(-1, 10_000), taxDebt: nat,
-    loan: nat, loanDue: int, reliefPct: intRange(0, 100), rentHikePct: intRange(0, 50), shieldUntil: int, stayUntil: intRange(0, 200) }),
+    loan: nat, loanDue: int, reliefPct: intRange(0, 100), rentHikePct: intRange(0, 50), shieldUntil: int, stayUntil: intRange(0, 200),
+    hungerYears: intRange(0, 200), lastHungerYear: intRange(-1, 200) }),
   alive: bool,
 });
 

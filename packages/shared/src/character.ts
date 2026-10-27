@@ -2,7 +2,7 @@
 import type { Tick } from './calendar';
 import { STAMINA_BANDS, vSkillView, type CountyIndex, type SkillView, type StaminaBand } from './actions';
 import { vContentId, type ContentId } from './contentId';
-import { vHouseholdView, type HouseholdView } from './economy';
+import { TENURES, vHouseholdView, type Coin, type Grain, type HouseholdView, type Tenure } from './economy';
 import { arr, bool, int, intRange, nat, nonEmpty, obj, oneOf, record, str, union } from './schema';
 import { vBirthplaceId, vNewLifeConfig, type BirthplaceId, type NewLifeConfig } from './world';
 
@@ -87,6 +87,10 @@ export interface LifeSummary {
   birthplaceId: BirthplaceId;
   /** Các LogEntry importance = 'major'. */
   milestones: LogEntry[];
+  /** Của cải lúc nhắm mắt: túi, kho, ruộng (F5). */
+  estate: { money: Coin; grain: Grain; landMu: number; tenure: Tenure };
+  /** Số năm tuổi có ít nhất một tuần không đủ khẩu phần, kể cả lúc còn nhỏ bị bỏ đói (F5). */
+  hungerYears: number;
   digest: string;
 }
 
@@ -130,5 +134,7 @@ export const vLifeSummary = obj<LifeSummary>({
   causeDetail: vContentId,
   birthplaceId: vBirthplaceId,
   milestones: arr(vLogEntry),
+  estate: obj<LifeSummary['estate']>({ money: nat, grain: nat, landMu: nat, tenure: oneOf(TENURES) }),
+  hungerYears: nat,
   digest: nonEmpty,
 });

@@ -30,6 +30,9 @@ export interface HouseholdState {
   shieldUntil: number;
   /** Lập thân: ở lại làm cho nhà tới tuổi này rồi mới ra riêng (0 = không) (ADR 0013). */
   stayUntil: number;
+  /** Số năm tuổi có tuần ăn thiếu, và năm tuổi gần nhất đã đếm (−1 = chưa) — cho màn tổng kết (F5). */
+  hungerYears: number;
+  lastHungerYear: number;
 }
 
 /** Khẩu phần một tuần (thăng): người lớn 1 đấu, dưới 12 tuổi nửa đấu. */
@@ -62,7 +65,7 @@ type Log = (e: Omit<LogEntry, 'tick'>) => void;
 
 export function newHousehold(): HouseholdState {
   return { independent: false, money: 0, grain: 0, landMu: 0, tenure: 'none', hunger: 0, farmWeeks: 0, farmCounty: -1, taxDebt: 0,
-    loan: 0, loanDue: -1, reliefPct: 0, rentHikePct: 0, shieldUntil: -1, stayUntil: 0 };
+    loan: 0, loanDue: -1, reliefPct: 0, rentHikePct: 0, shieldUntil: -1, stayUntil: 0, hungerYears: 0, lastHungerYear: -1 };
 }
 
 export function hungerBand(hunger: number): HungerBand {
@@ -119,6 +122,10 @@ export function feedPhase(c: CharacterState, tick: Tick, homeSupply: SupplyBand,
     if (h.grain < ration) buy(ration - h.grain);
     eaten = Math.min(h.grain, ration);
     h.grain -= eaten;
+  }
+  if (eaten < ration) {
+    const age = ageYearsAt(c.birthTick, tick);
+    if (age !== h.lastHungerYear) { h.hungerYears++; h.lastHungerYear = age; }
   }
   const before = hungerBand(h.hunger);
   if (eaten >= ration) h.hunger = Math.max(0, h.hunger - 1);

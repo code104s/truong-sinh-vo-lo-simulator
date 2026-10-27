@@ -1,4 +1,5 @@
 // Máy trạng thái màn hình (thuần, test được không cần DOM). Không có luật game: mọi số liệu đến từ worker.
+import { t } from '@tsvl/content';
 import type {
   Birthplace, BirthplaceId, CalendarDate, CharacterView, LifeSummary, LogEntry, RegionMapData, RegionSummary, WorkerMessage, WorldSeed, MonthPlan, ActionOption, ActionProgress, TravelOption, TravelPreview,
   MarketView, PendingEvent,
@@ -122,7 +123,9 @@ function onMessage(s: AppState, m: WorkerMessage): AppState {
       return { ...s, travelPreview: m.preview };
     case 'ERROR': {
       const back = s.screen === 'loading';
-      return { ...s, error: `${m.code}: ${m.message}`, running: false, loadingSave: false, screen: back ? 'menu' : s.screen };
+      // Save của bản sim khác (hình snapshot đã đổi): báo như save bản cũ, không hiện lỗi kỹ thuật
+      const error = m.code === 'VERSION' && s.loadingSave ? t('ui.save.outdated_sim') : `${m.code}: ${m.message}`;
+      return { ...s, error, running: false, loadingSave: false, screen: back ? 'menu' : s.screen };
     }
   }
 }
