@@ -114,3 +114,26 @@ Số liệu là điểm khởi đầu, chốt bằng batch ở S7.
   - Uy tín/danh tiếng (v0.5);
   - Mua bán đất, nghề nghiệp chính thức (v0.7);
   - Chợ tài nguyên tu luyện (v0.9).
+
+## Ghi chú triển khai S2 (2026-10-27)
+- **Mã:** `packages/sim/src/economy/market.ts` (chợ) và `simulate.ts` (chạy không người chơi). Lệnh kiểm: `pnpm sim economy --seeds 10 [--years 100]`.
+- **Số liệu khởi điểm:**
+  - Dân nền: 150 / 200 / 300 miệng mỗi ô (làng / trấn / thành) × độ phì.
+  - Dân nền nhân độ phì: đất tốt nuôi nhiều người hơn. Nhờ vậy quận đất xấu không bị đói kinh niên; độ phì quyết định độ lớn chợ (và sản lượng ruộng người chơi ở S3).
+  - Mỗi miệng ăn 30 thăng/tháng; quỹ 100 văn/miệng.
+  - Sản lượng năm thường 107% nhu cầu × thời tiết; thu hoạch đầu tháng Chín.
+  - Hao kho 0,5%/tháng (bản nháp ghi 1%: quá cao so với phần dư 5–7%, kho không bao giờ tích được).
+  - Thời tiết vùng 50 / 80 / 100 / 110 / 120% với trọng số 6 / 14 / 50 / 20 / 10, mỗi quận lệch thêm ±10.
+  - Buôn quận kề tối đa 2% kho/tháng; phí chở (văn/đấu) = km × địa hình% × 5 / 10.000.
+- **Kho ban đầu** = 4 tháng dự trữ + số tháng còn tới vụ. Lỗi đã sửa: kho cố định 6 tháng làm người sinh sau mùa gặt gặp đói kém giả ngay năm đầu.
+- **Giá niêm yết** tính lại mỗi đầu tháng; mua bán trong tháng theo giá này.
+- **Tin tức** chỉ về quận đang đứng: mất mùa (ngắt tua nếu đã ra riêng), được mùa, đói kém (ngắt tua), hết đói kém.
+- **Kết quả nghiệm thu** (`pnpm sim economy --seeds 10`):
+  - mỗi quận đói kém 1 lần / 11 năm (mục tiêu 8–15);
+  - 1,8% tháng đói kém, 3% tháng khan hiếm;
+  - giá trong 70–500%;
+  - tiền bảo toàn ở 10/10 vùng, kho không âm.
+- **Chưa có:**
+  - lệnh `TRADE` bán/mua chủ động (S4);
+  - tô, thuế (S3, S4);
+  - dân nền chết đói (v0.4 NPC).

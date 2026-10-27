@@ -1,6 +1,7 @@
 // Hộ, khẩu phần tuần, đói (ADR 0013). Toàn số nguyên; lương thực tính bằng thăng, tiền bằng văn.
-import { ageYearsAt, type FoodWeeksBand, type HouseholdView, type HungerBand, type LogEntry, type SupplyBand, type Tenure, type Tick } from '@tsvl/shared';
+import { ageYearsAt, GRAIN_PER_DOU, type FoodWeeksBand, type HouseholdView, type HungerBand, type LogEntry, type SupplyBand, type Tenure, type Tick } from '@tsvl/shared';
 import type { Rng } from '../core/rng';
+import type { CountyEconomy } from '../economy/market';
 import type { CharacterState } from './character';
 import type { Background } from './params';
 
@@ -19,12 +20,12 @@ export interface HouseholdState {
 export const RATION_ADULT = 10;
 export const RATION_CHILD = 5;
 export const CHILD_RATION_AGE = 12;
+/** Tuổi lập thân (ADR 0013): luật bỏ đói của hộ cha mẹ chỉ áp cho trẻ dưới tuổi này. */
+export const COMING_OF_AGE = 16;
 export const HUNGER_MAX = 20;
-/** Giá gốc lương thực (văn/thăng) để quy tiền ra tuần đủ ăn; S2 thay bằng giá chợ quận. */
-export const GRAIN_BASE_PRICE = 4;
 
 /** Xác suất (ppm) trẻ bị bỏ đói một tuần khi quận nhà đói kém, theo xuất thân. */
-export const FAMINE_SKIP_PPM: Record<Background, number> = { destitute: 400_000, commoner: 200_000, comfortable: 50_000, wealthy: 0 };
+export const FAMINE_SKIP_PPM: Record<Background, number> = { destitute: 300_000, commoner: 150_000, comfortable: 40_000, wealthy: 0 };
 
 /** Phần chia khi ra riêng, theo xuất thân (ADR 0013; số khởi điểm, chốt bằng batch). */
 export const SHARE_BY_BACKGROUND: Record<Background, { money: number; grain: number; landMu: number; tenure: Tenure }> = {
@@ -58,13 +59,19 @@ export function rationOf(c: CharacterState, tick: Tick): number {
   return ageYearsAt(c.birthTick, tick) < CHILD_RATION_AGE ? RATION_CHILD : RATION_ADULT;
 }
 
-/** Ra riêng: nhận phần chia theo xuất thân. Nguồn là quỹ và kho quận nhà, ghi sổ ở S2 (ADR 0012). */
-export function becomeIndependent(c: CharacterState): void {
+/**
+ * Ra riêng: nhận phần chia theo xuất thân. Tiền và lương lấy từ quỹ, kho của quận nhà (không tạo từ hư không, ADR 0012);
+ * quận cạn thì nhận được bao nhiêu hay bấy nhiêu.
+ */
+export function becomeIndependent(c: CharacterState, home: CountyEconomy): void {
   const share = SHARE_BY_BACKGROUND[c.background];
   const h = c.household;
+  const money = Math.min(share.money, home.money);
+  const grain = Math.min(share.grain, home.grain);
+  home.money -= money; home.grain -= grain;
   h.independent = true;
-  h.money += share.money;
-  h.grain += share.grain;
+  h.money += money;
+  h.grain += grain;
   h.landMu = share.landMu;
   h.tenure = share.tenure;
 }
@@ -74,16 +81,19 @@ const BAND_RANK: Record<HungerBand, number> = { fed: 0, hungry: 1, starving: 2, 
 /**
  * Pha Hậu quả, đầu pha: ăn một tuần.
  * - Chưa ra riêng: cha mẹ nuôi; quận nhà đói kém thì có thể bị bỏ đói theo xuất thân (luồng economy).
- * - Đã ra riêng: ăn từ kho của mình; tự mua phần thiếu ở chợ có từ S2.
+ * - Đã ra riêng: ăn từ kho của mình; thiếu thì tự mua ở chợ quận đang đứng nếu còn tiền (`buy` trả số thăng mua được).
  */
-export function feedPhase(c: CharacterState, tick: Tick, homeSupply: SupplyBand, economyRng: Rng, log: Log): void {
+export function feedPhase(c: CharacterState, tick: Tick, homeSupply: SupplyBand, economyRng: Rng, log: Log, buy: (need: number) => number = () => 0): void {
   const h = c.household;
   const ration = rationOf(c, tick);
   let eaten: number;
   if (!h.independent) {
-    // Chỉ rút RNG khi đói kém, để năm thường không đổi luồng
-    eaten = homeSupply === 'famine' && economyRng.chance(FAMINE_SKIP_PPM[c.background]) ? 0 : ration;
+    // Chỉ rút RNG khi đói kém, để năm thường không đổi luồng. Người lớn còn ở nhà là trạng thái tạm tới khi bật
+    // ra riêng (S3/S4): được nuôi đủ, không thì hộ cha mẹ trừu tượng "bỏ đói" cả người 60 tuổi.
+    const child = ageYearsAt(c.birthTick, tick) < COMING_OF_AGE;
+    eaten = child && homeSupply === 'famine' && economyRng.chance(FAMINE_SKIP_PPM[c.background]) ? 0 : ration;
   } else {
+    if (h.grain < ration) buy(ration - h.grain);
     eaten = Math.min(h.grain, ration);
     h.grain -= eaten;
   }
@@ -117,16 +127,17 @@ export function hungerDamage(c: CharacterState, healthRng: Rng): number {
   return 0;
 }
 
-export function foodWeeksBand(h: HouseholdState, ration: number): FoodWeeksBand {
-  const weeks = Math.floor((h.grain + Math.floor(h.money / GRAIN_BASE_PRICE)) / ration);
+/** Kho + tiền quy ra lương theo giá mua (văn/đấu) của chợ đang đứng, nuôi được bao nhiêu tuần. */
+export function foodWeeksBand(h: HouseholdState, ration: number, buyPricePerDou: number): FoodWeeksBand {
+  const weeks = Math.floor((h.grain + Math.floor((h.money * GRAIN_PER_DOU) / Math.max(1, buyPricePerDou))) / ration);
   return weeks < 1 ? 'none' : weeks < 9 ? 'short' : weeks < 36 ? 'season' : 'year';
 }
 
-export function householdView(c: CharacterState, tick: Tick): HouseholdView {
+export function householdView(c: CharacterState, tick: Tick, buyPricePerDou: number): HouseholdView {
   const h = c.household;
   return {
     independent: h.independent, money: h.money, grain: h.grain, landMu: h.landMu, tenure: h.tenure,
-    hungerBand: hungerBand(h.hunger), foodWeeksBand: foodWeeksBand(h, rationOf(c, tick)),
+    hungerBand: hungerBand(h.hunger), foodWeeksBand: foodWeeksBand(h, rationOf(c, tick), buyPricePerDou),
   };
 }
 

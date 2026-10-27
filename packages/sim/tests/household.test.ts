@@ -61,6 +61,15 @@ describe('đói: dải mức và khẩu phần (ADR 0013)', () => {
     expect([c.household.grain, c.household.hunger]).toEqual([0, 0]);
   });
 
+  it('người lớn còn ở nhà (trạng thái tạm) không bị bỏ đói kể cả khi đói kém (hồi quy: người 60 tuổi chết đói vì "cha mẹ")', () => {
+    const c = child('destitute');
+    const rng = Rng.fromSeed(3);
+    const before = rng.state();
+    for (let i = 0; i < 200; i++) feedPhase(c, 16 * 36 + i, 'famine', rng, () => {});
+    expect(c.household.hunger).toBe(0);
+    expect(rng.state()).toEqual(before);
+  });
+
   it('cha mẹ nuôi: năm thường không rút RNG, luôn đủ ăn', () => {
     const c = child('destitute', 2);
     const rng = Rng.fromSeed(7);
@@ -76,7 +85,7 @@ describe('đói: dải mức và khẩu phần (ADR 0013)', () => {
       const rng = Rng.fromSeed(42);
       let n = 0;
       for (let i = 0; i < 2000; i++) {
-        feedPhase(c, 5 * 36 + i, 'famine', rng, () => {});
+        feedPhase(c, 5 * 36, 'famine', rng, () => {}); // giữ 5 tuổi: luật bỏ đói chỉ áp cho trẻ
         if (c.household.hunger > 0) n++;
         c.household.hunger = 0;
       }
@@ -84,8 +93,8 @@ describe('đói: dải mức và khẩu phần (ADR 0013)', () => {
     };
     expect(skipped('wealthy')).toBe(0);
     const poor = skipped('destitute'), common = skipped('commoner'), comfy = skipped('comfortable');
-    expect(poor).toBeGreaterThan(700); // ~40%
-    expect(poor).toBeLessThan(900);
+    expect(poor).toBeGreaterThan(500); // ~30%
+    expect(poor).toBeLessThan(700);
     expect(common).toBeLessThan(poor);
     expect(comfy).toBeLessThan(common);
     expect(comfy).toBeGreaterThan(0);
@@ -105,11 +114,21 @@ describe('đói: dải mức và khẩu phần (ADR 0013)', () => {
 });
 
 describe('ra riêng và hộ người chơi thấy', () => {
-  it.each(Object.keys(SHARE_BY_BACKGROUND) as Background[])('%s nhận phần chia theo xuất thân', (bg) => {
+  it.each(Object.keys(SHARE_BY_BACKGROUND) as Background[])('%s nhận phần chia theo xuất thân, lấy từ quỹ và kho quận nhà', (bg) => {
     const c = child(bg);
-    becomeIndependent(c);
+    const home = { mouths: 100, grain: 100_000, money: 50_000, weatherPct: 100, price: 40, prevPrice: 40 };
+    becomeIndependent(c, home);
     const share = SHARE_BY_BACKGROUND[bg];
     expect(c.household).toMatchObject({ independent: true, money: share.money, grain: share.grain, landMu: share.landMu, tenure: share.tenure });
+    expect([home.money + c.household.money, home.grain + c.household.grain]).toEqual([50_000, 100_000]);
+  });
+
+  it('quận nhà cạn thì nhận được bao nhiêu hay bấy nhiêu (không tạo từ hư không)', () => {
+    const c = child('wealthy');
+    const home = { mouths: 100, grain: 30, money: 700, weatherPct: 100, price: 40, prevPrice: 40 };
+    becomeIndependent(c, home);
+    expect(c.household).toMatchObject({ money: 700, grain: 30 });
+    expect(home).toMatchObject({ money: 0, grain: 0 });
   });
 
   it('nghèo hơn thì phần chia ít hơn; nhà nghèo không có ruộng, làm tá điền', () => {
@@ -129,12 +148,14 @@ describe('ra riêng và hộ người chơi thấy', () => {
 
   it('dải đủ ăn tính cả tiền quy ra lương thực', () => {
     const h = (grain: number, money: number) => ({ independent: true, grain, money, landMu: 0, tenure: 'none' as const, hunger: 0 });
-    expect(foodWeeksBand(h(5, 0), RATION_ADULT)).toBe('none');
-    expect(foodWeeksBand(h(10, 0), RATION_ADULT)).toBe('short');
-    expect(foodWeeksBand(h(0, 300), RATION_ADULT)).toBe('short'); // 300 văn ≈ 75 thăng = 7 tuần
-    expect(foodWeeksBand(h(0, 400), RATION_ADULT)).toBe('season'); // 10 tuần
-    expect(foodWeeksBand(h(90, 0), RATION_ADULT)).toBe('season');
-    expect(foodWeeksBand(h(200, 700), RATION_ADULT)).toBe('year');
+    expect(foodWeeksBand(h(5, 0), RATION_ADULT, 46)).toBe('none');
+    expect(foodWeeksBand(h(10, 0), RATION_ADULT, 46)).toBe('short');
+    // Giá mua 46 văn/đấu: 300 văn ≈ 65 thăng ≈ 6 tuần; 460 văn = 100 thăng = 10 tuần; chợ đói kém giá 230 thì 460 văn chỉ còn 2 tuần
+    expect(foodWeeksBand(h(0, 300), RATION_ADULT, 46)).toBe('short');
+    expect(foodWeeksBand(h(0, 460), RATION_ADULT, 46)).toBe('season');
+    expect(foodWeeksBand(h(0, 460), RATION_ADULT, 230)).toBe('short');
+    expect(foodWeeksBand(h(90, 0), RATION_ADULT, 46)).toBe('season');
+    expect(foodWeeksBand(h(200, 900), RATION_ADULT, 46)).toBe('year'); // 200 + 195 thăng ≈ 39 tuần
   });
 });
 

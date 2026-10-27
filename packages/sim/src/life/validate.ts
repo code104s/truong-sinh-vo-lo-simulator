@@ -11,6 +11,7 @@ import { BACKGROUNDS, ELEMENTS, PERSONALITIES, TRAITS } from './params';
 import type { Skill } from './skills';
 import type { ActiveAction } from './player';
 import { HUNGER_MAX, type HouseholdState } from './household';
+import type { CountyEconomy, EconomyState } from '../economy/market';
 
 const skillRecord = (value: Validator<number>) => obj<Record<Skill, number>>({ farming: value, hunting: value, crafting: value, literacy: value, martial: value });
 
@@ -53,6 +54,10 @@ export const vLifeSnapshot = obj<LifeSnapshot>({
   config: vNewLifeConfig,
   tick: nat,
   character: vCharacter,
+  economy: obj<EconomyState>({
+    regionWeatherPct: intRange(0, 200),
+    counties: arr(obj<CountyEconomy>({ mouths: intRange(1, Number.MAX_SAFE_INTEGER), grain: nat, money: nat, weatherPct: intRange(0, 200), price: nat, prevPrice: nat })),
+  }),
   rng: obj<RngStreamsSnapshot>({ root: u32, streams: record(vRngState) }),
   death: nullable(obj<Death>({ tick: nat, cause: oneOf(DEATH_CAUSES), detail: str })),
   plan: nullable(vMonthPlan),

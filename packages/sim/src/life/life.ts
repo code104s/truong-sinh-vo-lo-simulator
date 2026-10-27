@@ -1,7 +1,7 @@
 // Một đời người: vòng tick theo pha có nhịp (ADR 0002), tua, nhật ký, snapshot (ADR 0004).
 import {
-  TICKS_PER_MONTH, TICKS_PER_YEAR, ageYearsAt, isYearStart,
-  type AdvanceMode, type Birthplace, type CharacterView, type LifeSummary, type LogEntry, type NewLifeConfig, type Tick, type MonthPlan, type SupplyBand,
+  TICKS_PER_MONTH, TICKS_PER_YEAR, ageYearsAt, calendarOf, isMonthStart, isYearStart,
+  type AdvanceMode, type Birthplace, type CharacterView, type LifeSummary, type LogEntry, type MarketView, type NewLifeConfig, type Tick, type MonthPlan, type SupplyBand,
 } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { digestOf } from '../core/digest';
@@ -10,6 +10,9 @@ import { RngStreams, type RngStreamsSnapshot } from '../core/rng';
 import { createCharacter, toView, type CharacterState } from './character';
 import { agingPhase, consequencesPhase, eventsPhase, type Death } from './health';
 import { feedPhase } from './household';
+import {
+  buyGrain, buyPrice, countyMoney, createEconomy, economyMonth, HARVEST_MONTH, marketView, rollWeather, supplyOf, type EconomyState,
+} from '../economy/market';
 import { AGE_MILESTONES, UNTIL_EVENT_MAX_TICKS } from './params';
 import { staminaMax } from './stamina';
 import { decaySkills } from './skills';
@@ -26,6 +29,8 @@ export interface LifeSnapshot extends PlayerState {
   /** Tick kế tiếp sẽ chạy. */
   tick: Tick;
   character: CharacterState;
+  /** Chợ các quận của vùng (ADR 0012); thế giới chạy cùng đời người chơi. */
+  economy: EconomyState;
   rng: RngStreamsSnapshot;
   death: Death | null;
 }
@@ -60,7 +65,7 @@ export class Life {
     character.health = character.healthMax;
     character.stamina = staminaMax(character, birthTick);
     // Tuần sinh coi như đã qua: tick kế tiếp là tuần sau khi sinh
-    const life = new Life({ simVersion: SIM_VERSION, config, tick: birthTick + 1, character, rng: streams.snapshot(), death: null, plan: null, active: null, planWarned: false }, streams, [], logic);
+    const life = new Life({ simVersion: SIM_VERSION, config, tick: birthTick + 1, character, economy: createEconomy(logic, birthTick), rng: streams.snapshot(), death: null, plan: null, active: null, planWarned: false }, streams, [], logic);
     life.push({ tick: birthTick, key: 'log.birth', params: { birthplace: birthplace.name, background: `background.${character.background}` }, importance: 'major' });
     return life;
   }
@@ -101,7 +106,7 @@ export class Life {
   }
 
   view(): CharacterView {
-    return toView(this.s.character, this.displayTick);
+    return toView(this.s.character, this.displayTick, buyPrice(this.s.economy.counties[this.s.character.location]!));
   }
 
   snapshot(): LifeSnapshot {
@@ -124,7 +129,8 @@ export class Life {
     const entries: LogEntry[] = [];
     const log = (e: Omit<LogEntry, 'tick'>) => entries.push({ tick: t, ...e });
 
-    // 1 Thế giới, 2 Thế lực, 3 NPC: chưa có ở v0.1
+    // 1 Thế giới: thời tiết (năm), chợ quận (tháng). 2 Thế lực, 3 NPC: chưa có
+    this.worldPhase(t, log);
     // 4 Sự kiện (tuần)
     let death = eventsPhase(c, t, this.streams.get('illness'), this.streams.get('accident'), log);
     // 5 Người chơi: tuổi thơ hoặc ô kế hoạch tháng (ADR 0008).
@@ -132,7 +138,8 @@ export class Life {
     death = action.death;
     // 6 Hậu quả: ăn (tuần), lão hóa (năm), diễn tiến (tuần), tử vong (cuối pha)
     if (!death) {
-      feedPhase(c, t, this.homeSupply(), this.streams.get('economy'), log);
+      const market = this.s.economy.counties[c.location]!;
+      feedPhase(c, t, this.homeSupply(), this.streams.get('economy'), log, (need) => buyGrain(market, c.household, need));
       if (isYearStart(t)) { agingPhase(c, t); decaySkills(c, t); }
       death = consequencesPhase(c, t, this.streams.get('health'), log, action.carePct);
     }
@@ -155,9 +162,39 @@ export class Life {
     return death;
   }
 
-  /** Tình hình lương thực của quận nhà; chợ quận có ở S2 (ADR 0012), tới đó coi như năm thường. */
+  /** Tình hình lương thực của quận nhà, nơi hộ cha mẹ sống (ADR 0013). */
   private homeSupply(): SupplyBand {
-    return 'normal';
+    return supplyOf(this.s.economy.counties[this.s.character.home]!);
+  }
+
+  /** Pha Thế giới. Tin tức chỉ về quận đang đứng: người chơi không biết chuyện nơi khác. */
+  private worldPhase(t: Tick, log: (e: Omit<LogEntry, 'tick'>) => void): void {
+    const eco = this.s.economy;
+    if (isYearStart(t)) rollWeather(eco, this.streams.get('weather'));
+    if (!isMonthStart(t)) return;
+    const c = this.s.character;
+    const here = eco.counties[c.location]!;
+    const before = supplyOf(here);
+    economyMonth(eco, this.logic, t);
+    const county = this.logic.counties[c.location]!.name ?? 'place.unknown';
+    if (calendarOf(t).month === HARVEST_MONTH) {
+      // Mất mùa báo trước cơn đói: ngắt tua với người tự nuôi mình
+      if (here.weatherPct <= 80) log({ key: 'log.world.harvest_bad', params: { county }, importance: c.household.independent ? 'major' : 'minor' });
+      else if (here.weatherPct >= 110) log({ key: 'log.world.harvest_good', params: { county }, importance: 'minor' });
+    }
+    const after = supplyOf(here);
+    if (after === 'famine' && before !== 'famine') log({ key: 'log.world.famine', params: { county }, importance: 'major' });
+    else if (before === 'famine' && after !== 'famine') log({ key: 'log.world.famine_end', params: { county }, importance: 'minor' });
+  }
+
+  /** Chợ quận đang đứng. */
+  market(): MarketView {
+    return marketView(this.s.economy, this.s.character.location);
+  }
+
+  /** Sổ cái: tổng tiền của vùng (quỹ quận + túi người chơi), không đổi qua mọi tick (ADR 0012). */
+  totalMoney(): number {
+    return countyMoney(this.s.economy) + this.s.character.household.money;
   }
 
   /** Tick đích của một chế độ tua: dừng ở ranh giới lịch (ADR 0002). */

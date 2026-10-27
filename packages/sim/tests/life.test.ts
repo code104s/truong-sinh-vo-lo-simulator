@@ -129,11 +129,12 @@ describe('tất định và lưu/tải (nghiệm thu Sim)', () => {
     });
     // v0.3 Bước 0: thêm luồng RNG economy, events, weather → digest đổi; tuổi và nguyên nhân chết giữ nguyên.
     // v0.3 S1: snapshot thêm hộ (ADR 0013) → digest đổi; chưa ra riêng, chưa đói kém nên tuổi và nguyên nhân giữ nguyên.
+    // v0.3 S2: chợ quận vào snapshot, thời tiết năm; trẻ nhà nghèo có thể đói trong nạn đói (ADR 0012, 0013).
     expect(out).toMatchInlineSnapshot(`
       [
-        "75 illness fabd20da79e3b2a9",
-        "67 old_age 33a116c2e14a1620",
-        "71 illness 9c55afc5e035869b",
+        "75 illness 0bca6f759e650da7",
+        "67 old_age a0426760e75b7ab7",
+        "71 illness 8995d9e94c3d2bb1",
       ]
     `);
   });
@@ -151,6 +152,7 @@ describe('thọ nguyên và tử vong (300 đời)', () => {
       expect(l.death!.tick - c.birthTick).toBeLessThanOrEqual(c.lifespanBase + c.lifespanBonus);
       causes.add(l.death!.cause);
     }
-    expect([...causes].sort()).toEqual(['accident', 'illness', 'old_age']);
+    // Từ S2 trẻ nhà nghèo có thể chết đói trong nạn đói quận nhà (ADR 0013)
+    expect([...causes].sort()).toEqual(['accident', 'illness', 'old_age', 'starvation']);
   });
 });

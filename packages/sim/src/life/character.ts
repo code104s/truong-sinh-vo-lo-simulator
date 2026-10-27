@@ -147,7 +147,8 @@ export function healthBandOf(c: CharacterState): HealthBand {
 }
 
 /** Chiếu sang những gì người chơi được thấy (ADR 0001). Không có linh căn, thọ nguyên, phúc duyên, thiên phú ẩn. */
-export function toView(c: CharacterState, tick: Tick): CharacterView {
+/** `buyPricePerDou`: giá mua ở chợ đang đứng, để quy tiền ra số tuần đủ ăn. */
+export function toView(c: CharacterState, tick: Tick, buyPricePerDou: number): CharacterView {
   const pct = idiv(c.health * 100, HEALTH_FULL);
   return {
     name: c.name,
@@ -169,6 +170,6 @@ export function toView(c: CharacterState, tick: Tick): CharacterView {
     staminaBand: staminaBand(c, tick),
     skills: skillViews(c),
     canAct: c.alive && ageYearsAt(c.birthTick, tick) >= ACTION_MIN_AGE,
-    household: householdView(c, tick),
+    household: householdView(c, tick, buyPricePerDou),
   };
 }

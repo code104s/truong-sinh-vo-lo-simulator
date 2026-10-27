@@ -121,7 +121,7 @@
 - **Đói kém quận nhà** đọc qua `Life.homeSupply()`, tạm trả `normal` tới S2. Năm thường `feedPhase` không rút RNG, nên đời thật hiện không đổi hành vi (batch 1.000 đời × 5 chiến lược y hệt Bước 0).
 - **Số liệu khởi điểm:**
   - Khẩu phần: người lớn 10 thăng/tuần, dưới 12 tuổi 5 thăng.
-  - Bỏ đói khi đói kém (ppm/tuần): `destitute` 400.000 · `commoner` 200.000 · `comfortable` 50.000 · `wealthy` 0.
+  - Bỏ đói khi đói kém (ppm/tuần): `destitute` 300.000 · `commoner` 150.000 · `comfortable` 40.000 · `wealthy` 0 (chỉnh ở S2, xem dưới).
   - Đói nhẹ: hồi sức khỏe còn 50%, hồi thể lực còn 50%, tính như sức khỏe yếu khi xét bệnh.
   - Đói lả: không hồi sức khỏe; mất 30 + 15 × (đói − 4) mỗi tuần; khóa việc nặng (`lock.hunger`, khóa tạm thời).
   - Kiệt: mất 100 + 20 × (đói − 8) mỗi tuần; 25% để lại di chứng 10–30.
@@ -132,3 +132,17 @@
   - "Dần lại sức" ghi khi thoát khỏi đói lả, không ghi khi đói nhẹ lên xuống, để tránh ngập nhật ký.
 - **Chết vì bệnh khi đang đói nhẹ** dùng khóa nhật ký riêng `log.death.hungry` ("giữa cơn đói"); nguyên nhân vẫn là `illness`.
 - **Chưa có:** trường `stayUntil` (thêm ở S5 cùng sự kiện lập thân); tự mua lương khi thiếu (thêm ở S2 cùng chợ).
+
+## Ghi chú triển khai S2 (2026-10-27)
+- **Đói kém quận nhà đã nối vào đời thật** (chợ quận, ADR 0012), nên trẻ nhà nghèo có thể chết đói.
+- **Lỗi đã sửa:** luật bỏ đói của hộ cha mẹ áp cả cho người lớn còn ở nhà (trạng thái tạm từ S1). Kết quả là người 40–70 tuổi chết đói vì "cha mẹ". Giờ luật chỉ áp cho tuổi dưới 16 (`COMING_OF_AGE`), đúng như ADR.
+- **Hiệu chỉnh mức bỏ đói** (chủ dự án chọn 2026-10-27, batch 1.000 đời × 5 chiến lược). Kết quả rất phi tuyến:
+
+  | Mức bỏ đói (bần cùng / bình dân / khá giả) | Chết đói | "lao lực" chết 40–80 |
+  |---|---|---|
+  | 40 / 20 / 5% | 4,1% | 82,7% |
+  | **30 / 15 / 4% (chọn)** | **1,7%** | **84,5%** |
+  | 20 / 10 / 2,5% | 0,1% | 86,0% |
+
+  - Lý do chọn mức 30%: chừa chỗ cho chết đói người lớn khi bật ra riêng (Q3: "điều độ" chết đói ≤ 5%), mà nạn đói vẫn có giá thật với nhà nghèo.
+- **Tiêu chí batch:** mỗi chiến lược ≥ 80% chết 40–80 tuổi, theo mục 6 v0.3, thay cho mức 85% của v0.2. Bộ tiêu chí đầy đủ của Q3 thêm ở S7.

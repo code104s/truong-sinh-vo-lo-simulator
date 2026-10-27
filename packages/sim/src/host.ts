@@ -200,8 +200,8 @@ export class SimHost {
     this.emit({ type: 'STATE', reqId, date: calendarOf(life.displayTick), character: life.view(), running: false, plan: life.plan,
       active: a ? { action: a.slot.action, remaining: a.remaining, total: a.total, ...(a.slot.target === undefined ? {} : { target: a.slot.target }) } : null,
       slotIndex: calendarOf(life.displayTick).tenDay, actions: life.view().canAct ? life.actions() : [], travel: life.view().canAct ? life.travel() : [],
-      // Chợ có ở S2, sự kiện chờ có ở S5
-      market: null, pending: null });
+      // Sự kiện chờ có ở S5
+      market: life.market(), pending: null });
   }
 
   save(): SaveFile {

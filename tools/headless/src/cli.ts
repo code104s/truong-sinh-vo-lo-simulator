@@ -3,6 +3,7 @@
 //   pnpm sim batch --seeds 1000 [--worlds 10] [--threads K] [--policy balanced|all] [--out report.json]
 //   pnpm sim replay --save file.json
 //   pnpm sim regions --seeds 100 [--threads K] [--once]
+//   pnpm sim economy --seeds 10 [--years 100] [--threads K]   (chợ quận không người chơi, ADR 0012)
 import { readFileSync, writeFileSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { resolve } from 'node:path';
@@ -11,7 +12,7 @@ import { parseArgs } from 'node:util';
 import { isMainThread, parentPort, Worker } from 'node:worker_threads';
 import { t } from '@tsvl/content';
 import { calendarOf, decodeSave, encodeSave, type Birthplace, type Command, type LogEntry, type RegionId, type SettlementKind, type Tick, type WorkerMessage } from '@tsvl/shared';
-import { digestOf, replaySave, SimHost } from '@tsvl/sim';
+import { digestOf, replaySave, SimHost, simulateEconomy } from '@tsvl/sim';
 import { buildRegion, regionIdentity, type RegionLogic } from '@tsvl/worldgen';
 import { runPolicyBatch } from './batch';
 
@@ -108,6 +109,7 @@ async function main() {
       worlds: { type: 'string', default: '10' },
       threads: { type: 'string', default: String(Math.max(1, cpus().length - 1)) },
       once: { type: 'boolean', default: false },
+      years: { type: 'string', default: '100' },
     },
   });
   switch (cmd) {
@@ -123,8 +125,10 @@ async function main() {
     }
     case 'regions':
       return regionsCmd(Number(a.seeds), Number(a.threads), a.once ?? false);
+    case 'economy':
+      return economyCmd(Number(a.seeds), Number(a.years), Number(a.threads));
     default:
-      console.log('Dùng: pnpm sim life|batch|regions|replay …  (xem đầu tools/headless/src/cli.ts)');
+      console.log('Dùng: pnpm sim life|batch|regions|replay|economy …  (xem đầu tools/headless/src/cli.ts)');
       process.exit(cmd ? 1 : 0);
   }
 }
@@ -231,6 +235,33 @@ async function regionsCmd(n: number, threads: number, once: boolean) {
   console.log(`Độ phì (${fert.length} quận): ${fert[0]}–${fert.at(-1)} · p10 ${at(0.1)} · trung vị ${at(0.5)} · p90 ${at(0.9)} · chạm sàn ${fert.filter((f) => f === fert[0]).length}`);
   console.log(`Đo: sinh một vùng (gồm cả thế giới 1024×768) trung bình ${(ok.reduce((s, r) => s + r.ms, 0) / ok.length / 1000).toFixed(2)} s · tổng ${(wall / 1000).toFixed(1)} s`);
   const pass = fails.length === 0 && mismatch === 0;
+  console.log(pass ? 'KẾT QUẢ: PASS' : 'KẾT QUẢ: FAIL');
+  if (!pass) process.exitCode = 1;
+}
+
+// —— economy ——
+/** Nghiệm thu chợ quận (v0.3 mục 6): 100 năm × N seed không người chơi. */
+async function economyCmd(n: number, years: number, threads: number) {
+  const seeds = Array.from({ length: n }, (_, i) => `tsvl-${String(i + 1).padStart(2, '0')}`);
+  console.log(`Chợ quận ${years} năm × ${n} vùng, không người chơi`);
+  const regions = await regionPool(seeds.map((seed) => ({ seed })), threads);
+  let famines = 0, countyYears = 0, famineMonths = 0, scarceMonths = 0, minPrice = Infinity, maxPrice = 0, ledgerBad = 0, negative = 0;
+  for (const r of regions) {
+    if (!r.ok) throw new Error(`${r.seed}: ${r.error}`);
+    const s = simulateEconomy(r.logic!, years, r.seed);
+    famines += s.famines; countyYears += s.counties * years;
+    famineMonths += s.famineMonthsPermille * s.counties; scarceMonths += s.scarceMonthsPermille * s.counties;
+    minPrice = Math.min(minPrice, s.minPricePct); maxPrice = Math.max(maxPrice, s.maxPricePct);
+    if (s.moneyStart !== s.moneyEnd) ledgerBad++;
+    if (s.minGrain < 0) negative++;
+    console.log(`  ${r.seed}: ${s.counties} quận · đói kém ${s.famines} lần · tháng đói kém ${s.famineMonthsPermille / 10}% · khan hiếm ${s.scarceMonthsPermille / 10}% · giá ${s.minPricePct}–${s.maxPricePct}% · tiền ${s.moneyStart === s.moneyEnd ? 'bảo toàn' : `LỆCH ${s.moneyEnd - s.moneyStart}`}`);
+  }
+  const counties = countyYears / years;
+  const every = famines ? countyYears / famines : Infinity;
+  console.log(`Đói kém: ${famines} lần trên ${counties} quận × ${years} năm → mỗi quận 1 lần / ${every.toFixed(1)} năm (mục tiêu 8–15)`);
+  console.log(`Tháng đói kém ${(famineMonths / counties / 10).toFixed(1)}% · khan hiếm ${(scarceMonths / counties / 10).toFixed(1)}% · giá ${minPrice}–${maxPrice}% (mục tiêu trong 70–500)`);
+  const pass = ledgerBad === 0 && negative === 0 && minPrice >= 70 && maxPrice <= 500 && every >= 8 && every <= 15;
+  console.log(`Sổ cái lệch: ${ledgerBad} vùng · kho âm: ${negative} vùng`);
   console.log(pass ? 'KẾT QUẢ: PASS' : 'KẾT QUẢ: FAIL');
   if (!pass) process.exitCode = 1;
 }

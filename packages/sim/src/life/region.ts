@@ -31,6 +31,7 @@ export function checkSavedLogic(logic: RegionLogic, save: SaveFile, snap: LifeSn
   const bp = save.region.birthplaces.find((p) => p.id === snap.config.birthplaceId);
   if (!bp || bp.county !== c.home || c.location >= n || c.home >= n || snap.tick <= c.birthTick || c.alive !== (snap.death === null)) return 'trạng thái nhân vật không khớp vùng';
   if (STREAMS.some((name) => !snap.rng.streams[name])) return 'thiếu luồng RNG';
+  if (snap.economy.counties.length !== n) return 'chợ quận không khớp vùng';
   if (snap.plan && !validatePlan(snap.plan, logic)) return 'kế hoạch lưu không hợp lệ';
   if (snap.active) {
     const a = snap.active;

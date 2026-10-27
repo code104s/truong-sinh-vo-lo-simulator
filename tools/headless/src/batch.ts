@@ -7,6 +7,12 @@ import type { RegionLogic } from '@tsvl/worldgen';
 import { POLICIES, policyPlan, type PolicyName } from './policies';
 
 interface BatchRegion { seed: string; regionId: RegionId; birthplaces: Birthplace[]; logic: RegionLogic | null }
+/**
+ * Tỉ lệ tối thiểu đời chết trong 40–80 tuổi, mỗi chiến lược. v0.2: 85%. v0.3 mục 6 (chủ dự án duyệt 2026-10-27): 80%, vì
+ * từ S2 trẻ nhà nghèo có thể chết đói trong nạn đói. Bộ tiêu chí đầy đủ của Q3 thêm ở S7.
+ */
+export const IN_RANGE_MIN_PCT = 80;
+
 export interface PolicyReport { policy: PolicyName; count: number; stuck: number; overCap: number; meanAge: number; medianAge: number; inRangePct: number; oldAgePct: number; causes: Record<string, number>; skills: Record<string, number>; ticks: number; ms: number }
 
 export function runPolicyBatch(regions: BatchRegion[], n: number, selection: string, out?: string): PolicyReport[] {
@@ -43,7 +49,7 @@ export function runPolicyBatch(regions: BatchRegion[], n: number, selection: str
     console.log(`${policy}: ${n} đời · kẹt ${stuck} · vượt trần ${overCap} · trung bình ${report.meanAge.toFixed(2)} · trung vị ${report.medianAge} · 40–80 ${report.inRangePct.toFixed(1)}% · chết già ${report.oldAgePct.toFixed(1)}% · ${report.ms.toFixed(0)} ms`);
     console.log(`  Nguyên nhân: ${JSON.stringify(causes)} · kỹ năng trung bình: ${JSON.stringify(skills)}`);
   }
-  const basePass = reports.every((r) => r.stuck === 0 && r.overCap === 0 && r.inRangePct >= 85);
+  const basePass = reports.every((r) => r.stuck === 0 && r.overCap === 0 && r.inRangePct >= IN_RANGE_MIN_PCT);
   const mean = (p: PolicyName) => reports.find((r) => r.policy === p)?.meanAge;
   const balanced = reports.find((r) => r.policy === 'balanced');
   const ordering = selection !== 'all' || (mean('overwork')! < mean('balanced')! && mean('balanced')! <= mean('lazy')! + 1);

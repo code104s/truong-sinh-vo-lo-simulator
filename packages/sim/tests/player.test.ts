@@ -48,7 +48,8 @@ describe('pha người chơi', () => {
     for (let k = 0; k < 3 && town.alive; k++) town.advance('year');
     expect(town.log.filter((e) => e.key === 'log.plan.invalid')).toHaveLength(1);
     town.setPlan({ slots: [{ action: 'action.farm' }, { action: 'action.rest' }, { action: 'action.rest' }] });
-    town.advance('week');
+    // Tin chợ quận có thể ngắt tua giữa chừng nên tuần đang đứng không cố định: chạy tới khi ô làm ruộng tới lượt
+    for (let k = 0; k < 3; k++) town.advance('week');
     expect(town.log.filter((e) => e.key === 'log.plan.invalid')).toHaveLength(2);
   });
   it('ô di chuyển chỉ chạy một lần: tới nơi thì ô đó thành nghỉ, tua năm không bị ngắt vì kế hoạch (hồi quy)', () => {

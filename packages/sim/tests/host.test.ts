@@ -156,13 +156,18 @@ describe('SimHost — v0.2', () => {
   });
 
   it('save/tải host giữa chuyến đi giữ tiến độ, vị trí và giá đã trả', () => {
-    const a = host(); newLife(a.send, 0);
-    while (a.h.current.life!.alive && !a.h.current.life!.view().canAct) a.send({ type: 'ADVANCE', mode: 'year' });
-    const life = a.h.current.life!;
-    const target = life.travel().find((p) => p.slots > 1)!;
+    // Nơi sinh đầu tiên mà đời sống tới 12 tuổi và có đích cần nhiều ô đi (từ S2 có đời chết đói khi còn nhỏ)
+    const a = host();
+    let target: { county: number; slots: number } | undefined;
+    for (let bp = 0; bp < region.birthplaces.length && !target; bp++) {
+      newLife(a.send, bp);
+      while (a.h.current.life!.alive && !a.h.current.life!.view().canAct) a.send({ type: 'ADVANCE', mode: 'year' });
+      if (a.h.current.life!.alive) target = a.h.current.life!.travel().find((p) => p.slots > 1);
+    }
     expect(target).toBeDefined();
+    const life = a.h.current.life!;
     const plan = { slots: [{ action: 'action.rest' }, { action: 'action.rest' }, { action: 'action.rest' }] as { action: string; target?: number }[] };
-    plan.slots[life.tick % 3] = { action: 'action.travel', target: target.county };
+    plan.slots[life.tick % 3] = { action: 'action.travel', target: target!.county };
     a.send({ type: 'SET_PLAN', plan }); a.send({ type: 'ADVANCE', mode: 'week' });
     expect(life.active?.remaining).toBeGreaterThan(0);
     const decoded = decodeSave(encodeSave(a.h.save())); if (!decoded.ok) throw new Error(decoded.error);
@@ -199,11 +204,11 @@ describe('SimHost — v0.2', () => {
 });
 
 describe('SimHost — v0.3 Bước 0', () => {
-  it('STATE có chợ và sự kiện chờ (null tới S2, S5); TRADE, CHOOSE chưa nhận và không đổi đời', () => {
+  it('STATE có chợ quận đang đứng, sự kiện chờ null tới S5; TRADE, CHOOSE chưa nhận và không đổi đời', () => {
     const { send } = host();
     const born = newLife(send);
     const st = born.find((m) => m.type === 'STATE');
-    expect(st).toMatchObject({ market: null, pending: null });
+    expect(st).toMatchObject({ pending: null, market: { county: region.birthplaces[1]!.county } });
     if (st?.type === 'STATE') expect(st.character.household).toMatchObject({ independent: false, money: 0, grain: 0 });
     const before = send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>;
     expect(send({ type: 'TRADE', grain: 10 })).toMatchObject([{ type: 'ERROR', code: 'BAD_COMMAND' }]);
@@ -215,7 +220,7 @@ describe('SimHost — v0.3 Bước 0', () => {
 
   it('bộ đệm chống trùng có giới hạn (nợ v0.2), lệnh gửi lại gần đây vẫn không áp hai lần', () => {
     const { h, out, send } = host();
-    newLife(send);
+    newLife(send, 3); // đời này sống tới 85 tuổi, đủ dài cho 306 tuần
     for (let i = 0; i < HANDLED_LIMIT + 50; i++) send({ type: 'ADVANCE', mode: 'week' });
     expect(h.handledCount).toBe(HANDLED_LIMIT);
     const tick = h.current.life!.tick;
