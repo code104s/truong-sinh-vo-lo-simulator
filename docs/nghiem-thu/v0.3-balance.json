@@ -1,0 +1,381 @@
+{
+  "pass": true,
+  "reports": [
+    {
+      "policy": "lazy",
+      "count": 1000,
+      "stuck": 0,
+      "overCap": 0,
+      "meanAge": 17.934,
+      "medianAge": 16,
+      "inRangePct": 3,
+      "oldAgePct": 1.1,
+      "starvationPct": 94.5,
+      "causes": {
+        "starvation": 945,
+        "illness": 21,
+        "accident": 23,
+        "old_age": 11
+      },
+      "skills": {
+        "farming": 37,
+        "hunting": 0,
+        "crafting": 0,
+        "literacy": 6,
+        "martial": 0,
+        "trade": 0
+      },
+      "byBackground": {
+        "destitute": {
+          "count": 301,
+          "meanAge": 15.262458471760798,
+          "starvationPct": 98.00664451827242
+        },
+        "commoner": {
+          "count": 517,
+          "meanAge": 16.168278529980658,
+          "starvationPct": 98.45261121856866
+        },
+        "comfortable": {
+          "count": 145,
+          "meanAge": 17.620689655172413,
+          "starvationPct": 97.24137931034483
+        },
+        "wealthy": {
+          "count": 37,
+          "meanAge": 65.56756756756756,
+          "starvationPct": 0
+        }
+      },
+      "events": {
+        "event.immortal_tale": 249,
+        "event.bitter_cold": 1251,
+        "event.market_brawl": 551,
+        "event.coming_of_age": 968,
+        "event.usurer": 411,
+        "event.beggar": 1238,
+        "event.old_book": 311,
+        "event.good_harvest": 305,
+        "event.granary_theft": 289,
+        "event.house_fire": 92,
+        "event.quack": 127,
+        "event.rice_spike": 144,
+        "event.epidemic": 229,
+        "event.tax_collector": 563,
+        "event.village_funeral": 1563,
+        "event.wandering_physician": 199,
+        "event.neighbor_harvest": 590,
+        "event.village_festival": 1257,
+        "event.grain_broker": 615
+      },
+      "eventYears": 6107,
+      "ticks": 665486,
+      "ms": 7130.3992
+    },
+    {
+      "policy": "balanced",
+      "count": 1000,
+      "stuck": 0,
+      "overCap": 0,
+      "meanAge": 59.702,
+      "medianAge": 63,
+      "inRangePct": 86.4,
+      "oldAgePct": 28.9,
+      "starvationPct": 2.6,
+      "causes": {
+        "illness": 531,
+        "accident": 154,
+        "old_age": 289,
+        "starvation": 26
+      },
+      "skills": {
+        "farming": 6474,
+        "hunting": 5186,
+        "crafting": 2417,
+        "literacy": 88,
+        "martial": 0,
+        "trade": 0
+      },
+      "byBackground": {
+        "destitute": {
+          "count": 301,
+          "meanAge": 54.19269102990033,
+          "starvationPct": 6.976744186046512
+        },
+        "commoner": {
+          "count": 517,
+          "meanAge": 61.43520309477756,
+          "starvationPct": 0.7736943907156673
+        },
+        "comfortable": {
+          "count": 145,
+          "meanAge": 63.779310344827586,
+          "starvationPct": 0.6896551724137931
+        },
+        "wealthy": {
+          "count": 37,
+          "meanAge": 64.32432432432432,
+          "starvationPct": 0
+        }
+      },
+      "events": {
+        "event.immortal_tale": 269,
+        "event.bitter_cold": 8948,
+        "event.market_brawl": 4315,
+        "event.coming_of_age": 963,
+        "event.good_harvest": 6700,
+        "event.beggar": 21767,
+        "event.house_fire": 2062,
+        "event.granary_theft": 6808,
+        "event.quack": 1365,
+        "event.epidemic": 1408,
+        "event.rice_spike": 3667,
+        "event.old_book": 791,
+        "event.grain_broker": 18695,
+        "event.village_funeral": 11020,
+        "event.rent_hike": 2704,
+        "event.village_festival": 8521,
+        "event.neighbor_harvest": 4894,
+        "event.wild_beast": 14309,
+        "event.rare_herb": 2961,
+        "event.drought": 1947,
+        "event.locusts": 1811,
+        "event.flood": 1572,
+        "event.wandering_physician": 2381,
+        "event.spoiled_food": 6,
+        "event.usurer": 2,
+        "event.tax_collector": 3
+      },
+      "eventYears": 47875,
+      "ticks": 2166813,
+      "ms": 27285.988100000002
+    },
+    {
+      "policy": "overwork",
+      "count": 1000,
+      "stuck": 0,
+      "overCap": 0,
+      "meanAge": 56.783,
+      "medianAge": 61,
+      "inRangePct": 85.4,
+      "oldAgePct": 17.3,
+      "starvationPct": 1.5,
+      "causes": {
+        "illness": 641,
+        "old_age": 173,
+        "accident": 171,
+        "starvation": 15
+      },
+      "skills": {
+        "farming": 6492,
+        "hunting": 5721,
+        "crafting": 2452,
+        "literacy": 66,
+        "martial": 0,
+        "trade": 0
+      },
+      "byBackground": {
+        "destitute": {
+          "count": 301,
+          "meanAge": 51.35880398671096,
+          "starvationPct": 4.651162790697675
+        },
+        "commoner": {
+          "count": 517,
+          "meanAge": 58.3036750483559,
+          "starvationPct": 0.19342359767891681
+        },
+        "comfortable": {
+          "count": 145,
+          "meanAge": 61.95172413793104,
+          "starvationPct": 0
+        },
+        "wealthy": {
+          "count": 37,
+          "meanAge": 59.4054054054054,
+          "starvationPct": 0
+        }
+      },
+      "events": {
+        "event.immortal_tale": 267,
+        "event.bitter_cold": 8537,
+        "event.market_brawl": 3973,
+        "event.coming_of_age": 956,
+        "event.quack": 1534,
+        "event.beggar": 20022,
+        "event.granary_theft": 6320,
+        "event.epidemic": 1323,
+        "event.house_fire": 1906,
+        "event.good_harvest": 6435,
+        "event.rice_spike": 3322,
+        "event.old_book": 754,
+        "event.grain_broker": 18918,
+        "event.village_funeral": 10497,
+        "event.rent_hike": 3025,
+        "event.village_festival": 8049,
+        "event.wild_beast": 4453,
+        "event.rare_herb": 3717,
+        "event.wandering_physician": 2712,
+        "event.drought": 1847,
+        "event.locusts": 1700,
+        "event.flood": 1561,
+        "event.neighbor_harvest": 229,
+        "event.tax_collector": 6,
+        "event.spoiled_food": 5
+      },
+      "eventYears": 44956,
+      "ticks": 2061152,
+      "ms": 26070.934200000003
+    },
+    {
+      "policy": "scholar",
+      "count": 1000,
+      "stuck": 0,
+      "overCap": 0,
+      "meanAge": 57.82,
+      "medianAge": 63,
+      "inRangePct": 83.8,
+      "oldAgePct": 23.6,
+      "starvationPct": 35.1,
+      "causes": {
+        "illness": 299,
+        "starvation": 351,
+        "old_age": 236,
+        "accident": 114
+      },
+      "skills": {
+        "farming": 5,
+        "hunting": 0,
+        "crafting": 8835,
+        "literacy": 4847,
+        "martial": 0,
+        "trade": 0
+      },
+      "byBackground": {
+        "destitute": {
+          "count": 301,
+          "meanAge": 49.7906976744186,
+          "starvationPct": 48.17275747508306
+        },
+        "commoner": {
+          "count": 517,
+          "meanAge": 60.44100580270793,
+          "starvationPct": 30.56092843326886
+        },
+        "comfortable": {
+          "count": 145,
+          "meanAge": 64.10344827586206,
+          "starvationPct": 33.10344827586207
+        },
+        "wealthy": {
+          "count": 37,
+          "meanAge": 61.891891891891895,
+          "starvationPct": 0
+        }
+      },
+      "events": {
+        "event.immortal_tale": 968,
+        "event.teacher_word": 5031,
+        "event.old_book": 9752,
+        "event.market_brawl": 14757,
+        "event.bitter_cold": 8981,
+        "event.coming_of_age": 966,
+        "event.beggar": 20015,
+        "event.good_harvest": 6447,
+        "event.granary_theft": 6091,
+        "event.quack": 4622,
+        "event.house_fire": 1865,
+        "event.epidemic": 1360,
+        "event.rice_spike": 3073,
+        "event.tax_collector": 60,
+        "event.usurer": 78,
+        "event.village_festival": 14,
+        "event.village_funeral": 13,
+        "event.spoiled_food": 1
+      },
+      "eventYears": 45993,
+      "ticks": 2099043,
+      "ms": 27114.593800000002
+    },
+    {
+      "policy": "wanderer",
+      "count": 1000,
+      "stuck": 0,
+      "overCap": 0,
+      "meanAge": 47.873,
+      "medianAge": 58,
+      "inRangePct": 62.4,
+      "oldAgePct": 17.2,
+      "starvationPct": 43.5,
+      "causes": {
+        "starvation": 435,
+        "old_age": 172,
+        "accident": 136,
+        "illness": 257
+      },
+      "skills": {
+        "farming": 5232,
+        "hunting": 2903,
+        "crafting": 2366,
+        "literacy": 67,
+        "martial": 0,
+        "trade": 0
+      },
+      "byBackground": {
+        "destitute": {
+          "count": 301,
+          "meanAge": 23.803986710963454,
+          "starvationPct": 82.72425249169436
+        },
+        "commoner": {
+          "count": 517,
+          "meanAge": 56.967117988394584,
+          "starvationPct": 28.239845261121857
+        },
+        "comfortable": {
+          "count": 145,
+          "meanAge": 61.07586206896552,
+          "starvationPct": 27.586206896551722
+        },
+        "wealthy": {
+          "count": 37,
+          "meanAge": 64.86486486486487,
+          "starvationPct": 0
+        }
+      },
+      "events": {
+        "event.lost_in_mountains": 123,
+        "event.village_festival": 7118,
+        "event.epidemic": 1310,
+        "event.village_funeral": 9178,
+        "event.immortal_tale": 766,
+        "event.bitter_cold": 6827,
+        "event.coming_of_age": 959,
+        "event.market_brawl": 3681,
+        "event.beggar": 14788,
+        "event.good_harvest": 4227,
+        "event.grain_broker": 12482,
+        "event.house_fire": 1301,
+        "event.wandering_physician": 1787,
+        "event.wild_beast": 8607,
+        "event.granary_theft": 4169,
+        "event.rare_herb": 1927,
+        "event.flood": 1091,
+        "event.rent_hike": 286,
+        "event.neighbor_harvest": 3852,
+        "event.tax_collector": 612,
+        "event.usurer": 287,
+        "event.highway_robbers": 628,
+        "event.drought": 1240,
+        "event.rice_spike": 1703,
+        "event.quack": 879,
+        "event.locusts": 1178,
+        "event.old_book": 839,
+        "event.spoiled_food": 2
+      },
+      "eventYears": 36046,
+      "ticks": 1741152,
+      "ms": 19506.654599999994
+    }
+  ]
+}
