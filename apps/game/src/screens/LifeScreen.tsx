@@ -1,5 +1,6 @@
 import { t } from '@tsvl/content';
-import type { AdvanceMode, CalendarDate, CharacterView, LogEntry, MonthPlan, ActionOption, ActionProgress, PendingEvent, TravelOption, TravelPreview } from '@tsvl/shared';
+import type { AdvanceMode, CalendarDate, CharacterView, LogEntry, MarketView, MonthPlan, ActionOption, ActionProgress, PendingEvent, TravelOption, TravelPreview } from '@tsvl/shared';
+import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { logText } from '../app/format';
 import { defaultPlan, planDirty, planInvalid } from '../app/plan';
@@ -9,6 +10,7 @@ import { InkLandscape, Scroll, Seal } from '../ui/ink';
 import { ActionPlanner } from './ActionPlanner';
 import { Chronicle } from './Chronicle';
 import { EventCard } from './EventCard';
+import { MarketDialog, MarketPanel } from './Market';
 import { StatusBar } from './StatusBar';
 import { TravelDialog } from './TravelDialog';
 
@@ -30,15 +32,18 @@ interface Props {
   onPlan: (plan: MonthPlan) => void; onPreview: (county: number) => void;
   /** Sự kiện chờ chọn (ADR 0014): thời gian dừng, mọi nút tua khóa tới khi chọn. */
   pending: PendingEvent | null; onChoose: (instance: number, choice: string) => void;
+  /** Chợ quận đang đứng (F2); mua bán bằng lệnh TRADE, không tốn ô. */
+  market: MarketView | null; onTrade: (grain: number) => void;
 }
 
 const copyPlan = (p: MonthPlan | null): MonthPlan => (p ? { slots: p.slots.map((s) => ({ ...s })) as MonthPlan['slots'] } : defaultPlan());
 
 /** Thân thế: những gì không đổi hoặc ít đổi. Đặt bên phải để thanh trạng thái và biên niên được chỗ (đề xuất P0). */
-function Dossier({ c, world }: { c: CharacterView; world: WorldInfo | null }) {
+function Dossier({ c, world, children }: { c: CharacterView; world: WorldInfo | null; children?: ComponentChildren }) {
   const place = world?.birthplaces.find((b) => b.id === c.birthplaceId);
   return (
     <aside class="dossier">
+      {children}
       <span class="section-title">{t('ui.life.dossier')}</span>
       {place && <p class="small"><Seal char={KIND_CHAR[place.kind]} tone="ink" /> {t('ui.life.born', { place: `${place.name} (${t(`kind.${place.kind}`)})` })}</p>}
       <dl class="attrs">
@@ -63,8 +68,10 @@ function Dossier({ c, world }: { c: CharacterView; world: WorldInfo | null }) {
   );
 }
 
-export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview, pending, onChoose }: Props) {
+export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview, pending, onChoose, market, onTrade }: Props) {
   const [travelOpen, setTravelOpen] = useState(false);
+  const [marketOpen, setMarketOpen] = useState(false);
+  const place = world?.map.counties[c.location]?.name ?? '';
   const [draft, setDraft] = useState<MonthPlan>(copyPlan(plan));
   // Mỗi STATE mang một object kế hoạch mới; chỉ đặt lại bản nháp khi kế hoạch thật sự đổi.
   const planKey = JSON.stringify(plan);
@@ -103,11 +110,14 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
                 {running && <span class="muted running">{t('ui.ctrl.running')}</span>}
               </footer>
             </main>
-            <Dossier c={c} world={world} />
+            <Dossier c={c} world={world}>
+              {market && <MarketPanel market={market} place={place} locked={lock} onOpen={() => setMarketOpen(true)} />}
+            </Dossier>
           </div>
         </div>
       </Scroll>
       {pending && <EventCard pending={pending} date={date} busy={busy} onChoose={(choice) => onChoose(pending.instance, choice)} />}
+      {marketOpen && market && !pending && <MarketDialog market={market} household={c.household} place={place} canAct={c.canAct} busy={busy || running} onTrade={onTrade} onClose={() => setMarketOpen(false)} />}
       {travelOpen && world && <TravelDialog world={world} location={c.location} slotIndex={date.tenDay} plan={plan} options={travel} preview={travelPreview} onPreview={onPreview} onPlan={onPlan} onClose={() => setTravelOpen(false)} />}
     </div>
   );

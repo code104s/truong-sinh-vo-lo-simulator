@@ -699,3 +699,23 @@ p { margin: 0; }
   .event-figure .portrait, .event-figure .portrait img, .event-figure .portrait svg { width: 100px; }
   .event-figure .portrait img, .event-figure .portrait svg { height: 150px; }
 }
+
+/* —— Chợ (F2): khối giá ở cột phải, hộp mua bán dùng tờ giấy thiếp như thẻ sự kiện —— */
+.market-panel { padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.market-prices { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+.market-prices dt { color: var(--muted); }
+.market-prices dd { margin: 0; font-weight: 600; }
+.market-prices .tone-good, .market-prices .trend-falling { color: var(--jade); }
+.market-prices .tone-warn { color: var(--ochre); }
+.market-prices .tone-bad, .market-prices .trend-rising { color: var(--cinnabar); }
+.market-open { align-self: flex-start; font-size: 13px; padding: 6px 12px; }
+.market-card { width: min(520px, 100%); grid-template-columns: 1fr; }
+.market-card .event-text { padding: 22px 26px; }
+.market-amount { display: flex; flex-direction: column; gap: 8px; }
+.stepper { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.stepper .btn { font-size: 13px; padding: 6px 10px; min-width: 44px; }
+.stepper input { width: 84px; font: 700 18px/1 var(--display); text-align: center; padding: 6px 4px; border: 1px solid rgba(31, 30, 28, 0.45); background: rgba(255, 255, 255, 0.7); color: var(--ink); }
+.stepper input:focus-visible { outline: 2px dashed var(--cinnabar); outline-offset: 2px; }
+.market-why { font-size: 15px; padding: 8px 0; }
+.market-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 6px; }
+

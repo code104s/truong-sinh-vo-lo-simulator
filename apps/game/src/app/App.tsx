@@ -150,6 +150,8 @@ export function App({ client }: { client: SimClient }) {
           onPreview={(county) => send({ type: 'PREVIEW_TRAVEL', county })}
           pending={s.pending}
           onChoose={(instance, choice) => { setSaved(false); send({ type: 'CHOOSE', instance, choice }, 'plan'); }}
+          market={s.market}
+          onTrade={(grain) => { setSaved(false); send({ type: 'TRADE', grain }, 'plan'); }}
         />
       )}
       {s.screen === 'summary' && s.summary && <SummaryScreen summary={s.summary} character={s.character} world={s.world} onBack={() => dispatch({ type: 'go', screen: 'menu' })} />}
