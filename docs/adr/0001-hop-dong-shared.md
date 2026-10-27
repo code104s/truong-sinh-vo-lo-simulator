@@ -313,3 +313,20 @@ Lý do: màn tổng kết kể được của cải lúc chết và cái đói c
 - Nhánh bị ảnh hưởng:
   - **Sim:** hộ thêm `hungerYears`, `lastHungerYear` (ẩn, có trong schema snapshot), đếm ở `feedPhase`. Digest pin đổi; tuổi và nguyên nhân chết giữ nguyên.
   - **FE:** màn tổng kết mới.
+
+### 2026-10-27 — v0.4 Bước 0 (ADR 0015, 0016)
+Lý do: v0.4 thêm người có tên quanh người chơi. `PROTOCOL_VERSION` 3 → **4**, `SAVE_VERSION` 3 → **4**. Save v0.3 bị từ chối, không chuyển đổi (v0.4 Q10).
+- `contentId.ts` thêm `NpcId`, `NPC_ID_RE` (`n` + số từ 1), `vNpcId`. Đặt ở đây để `events` và `npc` cùng dùng mà không vòng import.
+- Tệp mới `npc.ts`:
+  - `NpcView { id, name, gender, ageYears, occupation, healthBand, portrait { ageBand, class, key } }` và `vNpcView`;
+  - không có thuộc tính ẩn; test kiểm `HIDDEN_CHARACTER_KEYS` bị từ chối.
+- `EventFigure` thêm `npcId?` (tùy chọn): người thật trong sự kiện; thiếu thì là người vô danh như v0.3.
+- Tin `STATE` thêm `people: NpcView[]`: NPC ở quận người chơi đang đứng, sắp theo id. STATE kiểu v0.3 (thiếu `people`) bị từ chối.
+- Nhánh bị ảnh hưởng:
+  - **Sim:**
+    - `SIM_VERSION` 0.4.0;
+    - snapshot thêm `npcs { nextId, people }` (rỗng tới S1), luồng RNG `npc-world`, luồng riêng mỗi NPC suy từ `hash32(lifeRoot, 'npc', id)`;
+    - pha NPC (`npcPhase`) cắm vào tick sau pha Thế giới, chưa làm gì;
+    - `STATE.people` rỗng;
+    - digest pin đổi; tuổi và nguyên nhân chết của ba đời mẫu giữ nguyên; batch v0.3 ra đúng số cũ.
+  - **FE:** máy trạng thái giữ `people`; giao diện "Người trong quận" ở F1.
