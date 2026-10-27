@@ -14,7 +14,7 @@ export function SummaryScreen({ summary: s, character, world, onBack }: { summar
       <Scroll title={t('ui.summary.title')} onClose={onBack} className="wide">
         <div class="two-col">
           <aside class="epitaph">
-            <Portrait src={character && s.ageYears >= PORTRAIT_MIN_AGE ? portraitOf(character) : null} alt={s.name} />
+            <Portrait src={character && s.ageYears >= PORTRAIT_MIN_AGE ? portraitOf(character) : null} alt={s.name} age={s.ageYears} />
             <h1 class="epitaph-name">{s.name}</h1>
             <p class="lived">{t('ui.summary.lived', { age: s.ageYears })} <Seal char="終" /></p>
             <p>{t('ui.summary.span', { from: shortDate(s.birthTick), to: shortDate(s.deathTick) })}</p>

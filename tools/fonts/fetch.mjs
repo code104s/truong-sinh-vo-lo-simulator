@@ -1,6 +1,8 @@
-// Tải font Khải thư LXGW WenKai TC (Google Fonts, OFL 1.1) về apps/game/src/assets/fonts/, chỉ giữ ký tự game cần.
+// Tải font (Google Fonts, OFL 1.1) về apps/game/src/assets/fonts/, chỉ giữ ký tự game cần.
 //   node tools/fonts/fetch.mjs
-// Một font cho mọi chữ trang trí để nét đồng bộ: tiêu đề và menu tiếng Việt, chữ Hán trang trí, tên địa danh chữ Hán.
+// - LXGW WenKai TC (Khải thư): mọi chữ trang trí để nét đồng bộ — tựa, nút, nhãn, chữ Hán trang trí, tên địa danh chữ Hán.
+// - Noto Serif (2026-10-27, đề xuất giao diện Q1): thân bài, nhật ký, sự kiện. Trước đó CSS khai báo nhưng không tải,
+//   trình duyệt rơi về Times New Roman.
 // Đã loại (2026-10-26), đo bằng cách vẽ thật trong trình duyệt:
 //   Yuji Mai   — Google báo có dấu tiếng Việt nhưng tệp thiếu 101/146 chữ có dấu (trình duyệt mượn font khác).
 //   Yuji Syuku — thiếu 36 chữ giản thể dùng trong tên địa danh (苍 龙 东 长…).
@@ -29,21 +31,36 @@ function vietnamese() {
 }
 
 /** Chữ Hán trang trí: tiêu đề, ấn triện nhật ký, ấn mệnh, vòng mùa, loại nơi sinh, nút nhạc. */
-const HAN = '長生無路命終病傷癒壽危變春夏秋冬城鎮村樂天';
+const HAN = '長生無路命終病傷癒壽危變春夏秋冬城鎮村樂天' +
+  // Ấn hành động và ấn tin v0.3 (đề xuất giao diện 2026-10-27)
+  '耕傭採獵商學武休醫行飢穀稅荒錢' +
+  // Tờ đề tựa bản đồ tranh treo
+  '輿圖';
 /** Chữ Hán của tên địa danh (bảng Hán-Việt trong worldgen). */
 const PLACE_HAN = [...readFileSync(join(root, 'packages/worldgen/src/region/hanviet.ts'), 'utf8').matchAll(/(\p{Script=Han}): '/gu)].map((m) => m[1]).join('');
 
-const family = 'LXGW WenKai TC';
-const text = [...new Set([...vietnamese(), ...HAN, ...PLACE_HAN])].join('');
-const file = 'lxgw-wenkai-tc.woff2';
+/** Tải một bộ chữ rút gọn theo `text`; trả về số KB. */
+async function subset(family, axis, text, file) {
+  const css = await (await fetch(`https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:${axis}&text=${encodeURIComponent(text)}`, { headers: { 'User-Agent': UA } })).text();
+  const urls = [...css.matchAll(/url\((https:[^)]+)\) format\('woff2'\)/g)].map((m) => m[1]);
+  if (urls.length !== 1) throw new Error(`${family} ${axis}: cần đúng 1 tệp woff2, nhận ${urls.length}`);
+  const buf = Buffer.from(await (await fetch(urls[0])).arrayBuffer());
+  writeFileSync(join(out, file), buf);
+  return (buf.length / 1024).toFixed(1);
+}
+async function license(dir, file) {
+  const lic = await fetch(`https://raw.githubusercontent.com/google/fonts/main/ofl/${dir}/OFL.txt`);
+  if (!lic.ok) throw new Error(`không tải được giấy phép ${dir} (${lic.status})`);
+  writeFileSync(join(out, file), await lic.text());
+}
 
 mkdirSync(out, { recursive: true });
-const css = await (await fetch(`https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@700&text=${encodeURIComponent(text)}`, { headers: { 'User-Agent': UA } })).text();
-const urls = [...css.matchAll(/url\((https:[^)]+)\) format\('woff2'\)/g)].map((m) => m[1]);
-if (urls.length !== 1) throw new Error(`${family}: cần đúng 1 tệp woff2, nhận ${urls.length}`);
-const buf = Buffer.from(await (await fetch(urls[0])).arrayBuffer());
-writeFileSync(join(out, file), buf);
-const lic = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/lxgwwenkaitc/OFL.txt');
-if (!lic.ok) throw new Error(`không tải được giấy phép (${lic.status})`);
-writeFileSync(join(out, 'lxgw-wenkai-tc.OFL.txt'), await lic.text());
-console.log(`${family} 700: ${[...text].length} ký tự (Hán ${[...new Set([...HAN, ...PLACE_HAN])].length}) → ${file} (${(buf.length / 1024).toFixed(1)} KB)`);
+const wenkai = [...new Set([...vietnamese(), ...HAN, ...PLACE_HAN])].join('');
+console.log(`LXGW WenKai TC 700: ${[...wenkai].length} ký tự (Hán ${[...new Set([...HAN, ...PLACE_HAN])].length}) → ${await subset('LXGW WenKai TC', 'wght@700', wenkai, 'lxgw-wenkai-tc.woff2')} KB`);
+await license('lxgwwenkaitc', 'lxgw-wenkai-tc.OFL.txt');
+
+const viet = vietnamese();
+for (const [axis, file] of [['wght@400', 'noto-serif-400.woff2'], ['wght@600', 'noto-serif-600.woff2'], ['wght@700', 'noto-serif-700.woff2'], ['ital,wght@1,400', 'noto-serif-400-italic.woff2']]) {
+  console.log(`Noto Serif ${axis}: ${[...viet].length} ký tự → ${await subset('Noto Serif', axis, viet, file)} KB`);
+}
+await license('notoserif', 'noto-serif.OFL.txt');

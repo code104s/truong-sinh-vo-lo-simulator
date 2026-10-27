@@ -85,13 +85,35 @@ export function Scroll({ title, onClose, className = '', children }: { title?: s
   );
 }
 
+/**
+ * Tranh treo (卷軸 dọc) cho bản đồ: trục gỗ ngang trên và dưới, viền gấm, giấy lụa ngả vàng, tờ đề tựa ở góc.
+ * Khác hẳn cuộn ngang (trục hai bên) của màn Đời người để nhìn qua là biết đang xem dư đồ. Mở ra thì trải từ trên xuống.
+ */
+export function HangingScroll({ title, han, onClose, className = '', children }: { title: string; han: string; onClose?: () => void; className?: string; children: ComponentChildren }) {
+  return (
+    <div class={`hanging ${className}`}>
+      <div class="hanging-rod hanging-rod-top" aria-hidden="true" />
+      <div class="hanging-mount">
+        <div class="hanging-slip"><span class="slip-han">{han}</span><span class="slip-vi">{title}</span></div>
+        {onClose && (
+          <button class="close" onClick={onClose} aria-label={t('ui.close')} title={t('ui.close')}>
+            ✕
+          </button>
+        )}
+        <div class="hanging-silk">{children}</div>
+      </div>
+      <div class="hanging-rod hanging-rod-bottom" aria-hidden="true" />
+    </div>
+  );
+}
+
 /** Nhãn chữ sáng trên nét cọ mực. */
 export function BrushLabel({ children, className = '' }: { children: ComponentChildren; className?: string }) {
   return <span class={`brush-label ${className}`}>{children}</span>;
 }
 
-/** Ấn triện vuông có một chữ Hán; tone "red" (chu sa) hoặc "ink". */
-export function Seal({ char, tone = 'red', title }: { char: string; tone?: 'red' | 'ink'; title?: string }) {
+/** Ấn triện vuông có một chữ Hán; tone chu sa, mực, ngọc (lành) hoặc hoàng thổ (cảnh báo). */
+export function Seal({ char, tone = 'red', title }: { char: string; tone?: 'red' | 'ink' | 'jade' | 'ochre'; title?: string }) {
   return (
     <span class={`seal seal-${tone}`} title={title} aria-hidden={title ? undefined : true}>
       {char}
@@ -111,8 +133,36 @@ export function Enso({ char, label }: { char: string; label: string }) {
   );
 }
 
-/** Khung chân dung viền vàng (tỉ lệ 2:3). Có ảnh thì hiện ảnh; chưa có thì vẽ dáng người bằng mực. */
-export function Portrait({ src, alt = '', caption }: { src?: string | null; alt?: string; caption?: string }) {
+/**
+ * Dáng người bằng mực khi chưa có ảnh (đề xuất giao diện Q3): lớn dần theo tuổi — bọc tã, trẻ nhỏ búi tóc trái đào,
+ * thiếu niên, người lớn. Thay bằng ảnh thật khi có bộ chân dung trẻ.
+ */
+function InkFigure({ age }: { age: number }) {
+  const ink = '#2c2b29';
+  if (age < 3) {
+    return <g fill={ink} opacity="0.85">
+      <ellipse cx="50" cy="120" rx="30" ry="24" />
+      <circle cx="50" cy="88" r="17" />
+      <path d="M33 82 C36 70 64 70 67 82 C60 77 40 77 33 82 Z" fill="#111" />
+    </g>;
+  }
+  if (age < 12) {
+    return <g fill={ink} opacity="0.85">
+      <path d="M14 150 C18 124 32 114 50 114 C68 114 82 124 86 150 Z" />
+      <ellipse cx="50" cy="90" rx="17" ry="19" />
+      <circle cx="37" cy="70" r="7" fill="#111" /><circle cx="63" cy="70" r="7" fill="#111" />
+    </g>;
+  }
+  const scale = age < 15 ? 0.9 : 1;
+  return <g fill={ink} opacity="0.85" transform={`translate(${50 * (1 - scale)} ${150 * (1 - scale)}) scale(${scale})`}>
+    <path d="M0 150 C6 112 28 100 50 100 C72 100 94 112 100 150 Z" />
+    <ellipse cx="50" cy="66" rx="19" ry="23" />
+    <path d="M28 56 C30 32 70 32 72 56 C65 46 35 46 28 56 Z" fill="#111" />
+  </g>;
+}
+
+/** Khung chân dung viền vàng (tỉ lệ 2:3). Có ảnh thì hiện ảnh; chưa có thì vẽ dáng người bằng mực theo tuổi. */
+export function Portrait({ src, alt = '', caption, age = 30 }: { src?: string | null; alt?: string; caption?: string; age?: number }) {
   return (
     <figure class="portrait">
       {src ? (
@@ -120,9 +170,7 @@ export function Portrait({ src, alt = '', caption }: { src?: string | null; alt?
       ) : (
         <svg viewBox="0 0 100 150" aria-hidden="true">
           <rect width="100" height="150" fill="#d9d3c5" />
-          <path d="M0 150 C6 112 28 100 50 100 C72 100 94 112 100 150 Z" fill="#2c2b29" opacity="0.85" />
-          <ellipse cx="50" cy="66" rx="19" ry="23" fill="#2c2b29" opacity="0.85" />
-          <path d="M28 56 C30 32 70 32 72 56 C65 46 35 46 28 56 Z" fill="#111" />
+          <InkFigure age={age} />
         </svg>
       )}
       {caption && <figcaption>{caption}</figcaption>}

@@ -3,7 +3,7 @@ import { birthplaceId, type MonthPlan, type TravelOption, type TravelPreview } f
 import { useState } from 'preact/hooks';
 import type { WorldInfo } from '../app/state';
 import { MapView } from '../map/MapView';
-import { Scroll } from '../ui/ink';
+import { HangingScroll } from '../ui/ink';
 
 interface Props { world: WorldInfo; location: number; slotIndex: number; plan: MonthPlan | null; options: TravelOption[]; preview: TravelPreview | null; onPreview: (county: number) => void; onPlan: (plan: MonthPlan) => void; onClose: () => void }
 export function TravelDialog({ world, location, slotIndex, plan, options, preview, onPreview, onPlan, onClose }: Props) {
@@ -12,7 +12,7 @@ export function TravelDialog({ world, location, slotIndex, plan, options, previe
   const choose = (county: number) => { if (county !== location && options.some((p) => p.county === county)) { setTarget(county); onPreview(county); } };
   const current = preview?.county === target ? preview : null;
   return <div class="travel-modal" role="dialog" aria-modal="true" aria-label={t('ui.travel.title')}>
-    <Scroll title={t('ui.travel.title')} onClose={onClose} className="travel-scroll">
+    <HangingScroll title={t('ui.travel.title')} han={t('ui.travel.title_han')} onClose={onClose}>
       <div class="birthplace">
         <div class="map-frame"><MapView map={world.map} region={world.region} seed={world.seed} birthplaces={points} selected={points.find((p) => p.county === target)?.id ?? null} onSelect={(id) => choose(points.find((p) => p.id === id)!.county)} location={location} route={current?.route ?? []} /></div>
         <aside class="side">
@@ -29,6 +29,6 @@ export function TravelDialog({ world, location, slotIndex, plan, options, previe
           </div>}
         </aside>
       </div>
-    </Scroll>
+    </HangingScroll>
   </div>;
 }
