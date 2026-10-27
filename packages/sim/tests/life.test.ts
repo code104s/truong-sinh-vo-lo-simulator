@@ -136,11 +136,12 @@ describe('tất định và lưu/tải (nghiệm thu Sim)', () => {
     // v0.3 S4: thêm kỹ năng buôn bán, nợ thuế vào snapshot (ADR 0012).
     // v0.3 S5: snapshot thêm trạng thái sự kiện (ADR 0014); đời mẫu chỉ nghỉ, túi không có lương nên không gặp sự kiện mẫu.
     // v0.3 S6: 29 sự kiện, tai họa và dịch theo quận, nợ vay (ADR 0014); đời mẫu nay gặp sự kiện (chọn lựa chọn đầu tiên đang mở).
+    // v0.3 S7: bật lập thân; đời mẫu chọn "ở lại" (lựa chọn đầu), hai mươi tuổi ra riêng, chỉ nghỉ nên chết đói sớm.
     expect(out).toMatchInlineSnapshot(`
       [
-        "75 illness 3647171b8ef6634f",
-        "67 old_age 967e33ecff744470",
-        "71 illness 0e2d4fe6eee91c3d",
+        "21 starvation 476c1c5ec21ab2bc",
+        "21 starvation 146dd9940261494a",
+        "21 starvation 4fb3583b73f0eabb",
       ]
     `);
   });

@@ -1,7 +1,16 @@
 // Tiện ích test: tua như người chơi máy mặc định — gặp sự kiện có lựa chọn thì chọn lựa chọn đầu tiên đang mở (ADR 0014),
 // giống Life.runToDeath, để chạy từng bước và chạy liền mạch cho cùng digest.
 import type { AdvanceMode, PendingEvent, WorkerMessage } from '@tsvl/shared';
-import { firstOpenChoice, type AdvanceResult, type Life } from '../src/index';
+import { firstOpenChoice, type AdvanceResult, type Life, type LifeSnapshot } from '../src/index';
+
+/**
+ * Người lớn dựng sẵn cho test (20 tuổi, chưa ra riêng) coi như đã qua lập thân và chọn ở lại, để sự kiện lập thân
+ * (S7) không chen vào test của luật khác.
+ */
+export function pastComingOfAge(s: LifeSnapshot): LifeSnapshot {
+  s.events.once.push('event.coming_of_age');
+  return s;
+}
 
 /** Lối ra: lựa chọn cuối, không bao giờ bị khóa — cho test cần sự kiện không đổi tiền, lương theo hướng có lợi. */
 export const lastChoice = (p: PendingEvent): string => p.choices.at(-1)!.id;

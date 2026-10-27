@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { birthplaceId, regionId, type MonthPlan } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { Life } from '../src/index';
-import { autoAdvance, lastChoice } from './auto';
+import { autoAdvance, lastChoice, pastComingOfAge } from './auto';
 import { restPlan } from '../src/life/actions';
 
 const region: RegionLogic = {
@@ -14,7 +14,7 @@ const region: RegionLogic = {
 export function adult(seed = 'player') {
   const l = Life.create({ worldSeed: seed, regionId: regionId('r0'), birthplaceId: birthplaceId('r0/c0') }, { id: birthplaceId('r0/c0'), name: 'Làng', nameHan: '村', kind: 'village', cell: { x: 0, y: 0 }, county: 0 }, region);
   const s = l.snapshot(); s.character.birthTick = 0; s.tick = 20 * 36 + 2; s.character.health = s.character.healthMax = 1000; s.character.stamina = 900;
-  return Life.restore(s, l.log, region);
+  return Life.restore(pastComingOfAge(s), l.log, region);
 }
 describe('pha người chơi', () => {
   it('tuổi thơ tự động, không cho trẻ xếp kế hoạch', () => {

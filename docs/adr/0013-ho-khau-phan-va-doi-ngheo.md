@@ -145,4 +145,49 @@
   | 20 / 10 / 2,5% | 0,1% | 86,0% |
 
   - Lý do chọn mức 30%: chừa chỗ cho chết đói người lớn khi bật ra riêng (Q3: "điều độ" chết đói ≤ 5%), mà nạn đói vẫn có giá thật với nhà nghèo.
-- **Tiêu chí batch:** mỗi chiến lược ≥ 80% chết 40–80 tuổi, theo mục 6 v0.3, thay cho mức 85% của v0.2. Bộ tiêu chí đầy đủ của Q3 thêm ở S7.
+- **Tiêu chí batch:** mỗi chiến lược ≥ 80% chết 40–80 tuổi, theo mục 6 v0.3, thay cho mức 85% của v0.2. Bộ tiêu chí đầy đủ của Q3 thêm ở S7 (xem ghi chú S7).
+
+## Ghi chú triển khai S7 (2026-10-27)
+
+- **Bật lập thân trong đời thật** (`COMING_OF_AGE_LIVE = true`, G2). Mười sáu tuổi, chưa ra riêng thì gặp sự kiện lập thân, một lần trong đời: ở lại tới hai mươi / lên trấn (chỉ người có chí lớn, khéo xoay xở) / ra riêng.
+- **Chiến lược batch có kinh tế** (`tools/headless/src/policies.ts`), chỉ đọc view và chợ đang đứng:
+  - **Mua bán đầu tháng** bằng lệnh TRADE:
+    - kho dưới một năm ăn (360 thăng) thì mua cho đủ, trừ khi chợ đói kém;
+    - kho quá hai năm ăn thì bán phần thừa;
+    - luôn giữ 300 văn để nộp thuế đinh và trả thầy thuốc.
+  - **Ruộng chỉ cho ăn lúc gặt:** kho không đủ ăn tới mùa gặt thì một ô săn hay hái lượm; túng hẳn (dưới mười hai tuần ăn) thì cả hai ô. Mùa đông ruộng nghỉ thì đi săn.
+  - **Yếu (sức khỏe dưới 50%):** có bệnh và còn của thì chữa; hết của thì vẫn làm một ô kiếm ăn.
+  - **Học giả, kẻ ngao du:** chỉ học, chỉ đi khi đã dành được hai năm ăn và chưa tới 45 tuổi; sau đó dành dụm như người điều độ.
+  - **Gặp sự kiện** (`policyChoose`): chọn lựa chọn đang mở có giá nhẹ nhất theo hoàn cảnh. Thứ đang thiếu thì đắt: thiếu lương không bán lương, thiếu tiền không tiêu tiền, yếu thì tránh lựa chọn tốn máu. "Lười" vẫn đi lối ra.
+- **Lỗi chiến lược tìm ra khi đo** (đều là lỗi người chơi máy, không phải luật):
+  - Dân trấn có hàng nghìn văn vẫn chết đói, vì năm đói kém chợ hết lương. Sửa bằng cách giữ kho một năm ăn.
+  - Bán hết lương cho lái lúa, rồi đói. Sửa bằng cách tính giá lựa chọn theo hoàn cảnh.
+  - Sức khỏe dưới 50% thì tiêu hết tiền chữa rồi nằm nghỉ cả tháng tới chết đói. Sửa: chỉ chữa khi còn của, vẫn làm một ô kiếm ăn.
+  - Học giả tiêu hết vào học, về già không làm nổi thì đói. Sửa bằng ngưỡng hai năm ăn và tuổi 45.
+- **Tiêu chí batch (mục 6, Q3)** viết thành `batchCriteria`:
+  - Mọi chiến lược: không kẹt; bần cùng sống ngắn hơn giàu ít nhất 5 năm.
+  - Điều độ: ít nhất 80% chết trong 40–80 tuổi; chết đói không quá 5%.
+  - Lười: chết đói ít nhất 40%; sống ngắn hơn điều độ ít nhất 10 năm.
+  - Lao lực: sống ngắn hơn điều độ.
+  - Sự kiện (gộp mọi chiến lược trừ "lười"): 2–4 mỗi năm sau 12 tuổi, mọi sự kiện xảy ra ít nhất một lần.
+  - Bỏ hai tiêu chí cũ: "mỗi chiến lược ≥ 80% chết 40–80" (từ S2, khi chưa ra riêng) và "điều độ chết già ≥ 30%" (v0.2).
+- **Kết quả** (`pnpm sim batch --seeds 1000 --policy all`, PASS):
+
+  | Chiến lược | Tuổi TB | 40–80 | Chết đói | Bần cùng / giàu |
+  |---|---|---|---|---|
+  | lười | 17,9 | 3,0% | 94,5% | 15,3 / 65,6 |
+  | điều độ | 59,7 | 86,4% | 2,6% | 54,2 / 64,3 |
+  | lao lực | 56,8 | 85,4% | 1,5% | 51,4 / 59,4 |
+  | học giả | 57,8 | 83,8% | 35,1% | 49,8 / 61,9 |
+  | ngao du | 47,9 | 62,4% | 43,5% | 23,8 / 64,9 |
+
+  - Sự kiện: 2,39 mỗi năm sau 12 tuổi; đủ 29 loại.
+  - Người giàu chỉ có 37 đời mỗi chiến lược (ít người sinh ra giàu), nên số của họ dao động nhiều hơn.
+- **Không đổi số liệu kinh tế nào** (ADR 0012 giữ nguyên). Đã thử hai phương án, chỉ để so sánh rồi bỏ:
+  - lương làm thuê 90 văn;
+  - cho làm mướn ở làng.
+
+  Lương 90 văn đưa chết đói của học giả từ 35% xuống 14%; bần cùng điều độ gần như không đổi (7% → 6%). Mục 6 không đòi hỏi các mức này.
+  Ghi lại để cân nhắc khi có NPC và gia đình (v0.4–v0.5).
+- **Hệ quả cho người chơi:** không xếp kế hoạch thì sau lập thân sẽ chết đói ở 17–21 tuổi. Đời mẫu trong digest pin chỉ nghỉ nên nay chết đói năm 21 tuổi.
+

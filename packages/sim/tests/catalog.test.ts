@@ -33,14 +33,36 @@ describe('tuyển tập S6', () => {
     expect(new Set(EVENTS.map((d) => d.category))).toEqual(new Set(['daily', 'economy', 'disaster', 'road', 'health', 'opportunity']));
   });
 
-  it('G2: lập thân viết xong nhưng chưa xảy ra trong đời thật tới S7; các lựa chọn vẫn chạy', () => {
-    expect(COMING_OF_AGE_LIVE).toBe(false);
+  it('G2: lập thân bật từ S7 — mười sáu tuổi chưa ra riêng thì gặp, một lần trong đời; đã ra riêng hay đã hẹn ở lại thì thôi', () => {
+    expect(COMING_OF_AGE_LIVE).toBe(true);
+    const coming = def('event.coming_of_age');
+    expect(coming.oncePerLife).toBe(true);
+    expect(coming.weight(ctxOf(snap(undefined, 15)))).toBe(0);
+    expect(coming.weight(ctxOf(snap(undefined, 16)))).toBeGreaterThan(0);
+    expect(coming.weight(ctxOf(snap((c) => { c.household.stayUntil = 20; }, 16)))).toBe(0);
+    expect(coming.weight(ctxOf(snap((c) => { c.household.independent = true; }, 16)))).toBe(0);
     const s = snap(undefined, 16);
-    expect(def('event.coming_of_age').weight(ctxOf(s))).toBe(0);
     const leave = def('event.coming_of_age').choices.at(-1)!;
     const out = leave.apply(ctxOf(s), Rng.fromSeed(1));
     expect(out.result).toBe('leave');
     expect(s.character.household.independent).toBe(true);
+  });
+
+  it('đời thật: mười sáu tuổi gặp lập thân, chọn xong thì ra riêng hoặc hẹn ở lại', () => {
+    for (const pick of ['leave', 'stay'] as const) {
+      const s = snap((c) => { c.background = 'commoner'; }, 16);
+      s.tick = 16 * 36;
+      const l = Life.restore(s, [], region);
+      let seen = false;
+      for (let k = 0; k < 12 && !seen; k++) {
+        const r = l.advance('week');
+        if (r.status === 'event' && r.pending.eventId === 'event.coming_of_age') { seen = true; expect(l.choose(r.pending.instance, pick)).toBeNull(); }
+        else if (r.status === 'event') l.choose(r.pending.instance, r.pending.choices.at(-1)!.id);
+      }
+      expect(seen).toBe(true);
+      expect(l.character.household.independent).toBe(pick === 'leave');
+      if (pick === 'stay') expect(l.character.household.stayUntil).toBe(20);
+    }
   });
 
   it('G3: hạn hán chỉ hỏi người có ruộng ở quận bị hạn, đúng tháng phát', () => {

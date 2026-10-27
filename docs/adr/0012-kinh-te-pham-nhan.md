@@ -81,7 +81,7 @@
   - Ghi vào nhật ký dạng tin tức.
 
 ### Thu nhập và chi phí của người chơi
-Số liệu là điểm khởi đầu, chốt bằng batch ở S7.
+Số liệu là điểm khởi đầu, chốt bằng batch ở S7. S7 giữ nguyên mọi số: batch đạt mục 6 khi người chơi máy biết giữ kho (ghi chú S7 ở ADR 0013).
 
 | Hành động | Thu | Chi phí tiền / lương mới |
 |---|---|---|

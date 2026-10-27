@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { birthplaceId, regionId, type MonthPlan } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { Life, Rng } from '../src/index';
-import { autoAdvance, lastChoice } from './auto';
+import { autoAdvance, lastChoice, pastComingOfAge } from './auto';
 import { ACTIONS, actionLock, actionOptions } from '../src/life/actions';
 import {
   FORAGE_BY_SEASON, HEAD_TAX, HEAL_FEE, HIRE_WAGE, HUNT_HIDE, HUNT_MEAT, LODGING_PER_SLOT, ROUGH_SLEEP_RISK_PCT, settleAction, TRADE_MIN_CAPITAL,
@@ -25,7 +25,7 @@ function adult(patch: (c: CharacterState) => void = () => {}, seed = 'income') {
   s.character.health = s.character.healthMax = 1000; s.character.stamina = 900; s.character.conditions = [];
   for (const k of Object.keys(s.character.skillXp) as (keyof CharacterState['skillXp'])[]) s.character.skillXp[k] = 0;
   patch(s.character);
-  return Life.restore(s, [], region);
+  return Life.restore(pastComingOfAge(s), [], region);
 }
 const state = (patch: (c: CharacterState) => void = () => {}) => adult(patch).snapshot().character;
 const market = (money = 1_000_000): CountyEconomy => ({ ...createEconomy(region, 0).counties[1]!, money });

@@ -8,10 +8,10 @@ import type { EventDef } from '../engine';
 import { figure, inTown, inVillage, man, month, nearestTown, personality, doingNow } from './common';
 
 /**
- * Lập thân chạy được ngay, nhưng chưa cho xảy ra trong đời thật tới S7 (G2): ra riêng là lúc đói nghèo có thật, chiến
- * lược batch phải biết bán lương, giữ tiền nộp thuế trước đã. S7 bật cờ này cùng chiến lược mới.
+ * Lập thân (G2): viết ở S6, bật ở S7 cùng chiến lược batch có kinh tế (giữ một năm ăn, bán phần thừa, giữ tiền thuế).
+ * Ra riêng là lúc đói nghèo có thật.
  */
-export const COMING_OF_AGE_LIVE = false;
+export const COMING_OF_AGE_LIVE = true;
 export const STAY_UNTIL_AGE = 20;
 export const FESTIVAL_DUES = 50;
 export const FUNERAL_GIFT = 30;

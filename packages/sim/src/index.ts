@@ -5,6 +5,8 @@ export { canonical, digestOf } from './core/digest';
 export { idiv, mulDiv, clamp, lerpTable, sortedEntries } from './core/math';
 export { Life, SIM_VERSION, firstOpenChoice, lifeRoot, type LifeSnapshot, type AdvanceResult } from './life/life';
 export { toView, type CharacterState } from './life/character';
+export { BACKGROUNDS, type Background } from './life/params';
+export { EVENT_IDS } from './events/catalog';
 export type { Death } from './life/health';
 export { simulateEconomy, type EconomyRunStats } from './economy/simulate';
 export { HANDLED_LIMIT, SimHost, replaySave, type Emit, type HostOptions } from './host';

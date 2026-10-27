@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { birthplaceId, regionId, vPendingEvent, type WorkerMessage } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { Life, Rng, SimHost, replaySave } from '../src/index';
+import { pastComingOfAge } from './auto';
 import { EVENTS, WANDERING_PHYSICIAN_FEE } from '../src/events/catalog';
 import { checkCatalog, makeContext, newEventsState, rollEvent, type EventDef } from '../src/events/engine';
 import type { CharacterState } from '../src/life/character';
@@ -19,6 +20,7 @@ function snap(patch: (c: CharacterState, s: LifeSnapshot) => void = () => {}, se
   s.character.birthTick = 0; s.tick = 20 * 36 + 3;
   s.character.health = s.character.healthMax = 1000; s.character.stamina = 900; s.character.conditions = [];
   s.character.personality = 'calm';
+  pastComingOfAge(s);
   patch(s.character, s);
   return s;
 }

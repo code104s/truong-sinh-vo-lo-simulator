@@ -172,7 +172,7 @@ Danh mục dự kiến, chi tiết điều kiện và lựa chọn viết ở S6
   | Sức khỏe | thầy thuốc qua làng, lang băm, đồ ăn ôi |
   | Cơ duyên | chuyện người tiên (một lần trong đời), cây thuốc quý, sách cũ |
 
-- **G2 — lập thân:** viết đủ ba lựa chọn (ở lại / lên trấn / ra riêng) nhưng `COMING_OF_AGE_LIVE = false` nên chưa xảy ra trong đời thật tới S7. "Ở lại" giữ người ở nhà tới hai mươi tuổi: mỗi đầu năm nộp nửa túi về quận nhà, rồi ra riêng với phần chia lớn hơn (`STAY_SHARE_PCT = 150`).
+- **G2 — lập thân:** viết đủ ba lựa chọn (ở lại / lên trấn / ra riêng) nhưng `COMING_OF_AGE_LIVE = false` nên chưa xảy ra trong đời thật tới S7 (S7 đã bật, xem ghi chú S7 ở ADR 0013; người chơi máy chọn theo giá ở `policyChoose`). "Ở lại" giữ người ở nhà tới hai mươi tuổi: mỗi đầu năm nộp nửa túi về quận nhà, rồi ra riêng với phần chia lớn hơn (`STAY_SHARE_PCT = 150`).
 - **G3 — tai họa theo quận:**
   - Đầu năm, sau khi gieo thời tiết, `labelDisasters` gọi tên năm xấu (thời tiết ≤ 85%): hạn, lũ hoặc châu chấu, kèm tháng phát đúng mùa. Hàm này không đổi thời tiết, nên kinh tế quận giữ nguyên.
   - Dịch gieo riêng theo quận, kéo dài 9 tuần, làm dễ mắc bệnh gấp ba.

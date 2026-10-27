@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { birthplaceId, regionId, type Tenure } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { Life } from '../src/index';
-import { autoAdvance, lastChoice } from './auto';
+import { autoAdvance, lastChoice, pastComingOfAge } from './auto';
 import { FARM_YIELD_PER_WEEK, harvestPlayer, recordFarmWeek, WEEKS_PER_MU } from '../src/economy/farming';
 import { createEconomy, HARVEST_MONTH } from '../src/economy/market';
 import type { CharacterState } from '../src/life/character';
@@ -21,7 +21,7 @@ function adult(patch: (c: CharacterState) => void = () => {}, seed = 'farm') {
   s.character.health = s.character.healthMax = 1000; s.character.stamina = 900; s.character.conditions = [];
   s.character.skillXp.farming = 0;
   patch(s.character);
-  return Life.restore(s, [], region);
+  return Life.restore(pastComingOfAge(s), [], region);
 }
 
 /** Nhân vật và chợ để gọi harvestPlayer trực tiếp; thời tiết 100% mọi quận. */

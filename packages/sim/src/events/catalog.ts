@@ -12,3 +12,5 @@ export { WANDERING_PHYSICIAN_FEE } from './defs/health';
 export { COMING_OF_AGE_LIVE } from './defs/daily';
 
 export const EVENTS: readonly EventDef[] = sortedCatalog([...DAILY, ...ECONOMY, ...DISASTER, ...ROAD, ...HEALTH, ...FORTUNE]);
+/** Id mọi sự kiện, cho công cụ batch kiểm "mỗi sự kiện xảy ra ít nhất một lần". */
+export const EVENT_IDS: readonly string[] = EVENTS.map((d) => d.id);

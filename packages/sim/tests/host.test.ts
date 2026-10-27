@@ -177,7 +177,9 @@ describe('SimHost — v0.2', () => {
     expect(b.save().digest).toBe(a.h.save().digest); expect(b.current.life!.character.location).toBe(life.character.location);
   });
 
-  it('10 seed: kế hoạch ngẫu nhiên có seed, lưu/tải giữa tháng, phát lại cùng digest', () => {
+  // v0.3 mục 6: chiến lược có seed gồm TRADE và CHOOSE; 200 tuần từ 12 tuổi để đi qua cả lập thân (S7)
+  it('10 seed: kế hoạch ngẫu nhiên có seed, mua bán, sự kiện, lưu/tải giữa tháng, phát lại cùng digest', () => {
+    let cameOfAge = 0;
     for (let i = 0; i < 10; i++) {
       const worldSeed = `replay-${i}`;
       const local = { ...region, worldSeed };
@@ -189,12 +191,22 @@ describe('SimHost — v0.2', () => {
       call({ type: 'NEW_LIFE', config: { worldSeed, regionId: local.summary.id, birthplaceId: local.birthplaces[0]!.id, lifeSeed: i } });
       while (a.current.life!.alive && !a.current.life!.view().canAct) hostAdvance(call, 'year');
       const rng = Rng.fromSeed(i);
-      for (let k = 0; k < 80 && a.current.life!.alive; k++) {
-        const choices = a.current.life!.actions().filter((x) => !x.locked && x.id !== 'action.travel');
+      let trades = 0;
+      for (let k = 0; k < 200 && a.current.life!.alive; k++) {
+        const life = a.current.life!;
+        const choices = life.actions().filter((x) => !x.locked && x.id !== 'action.travel');
         call({ type: 'SET_PLAN', plan: { slots: [0, 1, 2].map(() => ({ action: choices[rng.int(0, choices.length - 1)]!.id })) } });
+        // Mua bán một đấu khi chắc được nhận (lệnh bị từ chối thì không vào nhật ký lệnh, test này coi là lỗi)
+        const h = life.character.household, m = life.market();
+        if (rng.int(0, 3) === 0) {
+          if (h.grain >= 10 && m.maxSell >= 10) { call({ type: 'TRADE', grain: -10 }); trades++; }
+          else if (h.money >= m.buyPrice + 1 && m.maxBuy >= 10) { call({ type: 'TRADE', grain: 10 }); trades++; }
+        }
         hostAdvance(call, 'week');
       }
       const saved = a.save(); expect(replaySave(saved)).toBe(saved.digest);
+      expect(saved.commandLog.filter((r) => r.cmd.type === 'TRADE')).toHaveLength(trades);
+      if (a.current.life!.log.some((e) => e.key.startsWith('event.coming_of_age.result'))) cameOfAge++;
       const decoded = decodeSave(encodeSave(saved)); if (!decoded.ok) throw new Error(decoded.error);
       const b = new SimHost(() => {}); b.load(decoded.value);
       if (a.current.life!.alive) { call({ type: 'ADVANCE', mode: 'year' }); b.handle({ type: 'ADVANCE', reqId: 1, mode: 'year' }); }
@@ -202,6 +214,7 @@ describe('SimHost — v0.2', () => {
       const broken = { ...saved, commandLog: saved.commandLog.map((r) => ({ ...r })) }; broken.commandLog[0]!.seq = 1;
       expect(() => b.load(broken)).toThrow(/thứ tự/);
     }
+    expect(cameOfAge).toBeGreaterThan(0);
   });
 });
 
