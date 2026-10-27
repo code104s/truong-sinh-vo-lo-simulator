@@ -32,7 +32,7 @@ export const VI: Readonly<Record<string, string>> = {
   'ui.travel.open': 'Bản đồ di chuyển', 'ui.travel.title': 'Đường đời', 'ui.travel.destination': 'Điểm đến',
   'ui.travel.choose': 'Chọn điểm đến', 'ui.travel.here': 'Đang ở: {place}', 'ui.travel.hint': 'Chọn một quận để xem đường đi và cái giá trước khi lên đường.',
   'ui.travel.cost': '{days} ngày đường · {slots} ô thời gian · {risk}', 'ui.travel.confirm': 'Đưa vào ô kế tiếp',
-  'ui.save.export': 'Xuất save',
+  'ui.save.outdated': 'Đời đang dở được lưu bằng bản cũ (save v{version}), bản này không tải được. Hãy bắt đầu đời mới, hoặc xóa nó trong Thiết lập.',
   'ui.error': 'Có lỗi: {message}',
   'ui.back': 'Về màn chính',
 
@@ -51,6 +51,9 @@ export const VI: Readonly<Record<string, string>> = {
   'ui.settings.seed_hint': 'Để trống để chọn ngẫu nhiên. Cùng hạt giống và cùng nơi sinh thì cùng một đời.',
   'ui.settings.clear': 'Xóa đời đang dở',
   'ui.settings.cleared': 'Đã xóa.',
+  'ui.settings.debug': 'Gỡ lỗi',
+  'ui.settings.export': 'Xuất save đang dở',
+  'ui.settings.export_none': 'Không có đời đang dở để xuất.',
   'ui.settings.done': 'Xong',
   'ui.settings.music': 'Nhạc nền',
   'ui.settings.volume': 'Âm lượng',

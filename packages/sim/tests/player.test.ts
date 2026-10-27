@@ -7,7 +7,7 @@ import { restPlan } from '../src/life/actions';
 const region: RegionLogic = {
   kmPerCellMilli: 6000,
   counties: [0, 1, 2].map((worldIndex) => ({ worldIndex, area: 10, seat: { x: worldIndex, y: 0 }, name: `Quận ${worldIndex}` })),
-  settlementKind: ['village', 'town', 'city'], adjacency: [[0, 1], [1, 2]], terrainPct: [300, 300],
+  settlementKind: ['village', 'town', 'city'], adjacency: [[0, 1], [1, 2]], terrainPct: [300, 300], fertilityPct: [100, 100, 100],
   seatKm: [[0, 60, 120], [60, 0, 60], [120, 60, 0]],
 };
 export function adult(seed = 'player') {

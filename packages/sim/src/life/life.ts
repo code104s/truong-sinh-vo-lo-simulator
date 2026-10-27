@@ -16,8 +16,8 @@ import { ACTION_MIN_AGE, actionOptions, validatePlan } from './actions';
 import { playerPhase, type PlayerState } from './player';
 import { previewTravel } from './travel';
 
-export const SIM_VERSION = '0.2.0';
-export const STREAMS = ['accident', 'actions', 'character', 'health', 'illness', 'names', 'travel'] as const;
+export const SIM_VERSION = '0.3.0';
+export const STREAMS = ['accident', 'actions', 'character', 'economy', 'events', 'health', 'illness', 'names', 'travel', 'weather'] as const;
 
 export interface LifeSnapshot extends PlayerState {
   simVersion: string;
@@ -215,5 +215,5 @@ function structuredCloneSnapshot(s: LifeSnapshot): LifeSnapshot {
 /** Môi trường một quận cho test/đời độc lập; SimHost luôn truyền logic vùng thật. */
 function singleCounty(b: Pick<Birthplace, 'county' | 'kind'>): RegionLogic {
   const n = b.county + 1;
-  return { kmPerCellMilli: 1000, counties: Array.from({ length: n }, (_, i) => ({ worldIndex: i, area: 1, seat: { x: i, y: 0 } })), settlementKind: Array.from({ length: n }, () => b.kind), adjacency: [], terrainPct: [], seatKm: Array.from({ length: n }, () => Array<number>(n).fill(0)) };
+  return { kmPerCellMilli: 1000, counties: Array.from({ length: n }, (_, i) => ({ worldIndex: i, area: 1, seat: { x: i, y: 0 } })), settlementKind: Array.from({ length: n }, () => b.kind), adjacency: [], terrainPct: [], seatKm: Array.from({ length: n }, () => Array<number>(n).fill(0)), fertilityPct: Array<number>(n).fill(100) };
 }

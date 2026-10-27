@@ -9,10 +9,29 @@ const map = { W: 1, H: 1, origin: { x: 0, y: 0 }, kmPerCell: 6, elevation: new F
 const region = { id: regionId('r0'), name: 'Vị Kinh Châu', nameHan: '渭京州', realmName: 'Lương', kmPerCell: 6, landKm2: 1 };
 const world: WorkerMessage = { type: 'WORLD', reqId: 1, worldSeed: 's', region, map, birthplaces: [] };
 const character = { name: 'A', alive: true } as CharacterView;
-const state: WorkerMessage = { type: 'STATE', reqId: 2, date: { tick: 1, year: 1, month: 1, tenDay: 1, season: 'spring' }, character, running: false, plan: null, active: null, slotIndex: 1, actions: [], travel: [] };
+const state: WorkerMessage = { type: 'STATE', reqId: 2, date: { tick: 1, year: 1, month: 1, tenDay: 1, season: 'spring' }, character, running: false, plan: null, active: null, slotIndex: 1, actions: [], travel: [], market: null, pending: null };
 const entry = { tick: 1, key: 'log.birth', params: {}, importance: 'major' as const };
 
 describe('máy trạng thái màn', () => {
+  it('lỗi phía giao diện (save bản cũ) hiện ra và đóng được', () => {
+    let s = run([{ type: 'error', message: 'save cũ' }]);
+    expect(s.error).toBe('save cũ');
+    expect(s.screen).toBe('menu');
+    s = run([{ type: 'dismissError' }], s);
+    expect(s.error).toBeNull();
+  });
+
+  it('v0.3: sự kiện chờ chọn dừng tua liên tục; STATE mang chợ và sự kiện', () => {
+    const pending = { instance: 1, eventId: 'event.tax_collector', variant: null, params: {}, choices: [{ id: 'pay', costs: ['money' as const], locked: null }], figure: null };
+    let s = run([{ type: 'run', on: true }, msg({ type: 'EVENT', reqId: 7, pending })]);
+    expect(s.running).toBe(false);
+    expect(s.pending).toEqual(pending);
+    const market = { county: 0, buyPrice: 46, sellPrice: 34, supply: 'normal' as const, trend: 'steady' as const, maxBuy: 10, maxSell: 0 };
+    s = run([msg({ ...(state as Extract<WorkerMessage, { type: 'STATE' }>), market, pending: null })], s);
+    expect(s.market).toEqual(market);
+    expect(s.pending).toBeNull();
+  });
+
   it('đời mới: menu → loading → birthplace → life', () => {
     let s = run([msg({ type: 'READY', protocolVersion: 1, simVersion: '0.1.0' }), { type: 'genStart' }]);
     expect(s.ready).toBe(true);

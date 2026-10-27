@@ -1,5 +1,5 @@
 import { t } from '@tsvl/content';
-import type { AdvanceMode, WorkerMessage } from '@tsvl/shared';
+import { SAVE_VERSION, type AdvanceMode, type WorkerMessage } from '@tsvl/shared';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'preact/hooks';
 import { BirthplaceScreen } from '../screens/BirthplaceScreen';
 import { LifeScreen } from '../screens/LifeScreen';
@@ -67,7 +67,6 @@ export function App({ client }: { client: SimClient }) {
         }
         break;
       case 'SAVED':
-        if (kind === 'export') { downloadSave(m.save); break; }
         if (deadRef.current) break;
         queue(async () => {
           if (deadRef.current) return;
@@ -98,6 +97,8 @@ export function App({ client }: { client: SimClient }) {
   const onContinue = async () => {
     const save = await storage.loadCurrent();
     if (!save) return dispatch({ type: 'hasSave', value: false });
+    // Save của bản cũ không tải được và không chuyển đổi (v0.3 Q9): báo rõ thay vì lỗi hợp đồng
+    if (save.version !== SAVE_VERSION) return dispatch({ type: 'error', message: t('ui.save.outdated', { version: String(save.version) }) });
     deadRef.current = false;
     dispatch({ type: 'loadStart' });
     send({ type: 'LOAD', save });
@@ -127,6 +128,11 @@ export function App({ client }: { client: SimClient }) {
           seed={s.seedInput}
           onSeed={(value) => dispatch({ type: 'seedInput', value })}
           onClear={async () => { await queue(() => storage.clearCurrent()); dispatch({ type: 'hasSave', value: false }); }}
+          onExport={async () => {
+            const save = await storage.loadCurrent();
+            if (save) downloadSave(save);
+            return !!save;
+          }}
           onDone={() => dispatch({ type: 'go', screen: 'menu' })}
         />
       )}
@@ -141,7 +147,6 @@ export function App({ client }: { client: SimClient }) {
           plan={s.plan} active={s.active} actions={s.actions} travel={s.travel} travelPreview={s.travelPreview}
           onPlan={(plan) => { setSaved(false); send({ type: 'SET_PLAN', plan }, 'plan'); }}
           onPreview={(county) => send({ type: 'PREVIEW_TRAVEL', county })}
-          onExport={() => send({ type: 'SAVE' }, 'export')}
         />
       )}
       {s.screen === 'summary' && s.summary && <SummaryScreen summary={s.summary} character={s.character} world={s.world} onBack={() => dispatch({ type: 'go', screen: 'menu' })} />}

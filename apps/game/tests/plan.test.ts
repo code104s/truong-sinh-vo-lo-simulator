@@ -2,7 +2,7 @@ import type { ActionOption, MonthPlan } from '@tsvl/shared';
 import { describe, expect, it } from 'vitest';
 import { planInvalid } from '../src/app/plan';
 
-const opt = (id: string, locked: string | null = null): ActionOption => ({ id, group: 'livelihood', slots: 1, cost: { stamina: 'cost.low', risk: 'risk.low' }, gains: [], locked });
+const opt = (id: string, locked: string | null = null): ActionOption => ({ id, group: 'livelihood', slots: 1, cost: { stamina: 'cost.low', risk: 'risk.low', money: 'cost.none' }, gains: [], locked });
 const actions = [opt('action.farm', 'lock.winter'), opt('action.study', 'lock.place'), opt('action.rest'), opt('action.travel')];
 const travel = [{ county: 1, slots: 1, risk: 'risk.low' }];
 

@@ -49,6 +49,12 @@ interface SavedRegionLogic {
   logic: RegionLogic;
 }
 
+/**
+ * Số lệnh gần nhất được nhớ để chống áp dụng trùng khi UI gửi lại (cùng reqId).
+ * UI tăng reqId đơn điệu và chỉ gửi lại lệnh vừa gửi, nên giữ cửa sổ ngắn là đủ; trước v0.3 bộ đệm không giới hạn.
+ */
+export const HANDLED_LIMIT = 256;
+
 export class SimHost {
   private region: RegionBundle | null = null;
   private life: Life | null = null;
@@ -73,6 +79,11 @@ export class SimHost {
     return { region: this.region, life: this.life };
   }
 
+  /** Số lệnh đang nhớ để chống trùng (test). */
+  get handledCount(): number {
+    return this.handled.size;
+  }
+
   handle(u: unknown): void {
     const parsed = parseCommand(u);
     if (!parsed.ok) {
@@ -92,7 +103,11 @@ export class SimHost {
     try {
       this.response = [];
       this.dispatch(cmd);
-      if (mutates) this.handled.set(cmd.reqId, { key, messages: this.response });
+      if (mutates) {
+        this.handled.set(cmd.reqId, { key, messages: this.response });
+        // Map giữ thứ tự chèn: phần tử đầu là lệnh cũ nhất
+        if (this.handled.size > HANDLED_LIMIT) this.handled.delete(this.handled.keys().next().value!);
+      }
     } catch (e) {
       const err = e instanceof HostError ? e : new HostError('INTERNAL', (e as Error).message ?? String(e));
       this.emit({ type: 'ERROR', reqId: cmd.reqId, code: err.code, message: err.message });
@@ -148,6 +163,10 @@ export class SimHost {
         if (!preview) throw new HostError('BAD_COMMAND', 'đích đi không hợp lệ');
         this.emit({ type: 'TRAVEL_PREVIEW', reqId: cmd.reqId, preview }); return;
       }
+      case 'TRADE':
+        throw new HostError('BAD_COMMAND', 'mua bán chưa có (v0.3 S4)');
+      case 'CHOOSE':
+        throw new HostError('BAD_COMMAND', 'không có sự kiện nào đang chờ (v0.3 S5)');
       case 'PAUSE':
         // Tua chạy đồng bộ và xong trong vài mili giây, nên không có gì đang chạy để dừng.
         if (this.life) this.emitState(cmd.reqId);
@@ -180,7 +199,9 @@ export class SimHost {
     const a = life.active;
     this.emit({ type: 'STATE', reqId, date: calendarOf(life.displayTick), character: life.view(), running: false, plan: life.plan,
       active: a ? { action: a.slot.action, remaining: a.remaining, total: a.total, ...(a.slot.target === undefined ? {} : { target: a.slot.target }) } : null,
-      slotIndex: calendarOf(life.displayTick).tenDay, actions: life.view().canAct ? life.actions() : [], travel: life.view().canAct ? life.travel() : [] });
+      slotIndex: calendarOf(life.displayTick).tenDay, actions: life.view().canAct ? life.actions() : [], travel: life.view().canAct ? life.travel() : [],
+      // Chợ có ở S2, sự kiện chờ có ở S5
+      market: null, pending: null });
   }
 
   save(): SaveFile {

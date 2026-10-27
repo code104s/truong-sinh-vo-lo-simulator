@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   HIDDEN_CHARACTER_KEYS, TICKS_PER_YEAR,
   ageYearsAt, base64ToBytes, bytesToBase64, calendarOf, decodeSave, encodeSave, isMonthStart, isYearStart,
-  parseCommand, parseWorkerMessage, vCharacterView,
+  parseCommand, parseWorkerMessage, vCharacterView, vHouseholdView, vMarketView, vPendingEvent,
 } from '../src/index';
-import { sampleBirthplace, sampleCharacter, sampleLife, sampleLog, sampleMap, sampleOption, samplePlan, sampleSave, sampleSummary } from './fixtures';
+import {
+  sampleBirthplace, sampleCharacter, sampleHousehold, sampleLife, sampleLog, sampleMap, sampleMarket, sampleOption, samplePending, samplePlan, sampleSave, sampleSummary,
+} from './fixtures';
 
 describe('lịch', () => {
   it('tick 0 là thượng tuần tháng Giêng năm 1', () => {
@@ -75,7 +77,7 @@ describe('tin worker → UI', () => {
       { type: 'READY', protocolVersion: 1, simVersion: '0.1.0' },
       { type: 'PROGRESS', reqId: 1, stage: 'worldgen.terrain', pct: 40 },
       { type: 'WORLD', reqId: 1, worldSeed: 'tsvl-01', region: sampleSummary, map: sampleMap(), birthplaces: [sampleBirthplace] },
-      { type: 'STATE', reqId: 2, date: calendarOf(37), character: sampleCharacter, running: false, plan: samplePlan, active: null, slotIndex: 1, actions: [sampleOption], travel: [] },
+      { type: 'STATE', reqId: 2, date: calendarOf(37), character: sampleCharacter, running: false, plan: samplePlan, active: null, slotIndex: 1, actions: [sampleOption], travel: [], market: sampleMarket, pending: null },
       { type: 'LOG', reqId: 2, entries: [sampleLog] },
       { type: 'INTERRUPT', reqId: 2, entry: { ...sampleLog, importance: 'major' } },
       { type: 'DIED', reqId: 3, summary: sampleLife },
@@ -146,7 +148,9 @@ describe('save', () => {
     expect(decodeSave('{').ok).toBe(false);
     // Save v1 của v0.1 bị từ chối (ADR 0004)
     expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 1 })).ok).toBe(false);
-    expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 3 })).ok).toBe(false);
+    // Save v2 của v0.2 bị từ chối (v0.3 Q9), save đời sau cũng vậy
+    expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 2 })).ok).toBe(false);
+    expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 4 })).ok).toBe(false);
     expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), format: 'other' })).ok).toBe(false);
   });
 });
@@ -168,13 +172,14 @@ describe('v0.2: kế hoạch tháng, di chuyển, nhật ký lệnh (ADR 0008–
   });
 
   it('STATE mang kế hoạch, hành động khả dụng, đích đi được', () => {
-    const base = { type: 'STATE', reqId: 2, date: calendarOf(37), character: sampleCharacter, running: false, active: null };
+    const base = { type: 'STATE', reqId: 2, date: calendarOf(37), character: sampleCharacter, running: false, active: null, market: null, pending: null };
     expect(parseWorkerMessage({ ...base, plan: samplePlan, slotIndex: 1, actions: [sampleOption, { ...sampleOption, id: 'action.hunt', locked: 'lock.winter' }], travel: [{ county: 2, slots: 1, risk: 'risk.low' }] })).toMatchObject({ ok: true });
     expect(parseWorkerMessage({ ...base, plan: null, slotIndex: 0, actions: [], travel: [] })).toMatchObject({ ok: true });
     expect(parseWorkerMessage({ ...base, plan: null, slotIndex: 3, actions: [], travel: [] }).ok).toBe(false);
     expect(parseWorkerMessage({ ...base, plan: null, slotIndex: 0, actions: [{ ...sampleOption, group: 'magic' }], travel: [] }).ok).toBe(false);
     // STATE kiểu v0.1 (thiếu trường mới) bị từ chối
-    expect(parseWorkerMessage(base).ok).toBe(false);
+    const { market: _m, pending: _p, ...v01 } = base;
+    expect(parseWorkerMessage(v01).ok).toBe(false);
   });
 
   it('TRAVEL_PREVIEW', () => {
@@ -192,7 +197,75 @@ describe('v0.2: kế hoạch tháng, di chuyển, nhật ký lệnh (ADR 0008–
     expect(back.ok).toBe(true);
     if (back.ok) expect(back.value.commandLog).toEqual(sampleSave().commandLog);
     const bad = JSON.parse(encodeSave(sampleSave()));
-    bad.commandLog.push({ seq: 3, tick: 9, cmd: { type: 'PAUSE' } });
+    bad.commandLog.push({ seq: 5, tick: 49, cmd: { type: 'PAUSE' } });
+    expect(decodeSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+});
+
+describe('v0.3: hộ, chợ, mua bán, sự kiện (ADR 0012–0014)', () => {
+  const state = { type: 'STATE', reqId: 2, date: calendarOf(41), character: sampleCharacter, running: false, plan: null, active: null, slotIndex: 2, actions: [], travel: [] };
+
+  it('nhận TRADE và CHOOSE hợp lệ', () => {
+    expect(parseCommand({ type: 'TRADE', reqId: 1, grain: 30 })).toMatchObject({ ok: true });
+    expect(parseCommand({ type: 'TRADE', reqId: 1, grain: -30 })).toMatchObject({ ok: true });
+    expect(parseCommand({ type: 'CHOOSE', reqId: 2, instance: 4, choice: 'corvee' })).toMatchObject({ ok: true });
+  });
+
+  it.each([
+    ['TRADE số 0', { type: 'TRADE', reqId: 1, grain: 0 }],
+    ['TRADE số thực', { type: 'TRADE', reqId: 1, grain: 1.5 }],
+    ['CHOOSE thiếu instance', { type: 'CHOOSE', reqId: 1, choice: 'pay' }],
+    ['CHOOSE id sai', { type: 'CHOOSE', reqId: 1, instance: 0, choice: 'Pay now' }],
+  ])('từ chối: %s', (_n, u) => {
+    expect(parseCommand(u).ok).toBe(false);
+  });
+
+  it('STATE mang chợ và sự kiện chờ; EVENT', () => {
+    expect(parseWorkerMessage({ ...state, market: sampleMarket, pending: samplePending })).toMatchObject({ ok: true });
+    expect(parseWorkerMessage({ ...state, market: null, pending: null })).toMatchObject({ ok: true });
+    expect(parseWorkerMessage({ type: 'EVENT', reqId: 3, pending: samplePending })).toMatchObject({ ok: true });
+    expect(parseWorkerMessage({ type: 'ERROR', reqId: 3, code: 'EVENT_PENDING', message: 'x' })).toMatchObject({ ok: true });
+  });
+
+  it('hộ: số nguyên không âm, không lộ bộ đếm đói', () => {
+    expect(vHouseholdView.check(sampleHousehold, '$')).toBeNull();
+    expect(vHouseholdView.check({ ...sampleHousehold, money: -1 }, '$')).toContain('money');
+    expect(vHouseholdView.check({ ...sampleHousehold, grain: 1.5 }, '$')).toContain('grain');
+    expect(vHouseholdView.check({ ...sampleHousehold, hunger: 3 }, '$')).toContain('hunger');
+    expect(vHouseholdView.check({ ...sampleHousehold, tenure: 'serf' }, '$')).toContain('tenure');
+    const { household: _h, ...v02 } = sampleCharacter;
+    expect(vCharacterView.check(v02, '$')).toContain('household');
+  });
+
+  it('chợ: giá là số nguyên', () => {
+    expect(vMarketView.check(sampleMarket, '$')).toBeNull();
+    expect(vMarketView.check({ ...sampleMarket, buyPrice: 45.5 }, '$')).toContain('buyPrice');
+    expect(vMarketView.check({ ...sampleMarket, supply: 'glut' }, '$')).toContain('supply');
+  });
+
+  it.each([
+    ['không có lựa chọn', { choices: [] }],
+    ['mọi lựa chọn đều khóa (ADR 0014: luôn có lối ra)', { choices: samplePending.choices.map((c) => ({ ...c, locked: 'lock.money' })) }],
+    ['lựa chọn không có giá', { choices: [{ id: 'free', costs: [], locked: null }] }],
+    ['giá lạ', { choices: [{ id: 'pay', costs: ['soul'], locked: null }] }],
+    ['id lựa chọn trùng', { choices: [{ id: 'pay', costs: ['money'], locked: null }, { id: 'pay', costs: ['time'], locked: null }] }],
+    ['id sự kiện sai', { eventId: 'tax_collector' }],
+    ['tham số số thực', { params: { amount: 0.5 } }],
+  ])('sự kiện chờ bị từ chối: %s', (_n, patch) => {
+    expect(vPendingEvent.check({ ...samplePending, ...patch }, '$')).not.toBeNull();
+  });
+
+  it('hành động mang giá tiền', () => {
+    const { money: _m, ...cost } = sampleOption.cost;
+    expect(parseWorkerMessage({ ...state, actions: [{ ...sampleOption, cost }], market: null, pending: null }).ok).toBe(false);
+  });
+
+  it('nhật ký lệnh có TRADE và CHOOSE round-trip', () => {
+    const back = decodeSave(encodeSave(sampleSave()));
+    expect(back.ok).toBe(true);
+    if (back.ok) expect(back.value.commandLog.map((r) => r.cmd.type)).toEqual(['NEW_LIFE', 'SET_PLAN', 'ADVANCE', 'TRADE', 'CHOOSE']);
+    const bad = JSON.parse(encodeSave(sampleSave()));
+    bad.commandLog[3].cmd.grain = 0;
     expect(decodeSave(JSON.stringify(bad)).ok).toBe(false);
   });
 });

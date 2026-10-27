@@ -6,7 +6,7 @@ export const travelFixture = (): RegionLogic => ({
   kmPerCellMilli: 6000,
   counties: [0, 1, 2, 3].map((worldIndex) => ({ worldIndex, area: 10, seat: { x: worldIndex, y: 0 } })),
   settlementKind: ['village', 'town', 'city', 'village'],
-  adjacency: [[0, 1], [0, 2], [1, 2]], terrainPct: [100, 100, 100],
+  adjacency: [[0, 1], [0, 2], [1, 2]], terrainPct: [100, 100, 100], fertilityPct: [100, 100, 100],
   seatKm: [[0, 60, 200, 300], [60, 0, 60, 300], [200, 60, 0, 300], [300, 300, 300, 0]],
 });
 describe('đường đi (ADR 0009)', () => {

@@ -6,8 +6,8 @@ import { arr, lit, nat, nonEmpty, obj, parseWith, unknownValue, type Result } fr
 import { vBirthplace, vRegionMapData, vRegionSummary, vWorldSeed, type Birthplace, type RegionMapData, type RegionSummary, type WorldSeed } from './world';
 
 export const SAVE_FORMAT = 'tsvl-save';
-/** 2: v0.2 — thêm nhật ký lệnh (ADR 0011); save version 1 bị từ chối (ADR 0004). */
-export const SAVE_VERSION = 2;
+/** 3: v0.3 — kinh tế, sự kiện; nhật ký lệnh có TRADE, CHOOSE. Save cũ hơn bị từ chối (ADR 0004, v0.3 Q9). */
+export const SAVE_VERSION = 3;
 
 export interface SaveRegion {
   summary: RegionSummary;

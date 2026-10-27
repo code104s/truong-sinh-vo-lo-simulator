@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BIRTHPLACE_ID_RE, vBirthplace, vRegionMapData, vRegionSummary } from '@tsvl/shared';
 import { describe, expect, it } from 'vitest';
-import { buildRegion, HANVIET_CHARS, regionIdentity, toHanViet, type RegionBundle } from '../src/index';
+import { buildRegion, FERTILITY_MAX, FERTILITY_MIN, fertilityOf, HANVIET_CHARS, regionIdentity, toHanViet, type RegionBundle } from '../src/index';
 import { reachableCounties } from '../src/region/connectivity';
 
 const SEEDS = ['tsvl-01', 'tsvl-02', 'tsvl-03'];
@@ -115,6 +115,43 @@ describe('vùng chơi (1024×768)', () => {
     const plain = all.filter((p) => p === 100).length;
     expect(plain / all.length).toBeGreaterThanOrEqual(0.25);
     expect(all.some((p) => p > 100)).toBe(true);
+  });
+
+  it('độ phì nhiêu (ADR 0012): số nguyên trong khoảng, mỗi quận một giá trị, có phân biệt', () => {
+    for (const seed of SEEDS) {
+      const { logic, map } = region(seed);
+      expect(logic.fertilityPct).toHaveLength(map.counties.length);
+      for (const f of logic.fertilityPct) {
+        expect(Number.isInteger(f)).toBe(true);
+        expect(f).toBeGreaterThanOrEqual(FERTILITY_MIN);
+        expect(f).toBeLessThanOrEqual(FERTILITY_MAX);
+      }
+    }
+    // Vùng đồi núi (tsvl-01) phải chênh rõ giữa các quận
+    const f1 = region('tsvl-01').logic.fertilityPct;
+    expect(Math.max(...f1) - Math.min(...f1)).toBeGreaterThanOrEqual(15);
+    expect(region(SEEDS[0]!).logic.fertilityPct).toMatchInlineSnapshot(`
+      [
+        114,
+        70,
+        72,
+        70,
+        94,
+        109,
+        75,
+        72,
+        73,
+      ]
+    `);
+  });
+
+  it('công thức phì nhiêu: sông cộng, cao và lạnh trừ, kẹp hai đầu', () => {
+    expect(fertilityOf(50, 150, 0)).toBe(100);
+    expect(fertilityOf(50, 150, 90)).toBe(109);
+    expect(fertilityOf(50, 150, 500)).toBe(120); // sông cộng tối đa +20
+    expect(fertilityOf(400, 150, 0)).toBe(75);
+    expect(fertilityOf(50, 120, 0)).toBe(90);
+    expect(fertilityOf(2000, 50, 0)).toBe(FERTILITY_MIN);
   });
 
   it('digest vùng pin (bắt trôi do sửa code hoặc engine)', () => {

@@ -1,6 +1,7 @@
 import {
   birthplaceId, regionId,
-  type ActionOption, type Birthplace, type CharacterView, type MonthPlan, type LifeSummary, type LogEntry, type RegionMapData, type RegionSummary, type SaveFile,
+  type ActionOption, type Birthplace, type CharacterView, type HouseholdView, type LifeSummary, type LogEntry, type MarketView, type MonthPlan, type PendingEvent,
+  type RegionMapData, type RegionSummary, type SaveFile,
 } from '../src/index';
 
 export function sampleMap(W = 4, H = 3): RegionMapData {
@@ -44,6 +45,25 @@ export const sampleBirthplace: Birthplace = {
   county: 0,
 };
 
+export const sampleHousehold: HouseholdView = {
+  independent: true, money: 320, grain: 140, landMu: 6, tenure: 'owner', hungerBand: 'fed', foodWeeksBand: 'season',
+};
+
+export const sampleMarket: MarketView = { county: 0, buyPrice: 46, sellPrice: 34, supply: 'normal', trend: 'rising', maxBuy: 5000, maxSell: 800 };
+
+export const samplePending: PendingEvent = {
+  instance: 4,
+  eventId: 'event.tax_collector',
+  variant: 'winter',
+  params: { amount: 200 },
+  choices: [
+    { id: 'pay', costs: ['money'], locked: 'lock.money' },
+    { id: 'corvee', costs: ['time', 'stamina'], locked: null },
+    { id: 'flee', costs: ['risk', 'opportunity'], locked: null },
+  ],
+  figure: { gender: 'male', ageBand: 'adult', class: 'official' },
+};
+
 export const sampleCharacter: CharacterView = {
   name: 'Trần Văn An',
   gender: 'male',
@@ -64,13 +84,14 @@ export const sampleCharacter: CharacterView = {
   staminaBand: 'tired',
   skills: [{ id: 'skill.farming', rank: 'rank.novice' }],
   canAct: true,
+  household: sampleHousehold,
 };
 
 export const samplePlan: MonthPlan = { slots: [{ action: 'action.farm' }, { action: 'action.travel', target: 2 }, { action: 'action.rest' }] };
 
 export const sampleOption: ActionOption = {
   id: 'action.farm', group: 'livelihood', slots: 1,
-  cost: { stamina: 'cost.high', risk: 'risk.low' }, gains: ['skill.farming'], locked: null,
+  cost: { stamina: 'cost.high', risk: 'risk.low', money: 'cost.none' }, gains: ['skill.farming'], locked: null,
 };
 
 export const sampleLog: LogEntry = { tick: 3, key: 'log.illness.onset', params: { illness: 'illness.cold', age: 0 }, importance: 'minor' };
@@ -91,8 +112,8 @@ export const sampleLife: LifeSummary = {
 export function sampleSave(): SaveFile {
   return {
     format: 'tsvl-save',
-    version: 2,
-    protocolVersion: 1,
+    version: 3,
+    protocolVersion: 3,
     simVersion: '0.1.0',
     worldSeed: 'tsvl-01',
     region: { summary: sampleSummary, map: sampleMap(), birthplaces: [sampleBirthplace], logic: { adjacency: [[0, 1]] } },
@@ -102,6 +123,8 @@ export function sampleSave(): SaveFile {
       { seq: 0, tick: 0, cmd: { type: 'NEW_LIFE', config: { worldSeed: 'tsvl-01', regionId: regionId('r1'), birthplaceId: birthplaceId('r1/c3') } } },
       { seq: 1, tick: 5, cmd: { type: 'SET_PLAN', plan: samplePlan } },
       { seq: 2, tick: 5, cmd: { type: 'ADVANCE', mode: 'year' } },
+      { seq: 3, tick: 41, cmd: { type: 'TRADE', grain: -50 } },
+      { seq: 4, tick: 41, cmd: { type: 'CHOOSE', instance: 4, choice: 'corvee' } },
     ],
     digest: '0123456789abcdef',
   };

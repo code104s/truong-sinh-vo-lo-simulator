@@ -8,11 +8,14 @@ interface Props {
   seed: string;
   onSeed: (s: string) => void;
   onClear: () => Promise<void>;
+  /** Xuất save đang dở ra tệp để đối chiếu bằng `pnpm sim replay`; false nếu không có. */
+  onExport: () => Promise<boolean>;
   onDone: () => void;
 }
 
-export function Settings({ seed, onSeed, onClear, onDone }: Props) {
+export function Settings({ seed, onSeed, onClear, onExport, onDone }: Props) {
   const [cleared, setCleared] = useState(false);
+  const [exported, setExported] = useState<boolean | null>(null);
   const musicState = useMusic();
   return (
     <div class="screen ink-screen centered">
@@ -45,6 +48,13 @@ export function Settings({ seed, onSeed, onClear, onDone }: Props) {
             <button class="btn ghost" onClick={async () => { await onClear(); setCleared(true); }}>{t('ui.settings.clear')}</button>
             {cleared && <span class="muted small">{t('ui.settings.cleared')}</span>}
           </div>
+          <details class="field">
+            <summary class="muted small">{t('ui.settings.debug')}</summary>
+            <div class="row">
+              <button class="btn ghost" onClick={async () => setExported(await onExport())}>{t('ui.settings.export')}</button>
+              {exported === false && <span class="muted small">{t('ui.settings.export_none')}</span>}
+            </div>
+          </details>
           <button class="btn primary" onClick={onDone}>{t('ui.settings.done')}</button>
         </div>
       </Scroll>

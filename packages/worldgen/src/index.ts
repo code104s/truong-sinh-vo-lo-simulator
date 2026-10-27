@@ -8,6 +8,6 @@ export { DEFAULT_SETTLEMENT } from './cartographer/settlement/types';
 export type { Settlement, SettlementParams } from './cartographer/settlement/types';
 
 // Vùng chơi và nơi sinh (code của dự án, ADR 0007)
-export { buildRegion, regionIdentity, RegionError, REGION_WORLD_W, REGION_WORLD_H, REGION_RADIUS_KM } from './region/buildRegion';
+export { buildRegion, fertilityOf, regionIdentity, RegionError, FERTILITY_MAX, FERTILITY_MIN, REGION_WORLD_W, REGION_WORLD_H, REGION_RADIUS_KM } from './region/buildRegion';
 export type { RegionBundle, RegionLogic, RegionProgress } from './region/buildRegion';
 export { toHanViet, HANVIET_CHARS } from './region/hanviet';

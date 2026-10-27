@@ -35,6 +35,22 @@ export interface RegionLogic {
   terrainPct: number[];
   /** Khoảng cách đường chim bay giữa trị sở (km), ma trận đối xứng. */
   seatKm: number[][];
+  /** Độ phì nhiêu đất mỗi quận (%), FERTILITY_MIN..FERTILITY_MAX (ADR 0012). */
+  fertilityPct: number[];
+}
+
+export const FERTILITY_MIN = 70;
+export const FERTILITY_MAX = 130;
+
+/**
+ * Độ phì nhiêu từ trung bình trên ô đất của quận (ADR 0012). Tỉ lệ đất canh tác theo quần xã gần như phẳng (85–100%)
+ * nên không dùng. Hiệu chỉnh trên 112 quận của tsvl-01..10: độ cao 6–745 m, nhiệt độ 10,1–18,5°, ô sông lớn 0–302‰.
+ */
+export function fertilityOf(elevM: number, tempDeci: number, riverPermille: number): number {
+  const river = Math.min(20, Math.floor(riverPermille / 10));
+  const highland = Math.floor(Math.max(0, elevM - 100) / 12);
+  const cold = Math.floor(Math.max(0, 150 - tempDeci) / 3);
+  return Math.min(FERTILITY_MAX, Math.max(FERTILITY_MIN, 100 + river - highland - cold));
 }
 
 export interface RegionBundle {
@@ -271,6 +287,16 @@ function cut(world: World, worldSeed: WorldSeed, ri: number, placeVariant: numbe
     }
     return (mountain ? 200 : 100) * (river ? 150 : 100) / 100;
   });
+  const fertilityPct = counties.map((_, c) => {
+    let n = 0, elev = 0, temp = 0, river = 0;
+    for (let i = 0; i < RW * RH; i++) {
+      if (county[i] !== c || !mask[i] || !Number.isNaN(map.water[i]!)) continue;
+      n++; elev += map.elevation[i]!; temp += map.temperature[i]!;
+      if (map.flow[i]! >= bigRiver) river++;
+    }
+    if (n === 0) return 100;
+    return fertilityOf(Math.round((elev / n) * 1000), Math.round((temp / n) * 10), Math.floor((river * 1000) / n));
+  });
   const logic: RegionLogic = {
     kmPerCellMilli: Math.round(world.kmPerCell * 1000),
     counties: chosen.map((wi, li) => ({ worldIndex: wi, area: pol.counties[wi].area, seat: counties[li].seat, name: counties[li].name })),
@@ -278,6 +304,7 @@ function cut(world: World, worldSeed: WorldSeed, ri: number, placeVariant: numbe
     adjacency,
     terrainPct,
     seatKm,
+    fertilityPct,
   };
 
   const landCells = chosen.reduce((s, wi) => s + pol.counties[wi].area, 0);

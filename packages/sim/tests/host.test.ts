@@ -1,7 +1,7 @@
 import { decodeSave, encodeSave, parseWorkerMessage, type Command, type SaveFile, type WorkerMessage } from '@tsvl/shared';
 import { buildRegion, type RegionBundle } from '@tsvl/worldgen';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { SimHost, replaySave, Rng } from '../src/index';
+import { HANDLED_LIMIT, SimHost, replaySave, Rng } from '../src/index';
 
 let region: RegionBundle;
 beforeAll(() => {
@@ -44,7 +44,7 @@ describe('SimHost', () => {
   it('READY rồi luồng chuẩn: GEN_WORLD → WORLD, NEW_LIFE → LOG + STATE', () => {
     const { h, out, send } = host();
     h.ready();
-    expect(out[0]).toMatchObject({ type: 'READY', protocolVersion: 2 });
+    expect(out[0]).toMatchObject({ type: 'READY', protocolVersion: 3 });
     const w = send({ type: 'GEN_WORLD', worldSeed: 'tsvl-01' });
     expect(w.map((m) => m.type)).toEqual(['PROGRESS', 'PROGRESS', 'WORLD']);
     const n = send({ type: 'NEW_LIFE', config: { worldSeed: 'tsvl-01', regionId: region.summary.id, birthplaceId: region.birthplaces[0]!.id } });
@@ -130,7 +130,7 @@ describe('SimHost — v0.2', () => {
     expect(send({ type: 'PREVIEW_TRAVEL', county })).toMatchObject([{ type: 'TRAVEL_PREVIEW' }]);
     const after = send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>;
     expect(after.save.digest).toBe(before.save.digest);
-    expect(after.save.version).toBe(2);
+    expect(after.save.version).toBe(3);
     expect(after.save.commandLog).toEqual(before.save.commandLog);
     expect(after.save.commandLog[0]!.cmd.type).toBe('NEW_LIFE');
   });
@@ -195,5 +195,35 @@ describe('SimHost — v0.2', () => {
       const broken = { ...saved, commandLog: saved.commandLog.map((r) => ({ ...r })) }; broken.commandLog[0]!.seq = 1;
       expect(() => b.load(broken)).toThrow(/thứ tự/);
     }
+  });
+});
+
+describe('SimHost — v0.3 Bước 0', () => {
+  it('STATE có chợ và sự kiện chờ (null tới S2, S5); TRADE, CHOOSE chưa nhận và không đổi đời', () => {
+    const { send } = host();
+    const born = newLife(send);
+    const st = born.find((m) => m.type === 'STATE');
+    expect(st).toMatchObject({ market: null, pending: null });
+    if (st?.type === 'STATE') expect(st.character.household).toMatchObject({ independent: false, money: 0, grain: 0 });
+    const before = send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>;
+    expect(send({ type: 'TRADE', grain: 10 })).toMatchObject([{ type: 'ERROR', code: 'BAD_COMMAND' }]);
+    expect(send({ type: 'CHOOSE', instance: 0, choice: 'pay' })).toMatchObject([{ type: 'ERROR', code: 'BAD_COMMAND' }]);
+    const after = send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>;
+    expect(after.save.digest).toBe(before.save.digest);
+    expect(after.save.commandLog).toEqual(before.save.commandLog);
+  });
+
+  it('bộ đệm chống trùng có giới hạn (nợ v0.2), lệnh gửi lại gần đây vẫn không áp hai lần', () => {
+    const { h, out, send } = host();
+    newLife(send);
+    for (let i = 0; i < HANDLED_LIMIT + 50; i++) send({ type: 'ADVANCE', mode: 'week' });
+    expect(h.handledCount).toBe(HANDLED_LIMIT);
+    const tick = h.current.life!.tick;
+    const last = { type: 'ADVANCE', reqId: 10_000, mode: 'week' } as const;
+    h.handle(last);
+    const n = out.length;
+    h.handle(last);
+    expect(h.current.life!.tick).toBe(tick + 1);
+    expect(out.length - n).toBeGreaterThan(0); // trả lại phản hồi cũ
   });
 });

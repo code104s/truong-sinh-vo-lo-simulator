@@ -1,5 +1,5 @@
-// Hành động, kế hoạch tháng, di chuyển và nhật ký lệnh (ADR 0008, 0009, 0011). Chỉ kiểu và validate, không có luật.
-import { vContentId, type ContentId } from './contentId';
+// Hành động, kế hoạch tháng, di chuyển và nhật ký lệnh (ADR 0008, 0009, 0011; v0.3: ADR 0012, 0014). Chỉ kiểu và validate, không có luật.
+import { vChoiceId, vContentId, type ChoiceId, type ContentId } from './contentId';
 import { lit, nat, nullable, obj, oneOf, opt, tagged, type Validator } from './schema';
 import { vNewLifeConfig, type NewLifeConfig } from './world';
 
@@ -35,8 +35,8 @@ export interface ActionOption {
   group: ActionGroup;
   /** Độ dài (số ô). */
   slots: number;
-  /** Mức chữ, vd. stamina "cost.high", risk "risk.low". */
-  cost: { stamina: ContentId; risk: ContentId };
+  /** Mức chữ, vd. stamina "cost.high", risk "risk.low", money "cost.money.low" hoặc "cost.none". */
+  cost: { stamina: ContentId; risk: ContentId; money: ContentId };
   /** Kết quả chính, vd. "skill.farming". */
   gains: ContentId[];
   /** Lý do bị khóa, vd. "lock.winter"; null nếu làm được. */
@@ -74,7 +74,14 @@ export interface SkillView {
 export type RecordedCommand =
   | { type: 'NEW_LIFE'; config: NewLifeConfig }
   | { type: 'SET_PLAN'; plan: MonthPlan }
-  | { type: 'ADVANCE'; mode: AdvanceMode };
+  | { type: 'ADVANCE'; mode: AdvanceMode }
+  | { type: 'TRADE'; grain: number }
+  | { type: 'CHOOSE'; instance: number; choice: ChoiceId };
+
+/** Lượng lương thực của lệnh TRADE (thăng): > 0 mua, < 0 bán, khác 0 (ADR 0012). */
+export const vTradeGrain: Validator<number> = {
+  check: (u, p) => (Number.isSafeInteger(u) && u !== 0 ? null : `${p}: cần số nguyên khác 0`),
+};
 
 export interface CommandRecord {
   /** Tăng dần từ 0, chống áp dụng trùng. */
@@ -106,7 +113,7 @@ export const vActionOption = obj<ActionOption>({
   id: vActionId,
   group: oneOf(ACTION_GROUPS),
   slots: nat,
-  cost: obj<ActionOption['cost']>({ stamina: vContentId, risk: vContentId }),
+  cost: obj<ActionOption['cost']>({ stamina: vContentId, risk: vContentId, money: vContentId }),
   gains: { check: (u, p) => (Array.isArray(u) ? u.map((g, i) => vContentId.check(g, `${p}[${i}]`)).find((e) => e) ?? null : `${p}: cần mảng`) },
   locked: nullable(vContentId),
 });
@@ -128,6 +135,8 @@ export const vRecordedCommand: Validator<RecordedCommand> = tagged<RecordedComma
   NEW_LIFE: obj<R<'NEW_LIFE'>>({ type: lit('NEW_LIFE'), config: vNewLifeConfig }),
   SET_PLAN: obj<R<'SET_PLAN'>>({ type: lit('SET_PLAN'), plan: vMonthPlan }),
   ADVANCE: obj<R<'ADVANCE'>>({ type: lit('ADVANCE'), mode: oneOf(ADVANCE_MODES) }),
+  TRADE: obj<R<'TRADE'>>({ type: lit('TRADE'), grain: vTradeGrain }),
+  CHOOSE: obj<R<'CHOOSE'>>({ type: lit('CHOOSE'), instance: nat, choice: vChoiceId }),
 });
 
 export const vCommandRecord = obj<CommandRecord>({ seq: nat, tick: nat, cmd: vRecordedCommand });

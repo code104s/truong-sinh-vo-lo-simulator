@@ -1,10 +1,13 @@
 // Giao thức UI ↔ worker (ADR 0001).
 import {
-  ADVANCE_MODES, vActionOption, vActionProgress, vMonthPlan, vTravelOption, vTravelPreview,
+  ADVANCE_MODES, vActionOption, vActionProgress, vMonthPlan, vTradeGrain, vTravelOption, vTravelPreview,
   type ActionOption, type ActionProgress, type AdvanceMode, type CountyIndex, type MonthPlan, type TravelOption, type TravelPreview,
 } from './actions';
 import { vCharacterView, vLifeSummary, vLogEntry, type CharacterView, type LifeSummary, type LogEntry } from './character';
 import { type CalendarDate } from './calendar';
+import { vChoiceId, type ChoiceId } from './contentId';
+import { vMarketView, type MarketView } from './economy';
+import { vPendingEvent, type PendingEvent } from './events';
 import { vSaveFile, type SaveFile } from './save';
 import { arr, bool, intRange, lit, nat, nonEmpty, nullable, obj, oneOf, parseWith, str, tagged, type Result, type Validator } from './schema';
 import type { TenDay } from './calendar';
@@ -13,8 +16,8 @@ import {
   type Birthplace, type NewLifeConfig, type RegionMapData, type RegionSummary, type WorldSeed,
 } from './world';
 
-/** 2: v0.2 — kế hoạch tháng, di chuyển, nhật ký lệnh (ADR 0008–0011). */
-export const PROTOCOL_VERSION = 2;
+/** 3: v0.3 — chợ, mua bán, sự kiện có lựa chọn (ADR 0012–0014). */
+export const PROTOCOL_VERSION = 3;
 
 export { ADVANCE_MODES, type AdvanceMode } from './actions';
 
@@ -27,11 +30,16 @@ export type Command =
   | { type: 'SET_PLAN'; reqId: number; plan: MonthPlan }
   /** Hỏi đường đi, thời gian, rủi ro tới một quận; không đổi trạng thái (ADR 0009). */
   | { type: 'PREVIEW_TRAVEL'; reqId: number; county: CountyIndex }
+  /** Mua (> 0) hoặc bán (< 0) lương thực, đơn vị thăng, ở chợ quận đang đứng; không tốn ô (ADR 0012). */
+  | { type: 'TRADE'; reqId: number; grain: number }
+  /** Chọn một lựa chọn của sự kiện đang chờ; instance phải khớp (ADR 0014). */
+  | { type: 'CHOOSE'; reqId: number; instance: number; choice: ChoiceId }
   | { type: 'PAUSE'; reqId: number }
   | { type: 'SAVE'; reqId: number }
   | { type: 'LOAD'; reqId: number; save: SaveFile };
 
-export const ERROR_CODES = ['BAD_COMMAND', 'NO_WORLD', 'NO_LIFE', 'DEAD', 'BAD_SAVE', 'VERSION', 'INTERNAL'] as const;
+/** EVENT_PENDING: ADVANCE khi còn sự kiện chờ chọn (ADR 0014). */
+export const ERROR_CODES = ['BAD_COMMAND', 'NO_WORLD', 'NO_LIFE', 'DEAD', 'EVENT_PENDING', 'BAD_SAVE', 'VERSION', 'INTERNAL'] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
 /** worker → UI. */
@@ -49,10 +57,16 @@ export type WorkerMessage =
       /** Hành động và đích đi được ở nơi đang đứng, sim tính sẵn. */
       actions: ActionOption[];
       travel: TravelOption[];
+      /** Chợ quận đang đứng; null khi chưa có kinh tế (trước S2). */
+      market: MarketView | null;
+      /** Sự kiện đang chờ chọn; khác null thì ADVANCE bị từ chối. */
+      pending: PendingEvent | null;
     }
   | { type: 'TRAVEL_PREVIEW'; reqId: number; preview: TravelPreview }
   | { type: 'LOG'; reqId: number; entries: LogEntry[] }
   | { type: 'INTERRUPT'; reqId: number; entry: LogEntry }
+  /** Tua dừng vì có sự kiện cần chọn (ADR 0014). */
+  | { type: 'EVENT'; reqId: number; pending: PendingEvent }
   | { type: 'DIED'; reqId: number; summary: LifeSummary }
   | { type: 'SAVED'; reqId: number; save: SaveFile }
   | { type: 'ERROR'; reqId: number | null; code: ErrorCode; message: string };
@@ -72,6 +86,8 @@ export const vCommand: Validator<Command> = tagged<Command>({
   ADVANCE: obj<C<'ADVANCE'>>({ type: lit('ADVANCE'), reqId: nat, mode: oneOf(ADVANCE_MODES) }),
   SET_PLAN: obj<C<'SET_PLAN'>>({ type: lit('SET_PLAN'), reqId: nat, plan: vMonthPlan }),
   PREVIEW_TRAVEL: obj<C<'PREVIEW_TRAVEL'>>({ type: lit('PREVIEW_TRAVEL'), reqId: nat, county: nat }),
+  TRADE: obj<C<'TRADE'>>({ type: lit('TRADE'), reqId: nat, grain: vTradeGrain }),
+  CHOOSE: obj<C<'CHOOSE'>>({ type: lit('CHOOSE'), reqId: nat, instance: nat, choice: vChoiceId }),
   PAUSE: obj<C<'PAUSE'>>({ type: lit('PAUSE'), reqId: nat }),
   SAVE: obj<C<'SAVE'>>({ type: lit('SAVE'), reqId: nat }),
   LOAD: obj<C<'LOAD'>>({ type: lit('LOAD'), reqId: nat, save: vSaveFile }),
@@ -85,10 +101,12 @@ export const vWorkerMessage: Validator<WorkerMessage> = tagged<WorkerMessage>({
   STATE: obj<M<'STATE'>>({
     type: lit('STATE'), reqId: nat, date: vCalendarDate, character: vCharacterView, running: bool,
     plan: nullable(vMonthPlan), active: nullable(vActionProgress), slotIndex: oneOf([0, 1, 2] as const), actions: arr(vActionOption), travel: arr(vTravelOption),
+    market: nullable(vMarketView), pending: nullable(vPendingEvent),
   }),
   TRAVEL_PREVIEW: obj<M<'TRAVEL_PREVIEW'>>({ type: lit('TRAVEL_PREVIEW'), reqId: nat, preview: vTravelPreview }),
   LOG: obj<M<'LOG'>>({ type: lit('LOG'), reqId: nat, entries: arr(vLogEntry) }),
   INTERRUPT: obj<M<'INTERRUPT'>>({ type: lit('INTERRUPT'), reqId: nat, entry: vLogEntry }),
+  EVENT: obj<M<'EVENT'>>({ type: lit('EVENT'), reqId: nat, pending: vPendingEvent }),
   DIED: obj<M<'DIED'>>({ type: lit('DIED'), reqId: nat, summary: vLifeSummary }),
   SAVED: obj<M<'SAVED'>>({ type: lit('SAVED'), reqId: nat, save: vSaveFile }),
   ERROR: obj<M<'ERROR'>>({ type: lit('ERROR'), reqId: nullable(nat), code: oneOf(ERROR_CODES), message: str }),

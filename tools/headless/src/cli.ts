@@ -223,6 +223,12 @@ async function regionsCmd(n: number, threads: number, once: boolean) {
   if (!once) console.log(`Cùng seed khác digest vùng: ${mismatch}/${n}`);
   console.log(`Quận: ${stat((r) => r.counties)} · đất ${stat((r) => r.landKm2)} km² · hộp ${stat((r) => r.size[0])}×${stat((r) => r.size[1])} ô`);
   console.log(`Nơi sinh: thành ${kinds('city')} · trấn ${kinds('town')} · làng ${kinds('village')}`);
+  const edges = ok.flatMap((r) => r.logic!.terrainPct);
+  const pct = (k: number) => `${Math.round((100 * edges.filter((e) => e === k).length) / Math.max(1, edges.length))}%`;
+  console.log(`Cạnh đường (${edges.length}): đồng bằng ${pct(100)} · qua sông ${pct(150)} · núi ${pct(200)} · núi + sông ${pct(300)}`);
+  const fert = ok.flatMap((r) => r.logic!.fertilityPct).sort((x, y) => x - y);
+  const at = (q: number) => fert[Math.min(fert.length - 1, Math.floor(q * fert.length))];
+  console.log(`Độ phì (${fert.length} quận): ${fert[0]}–${fert.at(-1)} · p10 ${at(0.1)} · trung vị ${at(0.5)} · p90 ${at(0.9)} · chạm sàn ${fert.filter((f) => f === fert[0]).length}`);
   console.log(`Đo: sinh một vùng (gồm cả thế giới 1024×768) trung bình ${(ok.reduce((s, r) => s + r.ms, 0) / ok.length / 1000).toFixed(2)} s · tổng ${(wall / 1000).toFixed(1)} s`);
   const pass = fails.length === 0 && mismatch === 0;
   console.log(pass ? 'KẾT QUẢ: PASS' : 'KẾT QUẢ: FAIL');

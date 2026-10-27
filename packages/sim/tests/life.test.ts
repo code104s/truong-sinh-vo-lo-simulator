@@ -127,11 +127,12 @@ describe('tất định và lưu/tải (nghiệm thu Sim)', () => {
       l.runToDeath();
       return `${l.summary().ageYears} ${l.summary().cause} ${l.digest()}`;
     });
+    // v0.3 Bước 0: thêm luồng RNG economy, events, weather → digest đổi; tuổi và nguyên nhân chết giữ nguyên.
     expect(out).toMatchInlineSnapshot(`
       [
-        "75 illness f4e301653e45cfc7",
-        "67 old_age 36678898ea9e822a",
-        "71 illness 9d4a758d19c20a58",
+        "75 illness a03a285fba99e068",
+        "67 old_age 6e9a92adee0a84d4",
+        "71 illness 781c7116760646a0",
       ]
     `);
   });

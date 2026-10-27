@@ -1,6 +1,7 @@
 // Máy trạng thái màn hình (thuần, test được không cần DOM). Không có luật game: mọi số liệu đến từ worker.
 import type {
   Birthplace, BirthplaceId, CalendarDate, CharacterView, LifeSummary, LogEntry, RegionMapData, RegionSummary, WorkerMessage, WorldSeed, MonthPlan, ActionOption, ActionProgress, TravelOption, TravelPreview,
+  MarketView, PendingEvent,
 } from '@tsvl/shared';
 
 export type Screen = 'menu' | 'settings' | 'loading' | 'birthplace' | 'life' | 'summary';
@@ -32,12 +33,14 @@ export interface AppState {
   error: string | null;
   seedInput: string;
   plan: MonthPlan | null; active: ActionProgress | null; actions: ActionOption[]; travel: TravelOption[]; travelPreview: TravelPreview | null;
+  /** Chợ quận đang đứng và sự kiện chờ chọn (ADR 0012, 0014); giao diện có ở F2, F3. */
+  market: MarketView | null; pending: PendingEvent | null;
 }
 
 export const initialState: AppState = {
   screen: 'menu', ready: false, hasSave: false, loadingSave: false, progress: null, world: null, selected: null,
   date: null, character: null, log: [], interrupt: null, summary: null, running: false, error: null, seedInput: '',
-  plan: null, active: null, actions: [], travel: [], travelPreview: null,
+  plan: null, active: null, actions: [], travel: [], travelPreview: null, market: null, pending: null,
 };
 
 export type Action =
@@ -52,7 +55,9 @@ export type Action =
   /** Bắt đầu một lần tua: biển "có biến" cũ không còn đúng nữa. */
   | { type: 'advanceStart' }
   | { type: 'seedInput'; value: string }
-  | { type: 'dismissError' };
+  | { type: 'dismissError' }
+  /** Lỗi phía giao diện (không qua worker), vd. save của bản cũ. */
+  | { type: 'error'; message: string };
 
 /** Giữ nhật ký trong bộ nhớ UI ở mức vừa phải; save vẫn giữ đủ. */
 export const LOG_LIMIT = 2000;
@@ -68,7 +73,7 @@ export function reduce(s: AppState, a: Action): AppState {
     case 'loadStart':
       return { ...s, screen: 'loading', progress: null, loadingSave: true, log: [], interrupt: null, summary: null, character: null, error: null };
     case 'newLifeStart':
-      return { ...s, log: [], interrupt: null, summary: null, character: null, running: false, plan: null, active: null, actions: [], travel: [], travelPreview: null };
+      return { ...s, log: [], interrupt: null, summary: null, character: null, running: false, plan: null, active: null, actions: [], travel: [], travelPreview: null, market: null, pending: null };
     case 'select':
       return { ...s, selected: a.id };
     case 'advanceStart':
@@ -79,6 +84,8 @@ export function reduce(s: AppState, a: Action): AppState {
       return { ...s, seedInput: a.value };
     case 'dismissError':
       return { ...s, error: null };
+    case 'error':
+      return { ...s, error: a.message };
     case 'msg':
       return onMessage(s, a.m);
   }
@@ -101,10 +108,12 @@ function onMessage(s: AppState, m: WorkerMessage): AppState {
     }
     case 'STATE': {
       const toLife = s.screen === 'loading' || s.screen === 'birthplace';
-      return { ...s, date: m.date, character: m.character, plan: m.plan, active: m.active, actions: m.actions, travel: m.travel, travelPreview: null, loadingSave: false, screen: toLife ? 'life' : s.screen };
+      return { ...s, date: m.date, character: m.character, plan: m.plan, active: m.active, actions: m.actions, travel: m.travel, travelPreview: null, market: m.market, pending: m.pending, loadingSave: false, screen: toLife ? 'life' : s.screen };
     }
     case 'INTERRUPT':
       return { ...s, interrupt: m.entry, running: false };
+    case 'EVENT':
+      return { ...s, pending: m.pending, running: false };
     case 'DIED':
       return { ...s, summary: m.summary, running: false, hasSave: false, screen: 'summary' };
     case 'SAVED':

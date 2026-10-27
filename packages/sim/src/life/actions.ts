@@ -36,7 +36,9 @@ export function actionOptions(c: CharacterState, tick: Tick, logic: RegionLogic)
   const kind = logic.settlementKind[c.location]!;
   return ACTIONS.map((d) => ({
     id: d.id, group: d.group, slots: d.slots,
-    cost: { stamina: d.stamina === 0 ? 'cost.none' : d.stamina < 80 ? 'cost.low' : d.stamina < 160 ? 'cost.medium' : 'cost.high', risk: d.riskPpm === 0 ? 'risk.none' : d.riskPpm < 300 ? 'risk.low' : d.riskPpm < 1000 ? 'risk.medium' : 'risk.high' },
+    cost: { stamina: d.stamina === 0 ? 'cost.none' : d.stamina < 80 ? 'cost.low' : d.stamina < 160 ? 'cost.medium' : 'cost.high', risk: d.riskPpm === 0 ? 'risk.none' : d.riskPpm < 300 ? 'risk.low' : d.riskPpm < 1000 ? 'risk.medium' : 'risk.high',
+      // Tạm tới S4 (ADR 0012): chưa hành động nào tốn tiền
+      money: 'cost.none' },
     gains: d.skill ? [`skill.${d.skill}`] : [d.group === 'rest' ? 'gain.recovery' : d.group === 'heal' ? 'gain.healing' : 'gain.location'],
     locked: actionLock(d, c, tick, kind),
   }));

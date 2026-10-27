@@ -22,7 +22,7 @@ interface Props {
   onRun: () => void;
   onPause: () => void;
   plan: MonthPlan | null; active: ActionProgress | null; actions: ActionOption[]; travel: TravelOption[]; travelPreview: TravelPreview | null;
-  onPlan: (plan: MonthPlan) => void; onPreview: (county: number) => void; onExport: () => void;
+  onPlan: (plan: MonthPlan) => void; onPreview: (county: number) => void;
 }
 
 export function LogLine({ e, forceMajor = false }: { e: LogEntry; forceMajor?: boolean }) {
@@ -36,7 +36,7 @@ export function LogLine({ e, forceMajor = false }: { e: LogEntry; forceMajor?: b
   );
 }
 
-export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview, onExport }: Props) {
+export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview }: Props) {
   const [travelOpen, setTravelOpen] = useState(false);
   const place = world?.birthplaces.find((b) => b.id === c.birthplaceId);
   const logEnd = useRef<HTMLDivElement>(null);
@@ -114,7 +114,6 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
               <button class="btn" disabled={lock} onClick={() => onAdvance('year')}>{t('ui.ctrl.year')}</button>
               <button class="btn primary" disabled={lock} onClick={onRun}>{t('ui.ctrl.until')}</button>
               <button class="btn ghost" disabled={lock || !c.canAct || !!active || !!actions.find((a) => a.id === 'action.travel')?.locked} onClick={() => setTravelOpen(true)}>{t('ui.travel.open')}</button>
-              <button class="btn ghost" disabled={lock} onClick={onExport}>{t('ui.save.export')}</button>
               {running && <span class="muted running">{t('ui.ctrl.running')}</span>}
             </footer>
           </main>

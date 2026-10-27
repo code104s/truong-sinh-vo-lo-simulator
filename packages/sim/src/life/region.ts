@@ -1,5 +1,5 @@
 import { arr, intRange, nat, obj, oneOf, opt, str, SETTLEMENT_KINDS, type SaveFile, type Validator } from '@tsvl/shared';
-import type { RegionLogic } from '@tsvl/worldgen';
+import { FERTILITY_MAX, FERTILITY_MIN, type RegionLogic } from '@tsvl/worldgen';
 import { canonical } from '../core/digest';
 import { validatePlan } from './actions';
 import { STREAMS, type LifeSnapshot } from './life';
@@ -10,12 +10,13 @@ const validator = obj<RegionLogic>({
   kmPerCellMilli: intRange(1, 1_000_000),
   counties: arr(obj<RegionLogic['counties'][number]>({ worldIndex: nat, area: nat, seat: obj({ x: nat, y: nat }), name: opt(str) })),
   settlementKind: arr(oneOf(SETTLEMENT_KINDS)), adjacency: arr(edge), terrainPct: arr(oneOf([100, 150, 200, 300] as const)) as Validator<number[]>, seatKm: arr(arr(nat)),
+  fertilityPct: arr(intRange(FERTILITY_MIN, FERTILITY_MAX)),
 });
 
 export function checkSavedLogic(logic: RegionLogic, save: SaveFile, snap: LifeSnapshot): string | null {
   const invalid = validator.check(logic, '$save.region.logic'); if (invalid) return invalid;
   const n = logic.counties.length;
-  if (n === 0 || n !== save.region.map.counties.length || logic.settlementKind.length !== n || logic.seatKm.length !== n || logic.terrainPct.length !== logic.adjacency.length) return 'kích thước lớp logic vùng không khớp';
+  if (n === 0 || n !== save.region.map.counties.length || logic.settlementKind.length !== n || logic.seatKm.length !== n || logic.fertilityPct.length !== n || logic.terrainPct.length !== logic.adjacency.length) return 'kích thước lớp logic vùng không khớp';
   for (let i = 0; i < n; i++) {
     if (logic.seatKm[i]!.length !== n || logic.seatKm[i]![i] !== 0) return 'ma trận khoảng cách không hợp lệ';
     for (let j = 0; j < n; j++) if (logic.seatKm[i]![j] !== logic.seatKm[j]?.[i]) return 'khoảng cách không đối xứng';

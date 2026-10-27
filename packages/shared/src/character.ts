@@ -2,6 +2,7 @@
 import type { Tick } from './calendar';
 import { STAMINA_BANDS, vSkillView, type CountyIndex, type SkillView, type StaminaBand } from './actions';
 import { vContentId, type ContentId } from './contentId';
+import { vHouseholdView, type HouseholdView } from './economy';
 import { arr, bool, int, intRange, nat, nonEmpty, obj, oneOf, record, str, union } from './schema';
 import { vBirthplaceId, vNewLifeConfig, type BirthplaceId, type NewLifeConfig } from './world';
 
@@ -56,10 +57,12 @@ export interface CharacterView {
   skills: SkillView[];
   /** Được tự xếp kế hoạch tháng chưa (từ 12 tuổi, ADR 0008). */
   canAct: boolean;
+  /** Túi tiền, kho lương, ruộng, mức đói (ADR 0013). */
+  household: HouseholdView;
 }
 
 /** Khóa không bao giờ được xuất hiện trong CharacterView (test ở shared và sim). */
-export const HIDDEN_CHARACTER_KEYS = ['spiritRoot', 'lifespanBase', 'lifespanBonus', 'lifespanCap', 'luck', 'healthMax', 'scars', 'rng', 'hiddenTraits', 'stamina', 'skillXp', 'commandLog'] as const;
+export const HIDDEN_CHARACTER_KEYS = ['spiritRoot', 'lifespanBase', 'lifespanBonus', 'lifespanCap', 'luck', 'healthMax', 'scars', 'rng', 'hiddenTraits', 'stamina', 'skillXp', 'commandLog', 'hunger', 'stayUntil'] as const;
 
 export interface LogEntry {
   tick: Tick;
@@ -107,6 +110,7 @@ export const vCharacterView = obj<CharacterView>({
   staminaBand: oneOf(STAMINA_BANDS),
   skills: arr(vSkillView),
   canAct: bool,
+  household: vHouseholdView,
 });
 
 export const vLogEntry = obj<LogEntry>({
