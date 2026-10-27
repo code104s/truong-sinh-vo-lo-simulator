@@ -1,5 +1,5 @@
 import { t } from '@tsvl/content';
-import { GRAIN_PER_DOU, type CalendarDate, type CharacterView, type HungerBand, type StaminaBand } from '@tsvl/shared';
+import { GRAIN_PER_DOU, type CalendarDate, type CharacterView, type FoodWeeksBand, type HungerBand, type StaminaBand } from '@tsvl/shared';
 import type { ComponentChildren } from 'preact';
 import { dateText } from '../app/format';
 import type { WorldInfo } from '../app/state';
@@ -9,17 +9,19 @@ import { PORTRAIT_MIN_AGE, portraitOf } from '../ui/portraits';
 
 const STAMINA_PIPS: Record<StaminaBand, number> = { fresh: 3, tired: 2, exhausted: 1 };
 const HUNGER_PIPS: Record<HungerBand, number> = { fed: 4, hungry: 3, starving: 2, famished: 1 };
+const FOOD_PIPS: Record<FoodWeeksBand, number> = { none: 0, short: 1, season: 2, year: 3 };
 const dou = (grain: number) => Math.floor(grain / GRAIN_PER_DOU);
 
 function Pips({ on, of, tone }: { on: number; of: number; tone: 'good' | 'warn' | 'bad' }) {
   return <span class={`pips tone-${tone}`} aria-hidden="true">{Array.from({ length: of }, (_, i) => <i key={i} class={i < on ? 'on' : ''} />)}</span>;
 }
 
-function Meter({ label, value, children, tone = 'plain' }: { label: string; value: string; children?: ComponentChildren; tone?: string }) {
+/** `detail`: câu đầy đủ khi giá trị hiện rút gọn (rê chuột, trình đọc màn hình). */
+function Meter({ label, value, detail, children, tone = 'plain' }: { label: string; value: string; detail?: string; children?: ComponentChildren; tone?: string }) {
   return (
-    <div class={`meter tone-${tone}`}>
+    <div class={`meter tone-${tone}`} title={detail ?? value}>
       <span class="meter-k">{label}</span>
-      <span class="meter-v" title={value}>{value}</span>
+      <span class="meter-v" aria-label={detail}>{value}</span>
       {children}
     </div>
   );
@@ -36,7 +38,9 @@ export function StatusBar({ c, date, saved, world }: { c: CharacterView; date: C
   const staminaTone = c.staminaBand === 'fresh' ? 'good' : c.staminaBand === 'tired' ? 'warn' : 'bad';
   const hungerTone = h.hungerBand === 'fed' ? 'good' : h.hungerBand === 'hungry' ? 'warn' : 'bad';
   const foodTone = !h.independent ? 'plain' : h.foodWeeksBand === 'none' ? 'bad' : h.foodWeeksBand === 'short' ? 'warn' : 'good';
-  const food = h.independent
+  // Ô hẹp (3 × 2 dưới 1500px): chỉ ghi số đấu, dải đủ ăn thành vạch như thể lực, bụng; câu đầy đủ ở detail
+  const food = h.independent ? t('ui.hud.dou', { dou: dou(h.grain) }) : t('ui.hud.parents');
+  const foodDetail = h.independent
     ? `${t('ui.hud.dou', { dou: dou(h.grain) })} · ${t(`food.${h.foodWeeksBand}`)}`
     : h.grain > 0 ? `${t('ui.hud.parents')} · ${t('ui.hud.pocket', { dou: dou(h.grain) })}` : t('ui.hud.parents');
   const land = h.landMu > 0 ? `${t('ui.hud.mu', { mu: h.landMu })} · ${t(`tenure.${h.tenure}`)}` : h.tenure === 'tenant' ? t('tenure.tenant') : t('ui.hud.no_land');
@@ -62,7 +66,9 @@ export function StatusBar({ c, date, saved, world }: { c: CharacterView; date: C
         <Meter label={t('ui.hud.belly')} value={t(`hunger.${h.hungerBand}`)} tone={hungerTone}>
           <Pips on={HUNGER_PIPS[h.hungerBand]} of={4} tone={hungerTone} />
         </Meter>
-        <Meter label={t('ui.hud.food')} value={food} tone={foodTone} />
+        <Meter label={t('ui.hud.food')} value={food} detail={foodDetail} tone={foodTone}>
+          {h.independent && <Pips on={FOOD_PIPS[h.foodWeeksBand]} of={3} tone={foodTone === 'plain' ? 'good' : foodTone} />}
+        </Meter>
         <Meter label={t('ui.hud.money')} value={t('ui.hud.coin', { coin: h.money })} />
         <Meter label={t('ui.hud.land')} value={land} />
       </div>

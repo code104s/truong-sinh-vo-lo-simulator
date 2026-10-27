@@ -27,7 +27,7 @@ export const VI: Readonly<Record<string, string>> = {
   'ui.title_han': '長生無路',
   'ui.close': 'Đóng',
   'ui.subtitle': 'Một đời, một mạng.',
-  'ui.version': 'bản thử v0.2',
+  'ui.version': 'bản thử v0.3',
   'ui.plan.title': 'Kế hoạch tháng', 'ui.plan.repeat': 'Tự lặp mỗi tháng cho tới khi sửa',
   'ui.plan.apply': 'Áp dụng kế hoạch', 'ui.plan.slots': '{count} ô', 'ui.plan.occupied': 'Đang bận',
   'ui.plan.locked_now': 'Lúc này chưa làm được ({reason}); tới tuần đó sẽ xét lại, không làm được thì nghỉ.',
