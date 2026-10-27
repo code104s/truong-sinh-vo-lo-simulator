@@ -115,3 +115,20 @@
   - vợ chồng, con cái, nuôi cha mẹ già (v0.5);
   - bạn bè giúp qua cơn đói (v0.5);
   - mua bán đất (v0.7).
+
+## Ghi chú triển khai S1 (2026-10-27)
+- **Chưa bật ra riêng trong đời thật.** Nguồn lương thực (chợ S2, thu hoạch S3, lương S4) chưa có; bật ra riêng lúc 16 tuổi bây giờ thì mọi đời chết đói ở 16–18 tuổi. Tới khi có nguồn thu, người chơi tạm ở nhà cha mẹ nuôi (đúng một nhánh của sự kiện lập thân). `becomeIndependent` đã có và có test; sẽ nối vào đời thật khi S3/S4 xong, rồi thành sự kiện có lựa chọn ở S5.
+- **Đói kém quận nhà** đọc qua `Life.homeSupply()`, tạm trả `normal` tới S2. Năm thường `feedPhase` không rút RNG, nên đời thật hiện không đổi hành vi (batch 1.000 đời × 5 chiến lược y hệt Bước 0).
+- **Số liệu khởi điểm:**
+  - Khẩu phần: người lớn 10 thăng/tuần, dưới 12 tuổi 5 thăng.
+  - Bỏ đói khi đói kém (ppm/tuần): `destitute` 400.000 · `commoner` 200.000 · `comfortable` 50.000 · `wealthy` 0.
+  - Đói nhẹ: hồi sức khỏe còn 50%, hồi thể lực còn 50%, tính như sức khỏe yếu khi xét bệnh.
+  - Đói lả: không hồi sức khỏe; mất 30 + 15 × (đói − 4) mỗi tuần; khóa việc nặng (`lock.hunger`, khóa tạm thời).
+  - Kiệt: mất 100 + 20 × (đói − 8) mỗi tuần; 25% để lại di chứng 10–30.
+  - Kết quả: người khỏe nhịn hẳn chết sau 6–10 tuần (60–100 ngày); ăn nửa khẩu phần thì chết chậm hơn.
+- **Nhật ký:**
+  - Ghi khi dải đói xấu đi.
+  - Trẻ còn ở nhà đói nhẹ chỉ ghi `minor`: không làm gì được nên không ngắt tua. Đói lả trở lên luôn ngắt tua.
+  - "Dần lại sức" ghi khi thoát khỏi đói lả, không ghi khi đói nhẹ lên xuống, để tránh ngập nhật ký.
+- **Chết vì bệnh khi đang đói nhẹ** dùng khóa nhật ký riêng `log.death.hungry` ("giữa cơn đói"); nguyên nhân vẫn là `illness`.
+- **Chưa có:** trường `stayUntil` (thêm ở S5 cùng sự kiện lập thân); tự mua lương khi thiếu (thêm ở S2 cùng chợ).

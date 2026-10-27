@@ -7,7 +7,7 @@ export const KIND_CHAR: Record<SettlementKind, string> = { city: '城', town: '�
 /** Ấn triện cho một mục nhật ký theo khóa nội dung: chữ và màu. */
 export function logSeal(e: LogEntry): { char: string; tone: 'red' | 'ink' } | null {
   if (e.key === 'log.birth') return { char: '生', tone: 'red' };
-  if (e.key === 'log.death') return { char: '終', tone: 'ink' };
+  if (e.key === 'log.death' || e.key === 'log.death.hungry') return { char: '終', tone: 'ink' };
   if (e.key === 'log.age.milestone') return { char: '壽', tone: 'red' };
   if (e.key === 'log.illness.onset') return { char: '病', tone: 'ink' };
   if (e.key === 'log.injury.onset') return { char: '傷', tone: 'ink' };

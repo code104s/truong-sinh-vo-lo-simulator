@@ -3,6 +3,7 @@ import { ageYearsAt, seasonOfMonth, calendarOf, type DeathCause, type LogEntry, 
 import { clamp, idiv, lerpTable, mulDiv } from '../core/math';
 import type { Rng } from '../core/rng';
 import { healthBandOf, lifespanCap, traitDef, type CharacterState, type Condition } from './character';
+import { hungerDamage, hungerRecoveryPct, isStarving } from './household';
 import { fatiguePct } from './stamina';
 import { skillRiskPct } from './skills';
 import {
@@ -65,7 +66,8 @@ export function eventsPhase(c: CharacterState, tick: Tick, illnessRng: Rng, acci
     ppm = mulDiv(ppm, 160 - c.constitution * 10, 100);
     ppm = mulDiv(ppm, traitPct(c, 'illnessPct'), 100);
     ppm = mulDiv(ppm, fatiguePct(c, tick), 100);
-    if (c.health < ILLNESS_WEAK_THRESHOLD) ppm = mulDiv(ppm, ILLNESS_WEAK_PCT, 100);
+    // Đói tính như sức khỏe yếu (ADR 0013)
+    if (c.health < ILLNESS_WEAK_THRESHOLD || c.household.hunger > 0) ppm = mulDiv(ppm, ILLNESS_WEAK_PCT, 100);
     if (illnessRng.chance(ppm)) {
       const pool = ILLNESSES.filter((d) => ratio >= (d.minAgeRatio ?? 0));
       const w = pool.map((d) => mulDiv(mulDiv(d.weight * 100, d.season[season], 100), d.place[c.birthplaceKind], 100));
@@ -103,7 +105,13 @@ export function consequencesPhase(c: CharacterState, tick: Tick, healthRng: Rng,
   // Hồi phục: đủ khi khỏe, một phần khi đang bệnh (theo mức nặng nhất)
   let recovery = RECOVERY_BASE + RECOVERY_PER_CONSTITUTION * c.constitution + RECOVERY_BY_BACKGROUND[c.background];
   for (const x of c.conditions) recovery = Math.min(recovery, mulDiv(recovery, RECOVERY_WHILE_ILL[x.severity], 100));
+  recovery = mulDiv(recovery, hungerRecoveryPct(c.household), 100);
   c.health = Math.min(c.healthMax, c.health + recovery);
+
+  // Đói (ADR 0013): đói lả mất sức khỏe, kiệt có thể để lại di chứng
+  const scarsBefore = c.scars;
+  c.health -= hungerDamage(c, healthRng);
+  if (c.scars !== scarsBefore) c.healthMax = computeHealthMax(c, tick);
 
   if (c.conditions.length > 0) {
     const still: Condition[] = [];
@@ -133,6 +141,7 @@ export function consequencesPhase(c: CharacterState, tick: Tick, healthRng: Rng,
   if (tick - c.birthTick >= lifespanCap(c)) return { tick, cause: 'old_age', detail: 'old_age.natural' };
   if (c.health <= 0) {
     c.health = 0;
+    if (isStarving(c.household)) return { tick, cause: 'starvation', detail: 'hunger.starved' };
     if (worst) return { tick, cause: worst.id.startsWith('injury.') ? 'accident' : 'illness', detail: worst.id };
     if (c.stamina === 0) return { tick, cause: 'illness', detail: 'illness.exhaustion' };
     return { tick, cause: 'old_age', detail: 'old_age.natural' };

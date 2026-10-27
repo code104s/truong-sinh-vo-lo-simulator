@@ -1,7 +1,7 @@
 // Một đời người: vòng tick theo pha có nhịp (ADR 0002), tua, nhật ký, snapshot (ADR 0004).
 import {
   TICKS_PER_MONTH, TICKS_PER_YEAR, ageYearsAt, isYearStart,
-  type AdvanceMode, type Birthplace, type CharacterView, type LifeSummary, type LogEntry, type NewLifeConfig, type Tick, type MonthPlan,
+  type AdvanceMode, type Birthplace, type CharacterView, type LifeSummary, type LogEntry, type NewLifeConfig, type Tick, type MonthPlan, type SupplyBand,
 } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { digestOf } from '../core/digest';
@@ -9,6 +9,7 @@ import { hash32 } from '../core/hash';
 import { RngStreams, type RngStreamsSnapshot } from '../core/rng';
 import { createCharacter, toView, type CharacterState } from './character';
 import { agingPhase, consequencesPhase, eventsPhase, type Death } from './health';
+import { feedPhase } from './household';
 import { AGE_MILESTONES, UNTIL_EVENT_MAX_TICKS } from './params';
 import { staminaMax } from './stamina';
 import { decaySkills } from './skills';
@@ -129,8 +130,9 @@ export class Life {
     // 5 Người chơi: tuổi thơ hoặc ô kế hoạch tháng (ADR 0008).
     const action = death ? { death, carePct: 0 } : playerPhase(this.s, c, t, this.logic, this.streams, log);
     death = action.death;
-    // 6 Hậu quả: lão hóa (năm), diễn tiến (tuần), tử vong (cuối pha)
+    // 6 Hậu quả: ăn (tuần), lão hóa (năm), diễn tiến (tuần), tử vong (cuối pha)
     if (!death) {
+      feedPhase(c, t, this.homeSupply(), this.streams.get('economy'), log);
       if (isYearStart(t)) { agingPhase(c, t); decaySkills(c, t); }
       death = consequencesPhase(c, t, this.streams.get('health'), log, action.carePct);
     }
@@ -144,11 +146,18 @@ export class Life {
       c.alive = false;
       c.conditions = [];
       this.s.death = death;
-      log({ key: 'log.death', params: { cause: `death.${death.cause}`, detail: death.detail, age: ageYearsAt(c.birthTick, t) }, importance: 'major' });
+      // Chết vì bệnh mà đang đói: vẫn là bệnh, kể thêm hoàn cảnh (ADR 0013)
+      const key = death.cause === 'illness' && c.household.hunger > 0 ? 'log.death.hungry' : 'log.death';
+      log({ key, params: { cause: `death.${death.cause}`, detail: death.detail, age: ageYearsAt(c.birthTick, t) }, importance: 'major' });
     }
     for (const e of entries) this.push(e);
     this.s.tick = t + 1;
     return death;
+  }
+
+  /** Tình hình lương thực của quận nhà; chợ quận có ở S2 (ADR 0012), tới đó coi như năm thường. */
+  private homeSupply(): SupplyBand {
+    return 'normal';
   }
 
   /** Tick đích của một chế độ tua: dừng ở ranh giới lịch (ADR 0002). */

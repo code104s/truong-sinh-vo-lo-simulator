@@ -10,6 +10,7 @@ export const VI: Readonly<Record<string, string>> = {
   'gain.recovery': 'Hồi phục', 'gain.healing': 'Chữa bệnh', 'gain.location': 'Đổi nơi ở',
   'lock.child': 'Chưa đủ 12 tuổi', 'lock.place': 'Không phù hợp nơi ở', 'lock.winter': 'Mùa đông không làm ruộng',
   'lock.health': 'Sức khỏe không cho phép', 'lock.stamina': 'Không đủ thể lực', 'lock.route': 'Không có đường đi phù hợp', 'lock.action': 'Hành động không hợp lệ',
+  'lock.hunger': 'Đói lả, không làm nổi việc nặng',
   'place.unknown': 'địa phương',
   'stamina.fresh': 'Sung sức', 'stamina.tired': 'Mỏi mệt', 'stamina.exhausted': 'Kiệt sức',
   'log.child.study': '{age} tuổi, được học vỡ lòng.', 'log.child.help': '{age} tuổi, phụ giúp việc nhà.',
@@ -145,6 +146,12 @@ export const VI: Readonly<Record<string, string>> = {
   'log.age.milestone': 'Tròn {age} tuổi.',
   'log.health.worse': 'Sức khỏe sa sút: {band}.',
   'log.death': 'Qua đời năm {age} tuổi. Nguyên do: {detail}.',
+  'log.death.hungry': 'Qua đời năm {age} tuổi, giữa cơn đói. Nguyên do: {detail}.',
+  'log.hunger.hungry': 'Bữa đói bữa no, người gầy rộc đi.',
+  'log.hunger.starving': 'Đói lả, đi đứng không vững.',
+  'log.hunger.famished': 'Kiệt sức vì đói, mắt hoa, chân run.',
+  'log.hunger.recovered': 'Đã có cái ăn trở lại, dần lại sức.',
+  'hunger.starved': 'chết đói',
 
   // —— Tổng kết ——
   'ui.summary.title': 'Một đời khép lại',

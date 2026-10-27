@@ -128,11 +128,12 @@ describe('tất định và lưu/tải (nghiệm thu Sim)', () => {
       return `${l.summary().ageYears} ${l.summary().cause} ${l.digest()}`;
     });
     // v0.3 Bước 0: thêm luồng RNG economy, events, weather → digest đổi; tuổi và nguyên nhân chết giữ nguyên.
+    // v0.3 S1: snapshot thêm hộ (ADR 0013) → digest đổi; chưa ra riêng, chưa đói kém nên tuổi và nguyên nhân giữ nguyên.
     expect(out).toMatchInlineSnapshot(`
       [
-        "75 illness a03a285fba99e068",
-        "67 old_age 6e9a92adee0a84d4",
-        "71 illness 781c7116760646a0",
+        "75 illness fabd20da79e3b2a9",
+        "67 old_age 33a116c2e14a1620",
+        "71 illness 9c55afc5e035869b",
       ]
     `);
   });

@@ -1,6 +1,7 @@
 import type { StaminaBand, Tick } from '@tsvl/shared';
 import { clamp, idiv, lerpTable, mulDiv } from '../core/math';
 import type { CharacterState } from './character';
+import { hungerStaminaPct } from './household';
 
 export const STAMINA_BASE = 600;
 export const STAMINA_PER_CONSTITUTION = 35;
@@ -34,5 +35,6 @@ export function spendStamina(c: CharacterState, cost: number): boolean {
 export function recoverStamina(c: CharacterState, tick: Tick, rest = false): void {
   const cap = staminaMax(c, tick);
   const base = mulDiv(STAMINA_RECOVERY_BASE + c.constitution * STAMINA_RECOVERY_PER_CONSTITUTION, cap, 1000);
-  c.stamina = Math.min(cap, c.stamina + base + (rest ? REST_STAMINA_BONUS : 0));
+  // Đói thì hồi một nửa (ADR 0013)
+  c.stamina = Math.min(cap, c.stamina + mulDiv(base + (rest ? REST_STAMINA_BONUS : 0), hungerStaminaPct(c.household), 100));
 }

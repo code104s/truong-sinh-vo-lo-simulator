@@ -1,6 +1,7 @@
 import { ageYearsAt, calendarOf, type ActionGroup, type ActionOption, type MonthPlan, type PlanSlot, type SettlementKind, type Tick } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import type { CharacterState } from './character';
+import { isStarving } from './household';
 import type { Skill } from './skills';
 import { previewTravel } from './travel';
 
@@ -21,6 +22,9 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'action.travel', group: 'travel', slots: 1, stamina: 100, riskPpm: 300, minStamina: 30 },
 ];
 export const actionDef = (id: string) => ACTIONS.find((a) => a.id === id);
+/** Việc nặng: thể lực tốn từ mức "cao" trở lên. */
+export const HEAVY_STAMINA = 160;
+
 export const restPlan = (): MonthPlan => ({ slots: [{ action: 'action.rest' }, { action: 'action.rest' }, { action: 'action.rest' }] });
 
 export function actionLock(def: ActionDef, c: CharacterState, tick: Tick, kind: SettlementKind): string | null {
@@ -29,6 +33,8 @@ export function actionLock(def: ActionDef, c: CharacterState, tick: Tick, kind: 
   if (def.id === 'action.farm' && calendarOf(tick).season === 'winter') return 'lock.winter';
   if (def.group !== 'rest' && def.group !== 'heal' && (c.health < 200 || c.conditions.some((s) => s.severity === 'grave'))) return 'lock.health';
   if (c.stamina < (def.minStamina ?? 0)) return 'lock.stamina';
+  // Đói lả không làm nổi việc nặng (ADR 0013)
+  if (isStarving(c.household) && def.stamina >= HEAVY_STAMINA) return 'lock.hunger';
   return null;
 }
 
@@ -36,7 +42,7 @@ export function actionOptions(c: CharacterState, tick: Tick, logic: RegionLogic)
   const kind = logic.settlementKind[c.location]!;
   return ACTIONS.map((d) => ({
     id: d.id, group: d.group, slots: d.slots,
-    cost: { stamina: d.stamina === 0 ? 'cost.none' : d.stamina < 80 ? 'cost.low' : d.stamina < 160 ? 'cost.medium' : 'cost.high', risk: d.riskPpm === 0 ? 'risk.none' : d.riskPpm < 300 ? 'risk.low' : d.riskPpm < 1000 ? 'risk.medium' : 'risk.high',
+    cost: { stamina: d.stamina === 0 ? 'cost.none' : d.stamina < 80 ? 'cost.low' : d.stamina < HEAVY_STAMINA ? 'cost.medium' : 'cost.high', risk: d.riskPpm === 0 ? 'risk.none' : d.riskPpm < 300 ? 'risk.low' : d.riskPpm < 1000 ? 'risk.medium' : 'risk.high',
       // Tạm tới S4 (ADR 0012): chưa hành động nào tốn tiền
       money: 'cost.none' },
     gains: d.skill ? [`skill.${d.skill}`] : [d.group === 'rest' ? 'gain.recovery' : d.group === 'heal' ? 'gain.healing' : 'gain.location'],

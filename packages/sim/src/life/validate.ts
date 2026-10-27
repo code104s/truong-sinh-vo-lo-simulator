@@ -1,7 +1,7 @@
 // Validate snapshot sim khi tải save (ADR 0004): save hỏng hoặc bị sửa tay thì từ chối trước khi chạy.
 import {
   arr, bool, intRange, lit, nat, nonEmpty, nullable, obj, oneOf, record, str,
-  DEATH_CAUSES, GENDERS, SETTLEMENT_KINDS, vBirthplaceId, vNewLifeConfig, vMonthPlan, vPlanSlot, vTravelPreview, type Validator,
+  DEATH_CAUSES, GENDERS, SETTLEMENT_KINDS, TENURES, vBirthplaceId, vNewLifeConfig, vMonthPlan, vPlanSlot, vTravelPreview, type Validator,
 } from '@tsvl/shared';
 import type { RngState, RngStreamsSnapshot } from '../core/rng';
 import type { CharacterState, Condition, SpiritRoot } from './character';
@@ -10,6 +10,7 @@ import { SIM_VERSION, type LifeSnapshot } from './life';
 import { BACKGROUNDS, ELEMENTS, PERSONALITIES, TRAITS } from './params';
 import type { Skill } from './skills';
 import type { ActiveAction } from './player';
+import { HUNGER_MAX, type HouseholdState } from './household';
 
 const skillRecord = (value: Validator<number>) => obj<Record<Skill, number>>({ farming: value, hunting: value, crafting: value, literacy: value, martial: value });
 
@@ -43,6 +44,7 @@ const vCharacter = obj<CharacterState>({
   healthMax: intRange(0, 1000),
   scars: nat,
   conditions: arr(obj<Condition>({ id: nonEmpty, kind: oneOf(['illness', 'injury'] as const), severity, weeksLeft: nat })),
+  household: obj<HouseholdState>({ independent: bool, money: nat, grain: nat, landMu: nat, tenure: oneOf(TENURES), hunger: intRange(0, HUNGER_MAX) }),
   alive: bool,
 });
 

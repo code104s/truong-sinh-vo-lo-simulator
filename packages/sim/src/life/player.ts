@@ -24,7 +24,7 @@ const REST: PlanSlot = { action: 'action.rest' };
  * Khóa tạm thời: tự hết theo mùa hoặc khi hồi sức. Ô đó nghỉ, không ngắt tua, chuyến đi dở giữ nguyên.
  * Các khóa khác (sai nơi, không có đường) là kế hoạch hỏng: nghỉ và ngắt tua một lần để người chơi sửa.
  */
-export const TRANSIENT_LOCKS: ReadonlySet<string> = new Set(['lock.winter', 'lock.stamina', 'lock.health']);
+export const TRANSIENT_LOCKS: ReadonlySet<string> = new Set(['lock.winter', 'lock.stamina', 'lock.health', 'lock.hunger']);
 
 /** Pha 5. Mỗi ô chỉ trừ giá một lần; hành động đang dở tiếp tục qua ranh tháng. */
 export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic: RegionLogic, rng: RngStreams, log: Log): { death: Death | null; carePct: number } {

@@ -1,11 +1,12 @@
 // Tạo nhân vật từ NewLifeConfig (GDD 3.2 A; thuộc tính theo bảng đã duyệt ở docs/v0.1-giai-doan-a.md mục 3).
 import { GIVEN_FEMALE, GIVEN_MALE, SURNAMES } from '@tsvl/content';
-import { TICKS_PER_YEAR, ageYearsAt, type BirthplaceId, type CharacterView, type Gender, type HealthBand, type HouseholdView, type SettlementKind, type Tick } from '@tsvl/shared';
+import { TICKS_PER_YEAR, ageYearsAt, type BirthplaceId, type CharacterView, type Gender, type HealthBand, type SettlementKind, type Tick } from '@tsvl/shared';
 import { clamp, idiv } from '../core/math';
 import type { Rng } from '../core/rng';
 import { staminaBand } from './stamina';
 import { emptySkills, skillViews, type Skill } from './skills';
 import { ACTION_MIN_AGE } from './actions';
+import { householdView, newHousehold, type HouseholdState } from './household';
 import {
   BACKGROUND_WEIGHTS, BACKGROUNDS, ELEMENTS, HEALTH_FULL, LIFESPAN_BASE_YEARS, LIFESPAN_BY_BACKGROUND, LIFESPAN_BY_CONSTITUTION,
   LIFESPAN_DICE, LIFESPAN_DIE_MAX, LIFESPAN_MAX_YEARS, LIFESPAN_MIN_YEARS, PERSONALITIES, SPIRIT_ROOT_COUNT_WEIGHTS, SPIRIT_ROOT_PPM,
@@ -61,6 +62,8 @@ export interface CharacterState {
   /** Tổng di chứng vĩnh viễn, đã trừ vào healthMax. */
   scars: number;
   conditions: Condition[];
+  /** Túi tiền, kho lương, ruộng, bộ đếm đói (ADR 0013). */
+  household: HouseholdState;
   alive: boolean;
 }
 
@@ -124,7 +127,7 @@ export function createCharacter(
     name, gender, birthTick: input.birthTick, birthplaceId: input.birthplaceId, birthplaceKind: input.birthplaceKind,
     home: input.county, location: input.county, stamina: 0, skillXp: emptySkills(), skillLastUsed: emptySkills(input.birthTick),
     background, personality, constitution, aptitude, luck, traits, spiritRoot,
-    lifespanBase, lifespanBonus: 0, health: 0, healthMax: 0, scars: 0, conditions: [], alive: true,
+    lifespanBase, lifespanBonus: 0, health: 0, healthMax: 0, scars: 0, conditions: [], household: newHousehold(), alive: true,
   };
   return c;
 }
@@ -166,11 +169,6 @@ export function toView(c: CharacterState, tick: Tick): CharacterView {
     staminaBand: staminaBand(c, tick),
     skills: skillViews(c),
     canAct: c.alive && ageYearsAt(c.birthTick, tick) >= ACTION_MIN_AGE,
-    household: householdView(),
+    household: householdView(c, tick),
   };
-}
-
-/** Giá trị tạm tới S1 (ADR 0013): chưa có hộ, túi, kho; cha mẹ nuôi. */
-function householdView(): HouseholdView {
-  return { independent: false, money: 0, grain: 0, landMu: 0, tenure: 'none', hungerBand: 'fed', foodWeeksBand: 'none' };
 }
