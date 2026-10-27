@@ -9,6 +9,7 @@ import { ACCIDENT_FATAL_PPM } from './params';
 import { gainSkill, skillRiskPct } from './skills';
 import { fatiguePct, recoverStamina, spendStamina } from './stamina';
 import { previewTravel, routeTerrainPct } from './travel';
+import { recordFarmWeek } from '../economy/farming';
 
 export interface ActiveAction { slot: PlanSlot; remaining: number; total: number; preview: TravelPreview | null }
 export interface PlayerState {
@@ -83,6 +84,8 @@ function perform(d: ActionDef, route: TravelPreview | null, c: CharacterState, t
   const tired = fatiguePct(c, tick);
   if (spendStamina(c, d.stamina)) log({ key: 'log.exhaustion', params: {}, importance: 'minor' });
   if (d.skill) gainSkill(c, d.skill, tick);
+  // Tuần công tính cho mùa tới; gặt đầu tháng thu hoạch (ADR 0012)
+  if (d.id === 'action.farm') recordFarmWeek(c.household, c.location);
   let carePct = 0;
   if (d.group === 'rest') { c.health = Math.min(c.healthMax, c.health + 18); carePct = 10; }
   if (d.group === 'heal') {

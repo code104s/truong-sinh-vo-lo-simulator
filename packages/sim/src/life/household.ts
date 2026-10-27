@@ -14,6 +14,9 @@ export interface HouseholdState {
   tenure: Tenure;
   /** Bộ đếm đói, ẩn; giao diện chỉ thấy dải mức. */
   hunger: number;
+  /** Tuần công mùa này và quận có ruộng đang làm (−1: chưa làm) (ADR 0012). */
+  farmWeeks: number;
+  farmCounty: number;
 }
 
 /** Khẩu phần một tuần (thăng): người lớn 1 đấu, dưới 12 tuổi nửa đấu. */
@@ -45,7 +48,7 @@ export const FAMISHED_SCAR = [10, 30] as const;
 type Log = (e: Omit<LogEntry, 'tick'>) => void;
 
 export function newHousehold(): HouseholdState {
-  return { independent: false, money: 0, grain: 0, landMu: 0, tenure: 'none', hunger: 0 };
+  return { independent: false, money: 0, grain: 0, landMu: 0, tenure: 'none', hunger: 0, farmWeeks: 0, farmCounty: -1 };
 }
 
 export function hungerBand(hunger: number): HungerBand {

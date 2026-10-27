@@ -152,6 +152,8 @@ export const VI: Readonly<Record<string, string>> = {
   'log.hunger.famished': 'Kiệt sức vì đói, mắt hoa, chân run.',
   'log.hunger.recovered': 'Đã có cái ăn trở lại, dần lại sức.',
   'hunger.starved': 'chết đói',
+  'log.harvest.own': 'Gặt xong, được {net} đấu (nộp tô {rent} đấu, thuế {tax} đấu).',
+  'log.harvest.landlord': 'Mùa gặt: thu về {net} đấu, trong đó tô ruộng cho thuê {income} đấu.',
   'log.world.harvest_bad': 'Mùa này {county} mất mùa, lúa lép nhiều.',
   'log.world.harvest_good': 'Mùa này {county} được mùa.',
   'log.world.famine': '{county} đói kém, kho cạn, giá gạo vọt lên.',

@@ -1,15 +1,17 @@
 // Một đời người: vòng tick theo pha có nhịp (ADR 0002), tua, nhật ký, snapshot (ADR 0004).
 import {
-  TICKS_PER_MONTH, TICKS_PER_YEAR, ageYearsAt, calendarOf, isMonthStart, isYearStart,
+  GRAIN_PER_DOU, TICKS_PER_MONTH, TICKS_PER_YEAR, ageYearsAt, calendarOf, isMonthStart, isYearStart,
   type AdvanceMode, type Birthplace, type CharacterView, type LifeSummary, type LogEntry, type MarketView, type NewLifeConfig, type Tick, type MonthPlan, type SupplyBand,
 } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { digestOf } from '../core/digest';
 import { hash32 } from '../core/hash';
+import { idiv } from '../core/math';
 import { RngStreams, type RngStreamsSnapshot } from '../core/rng';
 import { createCharacter, toView, type CharacterState } from './character';
 import { agingPhase, consequencesPhase, eventsPhase, type Death } from './health';
 import { feedPhase } from './household';
+import { harvestPlayer } from '../economy/farming';
 import {
   buyGrain, buyPrice, countyMoney, createEconomy, economyMonth, HARVEST_MONTH, marketView, rollWeather, supplyOf, type EconomyState,
 } from '../economy/market';
@@ -178,6 +180,11 @@ export class Life {
     economyMonth(eco, this.logic, t);
     const county = this.logic.counties[c.location]!.name ?? 'place.unknown';
     if (calendarOf(t).month === HARVEST_MONTH) {
+      const crop = harvestPlayer(c, eco, this.logic);
+      if (crop.gross > 0 || crop.landlordIncome > 0) {
+        const dou = (x: number) => idiv(x, GRAIN_PER_DOU);
+        log({ key: crop.landlordIncome > 0 ? 'log.harvest.landlord' : 'log.harvest.own', params: { net: dou(crop.net), rent: dou(crop.rent), tax: dou(crop.tax), income: dou(crop.landlordIncome) }, importance: 'minor' });
+      }
       // Mất mùa báo trước cơn đói: ngắt tua với người tự nuôi mình
       if (here.weatherPct <= 80) log({ key: 'log.world.harvest_bad', params: { county }, importance: c.household.independent ? 'major' : 'minor' });
       else if (here.weatherPct >= 110) log({ key: 'log.world.harvest_good', params: { county }, importance: 'minor' });

@@ -137,3 +137,28 @@ Số liệu là điểm khởi đầu, chốt bằng batch ở S7.
   - lệnh `TRADE` bán/mua chủ động (S4);
   - tô, thuế (S3, S4);
   - dân nền chết đói (v0.4 NPC).
+
+## Ghi chú triển khai S3 (2026-10-27)
+- **Mã:** `packages/sim/src/economy/farming.ts`. Tuần công ghi khi ô làm ruộng chạy xong; gặt đầu tháng Chín, sau dân nền.
+- **Tuần công gắn với quận đang làm.** Sang làm ở quận khác thì bỏ ruộng cũ, mùa tính lại từ đầu.
+- **Sản lượng mỗi tuần công:** 5 đấu × (100% + tối đa 60% theo kỹ năng) × độ phì quận có ruộng × thời tiết năm của quận đó.
+- **Ruộng nhà và ruộng thuê:**
+  - Chỉ có ruộng nhà ở quận nhà, khi quyền đất là tự canh hoặc chủ cho thuê. Mỗi mẫu cần 3 tuần công một mùa.
+  - Ruộng nhà nộp thuế điền 10%.
+  - Tuần công vượt số đất, hoặc làm khi không có đất, hoặc làm ở quận khác: tính là ruộng thuê, nộp tô 50%.
+  - Thuế và tô vào kho quận có ruộng.
+- **Nhà giàu (chủ cho thuê):**
+  - Đất không tự làm được cho tá điền (kỹ năng 0) cấy.
+  - Thu 50% sản lượng phần đó theo độ phì và thời tiết quận nhà, trừ 10% thuế.
+  - Lấy từ kho dân nền quận nhà; kho cạn thì thu được bao nhiêu hay bấy nhiêu.
+- **Người chưa ra riêng** (12 tuổi trở lên) làm ruộng theo luật tá điền. Lương gặt vào túi riêng (ADR 0013); vẫn ăn ở nhà nên lương tích lại trong túi. Vì vậy batch không đổi so với S2.
+- **Đo trên tsvl-01** (2 ô làm ruộng + 1 nghỉ, tá điền, 30 năm), lương ròng mỗi năm, so với 36 đấu cần ăn:
+
+  | Ruộng | Lương ròng/năm | Ghi chú |
+  |---|---|---|
+  | Xấu (phì 70–75) | ~39–45 đấu | Vừa đủ ăn, năm mất mùa sẽ đói |
+  | Vừa (phì 94) | ~54 đấu | |
+  | Tốt (phì 109) | ~68 đấu | |
+  | Thành, trấn | 0 | Không làm ruộng được |
+
+  Đây là mức "tá điền sống lay lắt" mà phương án A nhắm tới.
