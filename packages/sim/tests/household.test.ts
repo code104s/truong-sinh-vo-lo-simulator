@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { birthplaceId, regionId, vCharacterView, type LogEntry } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { Life, Rng } from '../src/index';
-import { autoAdvance } from './auto';
+import { autoAdvance, lastChoice } from './auto';
 import { actionOptions } from '../src/life/actions';
 import type { CharacterState } from '../src/life/character';
 import {
@@ -185,10 +185,12 @@ describe('hậu quả của đói', () => {
   it('hết sạch lương thực: ngắt tua khi bắt đầu đói, chết đói sau 6–10 tuần', () => {
     const l = adult('starve', (c) => { c.household.independent = true; c.household.grain = 0; });
     const start = l.tick;
-    const first = l.advance('year');
+    // Người túng đói có thể gặp chủ nợ hay đồ ăn ôi: luôn đi lối ra để đo đúng cơn đói
+    let first = autoAdvance(l, 'year', lastChoice);
+    while (first.status === 'event') first = autoAdvance(l, 'year', lastChoice);
     expect(first.status).toBe('interrupted');
     if (first.status === 'interrupted') expect(first.entry.key).toBe('log.hunger.hungry');
-    while (l.alive) l.advance('year');
+    while (l.alive) autoAdvance(l, 'year', lastChoice);
     expect(l.death).toMatchObject({ cause: 'starvation', detail: 'hunger.starved' });
     const weeks = l.death!.tick - start + 1;
     expect(weeks).toBeGreaterThanOrEqual(6);
@@ -203,7 +205,7 @@ describe('hậu quả của đói', () => {
         // Mỗi tuần chỉ có đúng chừng ấy để ăn
         const s = l.snapshot(); s.character.household.grain = grainPerWeek;
         l = Life.restore(s, [], region);
-        l.advance('week');
+        autoAdvance(l, 'week', lastChoice);
       }
       return { weeks: l.death!.tick - (20 * 36 + 2), cause: l.death!.cause };
     };

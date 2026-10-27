@@ -10,6 +10,8 @@ import type { EconomyState } from '../economy/market';
 /** Mọi thứ một sự kiện được đọc và (qua hàm có sổ cái ở effects.ts) được đổi. */
 export interface EventContext {
   c: CharacterState;
+  /** Trạng thái sự kiện của đời (cờ để lại). */
+  events: EventsState;
   player: PlayerState;
   eco: EconomyState;
   logic: RegionLogic;
@@ -32,7 +34,7 @@ export interface ChoiceDef {
   apply: (ctx: EventContext, rng: Rng) => ChoiceOutcome;
 }
 
-export const EVENT_CATEGORIES = ['daily', 'economy', 'disaster', 'health', 'opportunity'] as const;
+export const EVENT_CATEGORIES = ['daily', 'economy', 'disaster', 'road', 'health', 'opportunity'] as const;
 
 export interface EventDef {
   id: string;
@@ -67,9 +69,11 @@ export interface EventsState {
   once: string[];
   /** Tick của sự kiện có lựa chọn gần nhất: mỗi tháng tối đa một (ADR 0014). */
   lastChoiceTick: number;
+  /** Dấu vết sự kiện để lại cho về sau, vd. "heard_immortal" (v0.8 cửa ngõ tu tiên dùng). */
+  flags: string[];
 }
 
-export const newEventsState = (): EventsState => ({ pending: null, nextInstance: 0, lastFired: {}, once: [], lastChoiceTick: -1_000 });
+export const newEventsState = (): EventsState => ({ pending: null, nextInstance: 0, lastFired: {}, once: [], lastChoiceTick: -1_000, flags: [] });
 
 const PPM = 1_000_000;
 const TICKS_PER_MONTH = 3;
@@ -79,8 +83,8 @@ export function sortedCatalog(defs: readonly EventDef[]): EventDef[] {
   return [...defs].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
-export function makeContext(c: CharacterState, player: PlayerState, eco: EconomyState, logic: RegionLogic, tick: Tick): EventContext {
-  return { c, player, eco, logic, tick, age: ageYearsAt(c.birthTick, tick) };
+export function makeContext(c: CharacterState, events: EventsState, player: PlayerState, eco: EconomyState, logic: RegionLogic, tick: Tick): EventContext {
+  return { c, events, player, eco, logic, tick, age: ageYearsAt(c.birthTick, tick) };
 }
 
 /**

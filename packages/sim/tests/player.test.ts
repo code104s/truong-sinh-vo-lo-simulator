@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { birthplaceId, regionId, type MonthPlan } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { Life } from '../src/index';
-import { autoAdvance } from './auto';
+import { autoAdvance, lastChoice } from './auto';
 import { restPlan } from '../src/life/actions';
 
 const region: RegionLogic = {
@@ -43,14 +43,15 @@ describe('pha người chơi', () => {
     const l = adult(); const s = l.snapshot(); s.character.location = 1; s.tick = 20 * 36 + 3; // ở trấn, tháng Hai
     const town = Life.restore(s, [], region);
     town.setPlan({ slots: [{ action: 'action.farm' }, { action: 'action.farm' }, { action: 'action.farm' }] });
-    const r = town.advance('year');
+    let r = autoAdvance(town, 'year', lastChoice);
+    while (r.status === 'event') r = autoAdvance(town, 'year', lastChoice);
     expect(r.status).toBe('interrupted');
     if (r.status === 'interrupted') expect(r.entry.key).toBe('log.plan.invalid');
-    for (let k = 0; k < 3 && town.alive; k++) town.advance('year');
+    for (let k = 0; k < 3 && town.alive; k++) autoAdvance(town, 'year', lastChoice);
     expect(town.log.filter((e) => e.key === 'log.plan.invalid')).toHaveLength(1);
     town.setPlan({ slots: [{ action: 'action.farm' }, { action: 'action.rest' }, { action: 'action.rest' }] });
     // Tin chợ quận có thể ngắt tua giữa chừng nên tuần đang đứng không cố định: chạy tới khi ô làm ruộng tới lượt
-    for (let k = 0; k < 3; k++) town.advance('week');
+    for (let k = 0; k < 3; k++) autoAdvance(town, 'week', lastChoice);
     expect(town.log.filter((e) => e.key === 'log.plan.invalid')).toHaveLength(2);
   });
   it('ô di chuyển chỉ chạy một lần: tới nơi thì ô đó thành nghỉ, tua năm không bị ngắt vì kế hoạch (hồi quy)', () => {
@@ -59,7 +60,7 @@ describe('pha người chơi', () => {
     expect(l.character.location).toBe(1);
     expect(l.plan?.slots[2]).toEqual({ action: 'action.rest' });
     for (let k = 0; k < 3 && l.alive; k++) {
-      const r = l.advance('year');
+      const r = autoAdvance(l, 'year', lastChoice);
       if (r.status === 'interrupted') expect(r.entry.key).not.toBe('log.plan.invalid');
     }
     expect(l.log.some((e) => e.key === 'log.plan.invalid')).toBe(false);

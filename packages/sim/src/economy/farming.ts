@@ -54,13 +54,15 @@ export function harvestPlayer(c: CharacterState, eco: EconomyState, logic: Regio
   const res: HarvestResult = { gross: 0, tax: 0, rent: 0, landlordIncome: 0, net: 0 };
   if (h.farmWeeks > 0) {
     const field = eco.counties[h.farmCounty]!;
-    const perWeek = mulDiv(mulDiv(mulDiv(FARM_YIELD_PER_WEEK, farmSkillPct(c), 100), logic.fertilityPct[h.farmCounty]!, 100), field.weatherPct, 100);
+    // Tai họa: phần thiệt so với năm thường được cứu lại theo reliefPct (gánh nước, đắp bờ… — S6)
+    const weather = field.weatherPct < 100 ? field.weatherPct + mulDiv(100 - field.weatherPct, h.reliefPct, 100) : field.weatherPct;
+    const perWeek = mulDiv(mulDiv(mulDiv(FARM_YIELD_PER_WEEK, farmSkillPct(c), 100), logic.fertilityPct[h.farmCounty]!, 100), weather, 100);
     const own = ownWeeks(c);
     const ownGross = perWeek * own;
     const rentedGross = perWeek * (h.farmWeeks - own);
     res.gross = ownGross + rentedGross;
     res.tax = mulDiv(ownGross, LAND_TAX_PCT, 100);
-    res.rent = mulDiv(rentedGross, RENT_PCT, 100);
+    res.rent = mulDiv(rentedGross, RENT_PCT + h.rentHikePct, 100);
     field.grain += res.tax + res.rent;
     res.net = res.gross - res.tax - res.rent;
   }
@@ -78,5 +80,7 @@ export function harvestPlayer(c: CharacterState, eco: EconomyState, logic: Regio
   }
   h.grain += res.net;
   h.farmWeeks = 0;
+  h.reliefPct = 0;
+  h.rentHikePct = 0;
   return res;
 }

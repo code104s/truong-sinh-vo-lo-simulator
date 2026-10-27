@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { birthplaceId, regionId, type Tenure } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { Life } from '../src/index';
+import { autoAdvance, lastChoice } from './auto';
 import { FARM_YIELD_PER_WEEK, harvestPlayer, recordFarmWeek, WEEKS_PER_MU } from '../src/economy/farming';
 import { createEconomy, HARVEST_MONTH } from '../src/economy/market';
 import type { CharacterState } from '../src/life/character';
@@ -103,7 +104,7 @@ describe('mùa vụ trong đời', () => {
     l.setPlan({ slots: [{ action: 'action.farm' }, { action: 'action.farm' }, { action: 'action.rest' }] });
     const harvests: number[] = [];
     for (let i = 0; i < 36 * 2; i++) {
-      l.advance('week');
+      autoAdvance(l, 'week', lastChoice);
       const h = l.log.filter((e) => e.key === 'log.harvest.own');
       if (h.length > harvests.length) harvests.push(l.character.household.grain);
     }
@@ -119,7 +120,7 @@ describe('mùa vụ trong đời', () => {
   it('không làm ruộng thì không có gì để gặt, không ghi nhật ký', () => {
     const l = adult();
     l.setPlan({ slots: [{ action: 'action.rest' }, { action: 'action.rest' }, { action: 'action.rest' }] });
-    for (let i = 0; i < 36; i++) l.advance('week');
+    for (let i = 0; i < 36; i++) autoAdvance(l, 'week', lastChoice);
     expect(l.log.some((e) => e.key.startsWith('log.harvest.'))).toBe(false);
     expect(l.character.household.grain).toBe(0);
   });

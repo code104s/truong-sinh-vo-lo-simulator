@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { birthplaceId, regionId, type MonthPlan } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { Life, Rng } from '../src/index';
+import { autoAdvance, lastChoice } from './auto';
 import { ACTIONS, actionLock, actionOptions } from '../src/life/actions';
 import {
   FORAGE_BY_SEASON, HEAD_TAX, HEAL_FEE, HIRE_WAGE, HUNT_HIDE, HUNT_MEAT, LODGING_PER_SLOT, ROUGH_SLEEP_RISK_PCT, settleAction, TRADE_MIN_CAPITAL,
@@ -117,7 +118,7 @@ describe('tiền trong hành động (ADR 0012)', () => {
   it('thiếu tiền học thì ô đó nghỉ, không báo kế hoạch hỏng (khóa tạm)', () => {
     const l = adult((c) => { c.location = 1; c.household.money = 0; });
     l.setPlan(plan('action.study'));
-    for (let i = 0; i < 6; i++) l.advance('week');
+    for (let i = 0; i < 6; i++) autoAdvance(l, 'week', lastChoice);
     expect(l.log.some((e) => e.key === 'log.plan.invalid')).toBe(false);
     expect(l.character.skillXp.literacy).toBe(0);
   });
@@ -126,13 +127,13 @@ describe('tiền trong hành động (ADR 0012)', () => {
     const l = adult((c) => { c.location = 1; });
     l.setPlan({ slots: [{ action: 'action.hire' }, { action: 'action.hire' }, { action: 'action.rest' }] });
     const total = l.totalMoney();
-    for (let i = 0; i < 36; i++) { l.advance('week'); expect(l.totalMoney()).toBe(total); }
+    for (let i = 0; i < 36; i++) { autoAdvance(l, 'week', lastChoice); expect(l.totalMoney()).toBe(total); }
     expect(l.character.household.money).toBeGreaterThan(20 * HIRE_WAGE);
   });
 });
 
 describe('thuế đinh', () => {
-  const toYearStart = (l: Life) => { while (l.tick % 36 !== 1) l.advance('week'); };
+  const toYearStart = (l: Life) => { while (l.tick % 36 !== 1) autoAdvance(l, 'week', lastChoice); };
 
   it('đã ra riêng từ 16 tuổi: đầu năm nộp cho quận nhà', () => {
     const l = adult((c) => { c.household.independent = true; c.household.money = 500; c.household.grain = 10_000; });
@@ -151,9 +152,9 @@ describe('thuế đinh', () => {
 
   it('thiếu tiền: nộp được bao nhiêu hay bấy nhiêu, ghi nợ, ngắt tua', () => {
     const l = adult((c) => { c.household.independent = true; c.household.money = 50; c.household.grain = 10_000; });
-    let interrupted = false;
-    while (l.tick % 36 !== 1) { const r = l.advance('week'); if (r.status === 'interrupted' && r.entry.key === 'log.tax.short') interrupted = true; }
-    expect(interrupted).toBe(true);
+    // Tin thiếu thuế là tin lớn (ngắt tua); cùng tuần mà có sự kiện thì tua dừng vì sự kiện, tin vẫn ở đó
+    while (l.tick % 36 !== 1) autoAdvance(l, 'week', lastChoice);
+    expect(l.log.some((e) => e.key === 'log.tax.short' && e.importance === 'major')).toBe(true);
     expect(l.character.household).toMatchObject({ money: 0, taxDebt: HEAD_TAX - 50 });
   });
 });

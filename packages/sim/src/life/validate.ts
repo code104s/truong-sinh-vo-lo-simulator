@@ -11,7 +11,7 @@ import { BACKGROUNDS, ELEMENTS, PERSONALITIES, TRAITS } from './params';
 import type { Skill } from './skills';
 import type { ActiveAction } from './player';
 import { HUNGER_MAX, type HouseholdState } from './household';
-import type { CountyEconomy, EconomyState } from '../economy/market';
+import { DISASTERS, type CountyEconomy, type EconomyState } from '../economy/market';
 import type { EventsState, PendingState } from '../events/engine';
 
 const skillRecord = (value: Validator<number>) => obj<Record<Skill, number>>({ farming: value, hunting: value, crafting: value, literacy: value, martial: value, trade: value });
@@ -47,7 +47,8 @@ const vCharacter = obj<CharacterState>({
   scars: nat,
   conditions: arr(obj<Condition>({ id: nonEmpty, kind: oneOf(['illness', 'injury'] as const), severity, weeksLeft: nat })),
   household: obj<HouseholdState>({ independent: bool, money: nat, grain: nat, landMu: nat, tenure: oneOf(TENURES), hunger: intRange(0, HUNGER_MAX),
-    farmWeeks: intRange(0, 36), farmCounty: intRange(-1, 10_000), taxDebt: nat }),
+    farmWeeks: intRange(0, 36), farmCounty: intRange(-1, 10_000), taxDebt: nat,
+    loan: nat, loanDue: int, reliefPct: intRange(0, 100), rentHikePct: intRange(0, 50), shieldUntil: int, stayUntil: intRange(0, 200) }),
   alive: bool,
 });
 
@@ -58,14 +59,17 @@ export const vLifeSnapshot = obj<LifeSnapshot>({
   character: vCharacter,
   economy: obj<EconomyState>({
     regionWeatherPct: intRange(0, 200),
-    counties: arr(obj<CountyEconomy>({ mouths: intRange(1, Number.MAX_SAFE_INTEGER), grain: nat, money: nat, weatherPct: intRange(0, 200), price: nat, prevPrice: nat })),
+    counties: arr(obj<CountyEconomy>({
+      mouths: intRange(1, Number.MAX_SAFE_INTEGER), grain: nat, money: nat, weatherPct: intRange(0, 200), price: nat, prevPrice: nat,
+      disaster: nullable(oneOf(DISASTERS)), disasterMonth: intRange(0, 12), epidemicFrom: int, epidemicUntil: int,
+    })),
   }),
   events: obj<EventsState>({
     pending: nullable(obj<PendingState>({
       instance: nat, eventId: nonEmpty, tick: nat, variant: nullable(nonEmpty), params: record(union(str, int)),
       figure: nullable(obj({ gender: oneOf(GENDERS), ageBand: oneOf(FIGURE_AGES), class: oneOf(FIGURE_CLASSES) })),
     })),
-    nextInstance: nat, lastFired: record(int), once: arr(nonEmpty), lastChoiceTick: int,
+    nextInstance: nat, lastFired: record(int), once: arr(nonEmpty), lastChoiceTick: int, flags: arr(nonEmpty),
   }),
   rng: obj<RngStreamsSnapshot>({ root: u32, streams: record(vRngState) }),
   death: nullable(obj<Death>({ tick: nat, cause: oneOf(DEATH_CAUSES), detail: str })),

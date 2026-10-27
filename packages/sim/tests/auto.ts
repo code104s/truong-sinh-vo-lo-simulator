@@ -1,12 +1,15 @@
 // Tiện ích test: tua như người chơi máy mặc định — gặp sự kiện có lựa chọn thì chọn lựa chọn đầu tiên đang mở (ADR 0014),
 // giống Life.runToDeath, để chạy từng bước và chạy liền mạch cho cùng digest.
-import type { AdvanceMode, WorkerMessage } from '@tsvl/shared';
+import type { AdvanceMode, PendingEvent, WorkerMessage } from '@tsvl/shared';
 import { firstOpenChoice, type AdvanceResult, type Life } from '../src/index';
 
-export function autoAdvance(life: Life, mode: AdvanceMode): AdvanceResult {
+/** Lối ra: lựa chọn cuối, không bao giờ bị khóa — cho test cần sự kiện không đổi tiền, lương theo hướng có lợi. */
+export const lastChoice = (p: PendingEvent): string => p.choices.at(-1)!.id;
+
+export function autoAdvance(life: Life, mode: AdvanceMode, pick: (p: PendingEvent) => string = firstOpenChoice): AdvanceResult {
   const res = life.advance(mode);
   if (res.status === 'event') {
-    const refused = life.choose(res.pending.instance, firstOpenChoice(res.pending));
+    const refused = life.choose(res.pending.instance, pick(res.pending));
     if (refused) throw new Error(refused);
   }
   return res;

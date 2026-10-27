@@ -1,5 +1,6 @@
 // Hộ, khẩu phần tuần, đói (ADR 0013). Toàn số nguyên; lương thực tính bằng thăng, tiền bằng văn.
 import { ageYearsAt, GRAIN_PER_DOU, type FoodWeeksBand, type HouseholdView, type HungerBand, type LogEntry, type SupplyBand, type Tenure, type Tick } from '@tsvl/shared';
+import { mulDiv } from '../core/math';
 import type { Rng } from '../core/rng';
 import type { CountyEconomy } from '../economy/market';
 import type { CharacterState } from './character';
@@ -19,6 +20,16 @@ export interface HouseholdState {
   farmCounty: number;
   /** Thuế đinh còn nợ (văn); sự kiện quan sai đòi thuế ở S5 (ADR 0014). */
   taxDebt: number;
+  /** Nợ vay nặng lãi còn phải trả (văn, đã gồm lãi) và tick tới hạn (−1 = không nợ) (S6). */
+  loan: number;
+  loanDue: number;
+  /** Mùa này: phần thiệt do tai họa đã cứu được (%), và tô bị tăng thêm (%) (S6). Đặt lại sau mùa gặt. */
+  reliefPct: number;
+  rentHikePct: number;
+  /** Phòng dịch tới tick này (−1 = không). */
+  shieldUntil: number;
+  /** Lập thân: ở lại làm cho nhà tới tuổi này rồi mới ra riêng (0 = không) (ADR 0013). */
+  stayUntil: number;
 }
 
 /** Khẩu phần một tuần (thăng): người lớn 1 đấu, dưới 12 tuổi nửa đấu. */
@@ -50,7 +61,8 @@ export const FAMISHED_SCAR = [10, 30] as const;
 type Log = (e: Omit<LogEntry, 'tick'>) => void;
 
 export function newHousehold(): HouseholdState {
-  return { independent: false, money: 0, grain: 0, landMu: 0, tenure: 'none', hunger: 0, farmWeeks: 0, farmCounty: -1, taxDebt: 0 };
+  return { independent: false, money: 0, grain: 0, landMu: 0, tenure: 'none', hunger: 0, farmWeeks: 0, farmCounty: -1, taxDebt: 0,
+    loan: 0, loanDue: -1, reliefPct: 0, rentHikePct: 0, shieldUntil: -1, stayUntil: 0 };
 }
 
 export function hungerBand(hunger: number): HungerBand {
@@ -68,17 +80,23 @@ export function rationOf(c: CharacterState, tick: Tick): number {
  * Ra riêng: nhận phần chia theo xuất thân. Tiền và lương lấy từ quỹ, kho của quận nhà (không tạo từ hư không, ADR 0012);
  * quận cạn thì nhận được bao nhiêu hay bấy nhiêu.
  */
-export function becomeIndependent(c: CharacterState, home: CountyEconomy): void {
+export function becomeIndependent(c: CharacterState, home: CountyEconomy, opts: { sharePct?: number; landless?: boolean } = {}): { money: number; grain: number; landMu: number } {
   const share = SHARE_BY_BACKGROUND[c.background];
+  const pct = opts.sharePct ?? 100;
   const h = c.household;
-  const money = Math.min(share.money, home.money);
-  const grain = Math.min(share.grain, home.grain);
+  // Không lấy ruộng (lên trấn lập nghiệp): phần lương quy ra tiền theo giá gốc 4 văn/thăng
+  const wantMoney = mulDiv(share.money + (opts.landless ? share.grain * 4 : 0), pct, 100);
+  const wantGrain = opts.landless ? 0 : mulDiv(share.grain, pct, 100);
+  const money = Math.min(wantMoney, home.money);
+  const grain = Math.min(wantGrain, home.grain);
   home.money -= money; home.grain -= grain;
   h.independent = true;
+  h.stayUntil = 0;
   h.money += money;
   h.grain += grain;
-  h.landMu = share.landMu;
-  h.tenure = share.tenure;
+  h.landMu = opts.landless ? 0 : share.landMu;
+  h.tenure = opts.landless ? 'none' : share.tenure;
+  return { money, grain, landMu: h.landMu };
 }
 
 const BAND_RANK: Record<HungerBand, number> = { fed: 0, hungry: 1, starving: 2, famished: 3 };

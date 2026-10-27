@@ -38,33 +38,50 @@ describe('tuyển tập sự kiện (ADR 0014)', () => {
     expect(checkCatalog([bad])).toContain('2–4');
   });
 
-  it('mỗi lựa chọn có giá thật: áp lên trạng thái mẫu thì mất một thứ gì đó hoặc tiêu một lần rút rủi ro', () => {
+  it('mỗi lựa chọn có giá thật: đổi trạng thái hoặc rút một lần rủi ro; nếu không thì giá khai báo là "mất cơ hội"', () => {
     for (const def of EVENTS) {
       for (const choice of def.choices) {
-        const s = snap((c) => {
-          c.personality = 'kind';
-          c.household = { ...c.household, independent: true, money: 5_000, grain: 500, taxDebt: 200 };
-          c.conditions = [{ id: 'illness.fever', kind: 'illness', severity: 'serious', weeksLeft: 4 }];
-        });
-        const before = JSON.stringify([s.character.household.money, s.character.household.grain, s.character.health, s.character.stamina, s.character.conditions.length, s.active]);
-        const ctx = makeContext(s.character, s, s.economy, region, s.tick);
-        expect(choice.available?.(ctx) ?? null, `${def.id}/${choice.id}`).toBeNull();
+        const found = openFixture(def.id, choice.id);
+        expect(found, `${def.id}/${choice.id}: không có trạng thái mẫu nào mở được`).not.toBeNull();
+        const { s } = found!;
+        const before = JSON.stringify([s.character, s.active, s.economy, s.events.flags]);
+        const ctx = makeContext(s.character, s.events, s, s.economy, region, s.tick);
         const rng = Rng.fromSeed(3);
         const rngBefore = JSON.stringify(rng.state());
         choice.apply(ctx, rng);
-        const c = s.character;
-        const lost = c.household.money < 5_000 || c.household.grain < 500 || c.health < 1000 || c.stamina < 900 || s.active !== null;
+        const changed = JSON.stringify([s.character, s.active, s.economy, s.events.flags]) !== before;
         const rolled = JSON.stringify(rng.state()) !== rngBefore;
-        expect(lost || rolled, `${def.id}/${choice.id}`).toBe(true);
-        expect(JSON.stringify([c.household.money, c.household.grain, c.health, c.stamina, c.conditions.length, s.active]) !== before || rolled).toBe(true);
+        expect(changed || rolled || choice.costs.includes('opportunity'), `${def.id}/${choice.id}`).toBe(true);
       }
     }
   });
 });
 
+/** Trạng thái mẫu cho phép mọi sự kiện xảy ra và mọi lựa chọn được thử: có tiền, lương, nợ, bệnh, ruộng, võ, chữ. */
+function richSnap(personalityId: string, onRoad: boolean): LifeSnapshot {
+  return snap((c, s) => {
+    c.personality = personalityId;
+    c.household = { ...c.household, independent: true, money: 5_000, grain: 500, taxDebt: 200, farmWeeks: 10, farmCounty: 0, tenure: 'tenant' };
+    c.conditions = [{ id: 'illness.fever', kind: 'illness', severity: 'serious', weeksLeft: 4 }];
+    c.skillXp.martial = 2_000; c.skillXp.literacy = 500; c.skillXp.hunting = 500;
+    if (onRoad) s.active = { slot: { action: 'action.travel', target: 1 }, total: 2, remaining: 2, preview: { county: 1, route: [0, 1], days: 6, slots: 2, risk: 'risk.low' } };
+  });
+}
+const PERSONALITIES_TRY = ['calm', 'kind', 'hot_tempered', 'ambitious'];
+/** Trạng thái mẫu đầu tiên mà lựa chọn đang mở. */
+function openFixture(eventId: string, choiceId: string): { s: LifeSnapshot } | null {
+  const def = EVENTS.find((d) => d.id === eventId)!;
+  const choice = def.choices.find((c) => c.id === choiceId)!;
+  for (const onRoad of [false, true]) for (const p of PERSONALITIES_TRY) {
+    const s = richSnap(p, onRoad);
+    if ((choice.available?.(makeContext(s.character, s.events, s, s.economy, region, s.tick)) ?? null) === null) return { s };
+  }
+  return null;
+}
+
 describe('máy kích hoạt', () => {
   const always = (id: string): EventDef => ({ id, category: 'daily', weight: () => 1_000_000, cooldownTicks: 30, choices: EVENTS[0]!.choices });
-  const ctxAt = (tick: number) => { const s = snap(); return makeContext(s.character, s, s.economy, region, tick); };
+  const ctxAt = (tick: number) => { const s = snap(); return makeContext(s.character, s.events, s, s.economy, region, tick); };
 
   it('không có ứng viên thì không rút RNG (tuần yên ổn không đổi luồng)', () => {
     const rng = Rng.fromSeed(1), before = rng.state();
@@ -134,7 +151,7 @@ describe('chờ và chọn trong đời', () => {
       let n = 0;
       for (let i = 0; i < 200; i++) {
         const s = snap((c) => { c.luck = luck; c.household = { ...c.household, independent: true, taxDebt: 200 }; }, `flee-${i}`);
-        const ctx = makeContext(s.character, s, s.economy, region, s.tick);
+        const ctx = makeContext(s.character, s.events, s, s.economy, region, s.tick);
         if (EVENTS.find((d) => d.id === 'event.tax_collector')!.choices.at(-1)!.apply(ctx, Rng.fromSeed(i)).result === 'flee_caught') n++;
       }
       return n;
@@ -208,19 +225,43 @@ describe('SimHost: EVENT, CHOOSE, phát lại', () => {
 });
 
 describe('văn bản sự kiện', () => {
-  it('mọi khóa mà tuyển tập có thể sinh ra đều có trong vi.ts (hồi quy: từng ghép thành event.event.…)', async () => {
-    const { hasKey: has } = await import('@tsvl/content');
+  it('mọi khóa mà tuyển tập có thể sinh ra đều có trong chuỗi nội dung (hồi quy: từng ghép thành event.event.…)', async () => {
+    const { hasKey: has, t } = await import('@tsvl/content');
+    const MISSING = /⟨|\{\w+\}/;
     for (const d of EVENTS) {
       expect(has(`${d.id}.title`), d.id).toBe(true);
-      expect(has(`${d.id}.body`), d.id).toBe(true);
       expect(has(`event.cat.${d.category}`), d.id).toBe(true);
-      for (const ch of d.choices) expect(has(`${d.id}.choice.${ch.id}`), `${d.id}/${ch.id}`).toBe(true);
+      // Lời kể: mọi biến thể có thể ra trên các trạng thái mẫu
+      for (const p of PERSONALITIES_TRY) for (const onRoad of [false, true]) {
+        const s = richSnap(p, onRoad);
+        const ctx = makeContext(s.character, s.events, s, s.economy, region, s.tick);
+        const v = d.variant?.(ctx) ?? null;
+        const body = t(v ? `${d.id}.body.${v}` : `${d.id}.body`, d.params?.(ctx) ?? {});
+        expect(body, `${d.id} ${v}`).not.toMatch(MISSING);
+      }
+      for (const ch of d.choices) {
+        const s = richSnap('calm', false);
+        expect(t(`${d.id}.choice.${ch.id}`, d.params?.(makeContext(s.character, s.events, s, s.economy, region, s.tick)) ?? {}), `${d.id}/${ch.id}`).not.toMatch(MISSING);
+        // Kết quả: chạy trên nhiều seed để gặp đủ nhánh
+        for (let i = 0; i < 40; i++) {
+          const f = openFixture(d.id, ch.id)!;
+          const ctx = makeContext(f.s.character, f.s.events, f.s, f.s.economy, region, f.s.tick);
+          const params = d.params?.(ctx) ?? {};
+          const out = ch.apply(ctx, Rng.fromSeed(i));
+          const text = t(`${d.id}.result.${out.result}`, { ...params, ...out.params });
+          expect(text, `${d.id}.result.${out.result}`).not.toMatch(MISSING);
+        }
+      }
     }
-    // Khóa kết quả: chạy mọi lựa chọn trên nhiều seed để gặp đủ nhánh
-    for (const d of EVENTS) for (const ch of d.choices) for (let i = 0; i < 40; i++) {
-      const s = snap((c) => { c.personality = 'kind'; c.household = { ...c.household, independent: true, money: 5_000, grain: 500, taxDebt: 200 }; c.conditions = [{ id: 'illness.fever', kind: 'illness', severity: 'serious', weeksLeft: 4 }]; });
-      const out = ch.apply(makeContext(s.character, s, s.economy, region, s.tick), Rng.fromSeed(i));
-      expect(has(`${d.id}.result.${out.result}`), `${d.id}.result.${out.result}`).toBe(true);
+  });
+
+  it('văn bản theo văn phong (docs/van-phong.md): không gọi người chơi, không sáo ngữ văn dịch, lựa chọn ≤ 10 chữ', async () => {
+    const { VI } = await import('@tsvl/content');
+    const BANNED = [/\bbạn\b/i, /\bngươi\b/i, /\bhắn\b/, /\bnàng\b/, /một tia/, /khẽ cười/, /thầm nghĩ/, /khóe miệng/, /vẻ mặt/, /không khỏi/];
+    for (const [key, text] of Object.entries(VI)) {
+      if (!key.startsWith('event.') || key.startsWith('event.cat.') || key.startsWith('event.cost.')) continue;
+      for (const re of BANNED) expect(text, `${key}: ${re}`).not.toMatch(re);
+      if (key.includes('.choice.')) expect(text.split(/\s+/).length, key).toBeLessThanOrEqual(10);
     }
   });
 });

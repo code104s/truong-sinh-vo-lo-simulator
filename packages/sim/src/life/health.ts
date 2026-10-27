@@ -20,6 +20,9 @@ export interface Death {
 
 type Log = (e: Omit<LogEntry, 'tick'>) => void;
 
+/** Hệ số mắc bệnh khi quận có dịch mà chưa phòng (%). */
+export const EPIDEMIC_ILLNESS_PCT = 300;
+
 /** Tỉ lệ tuổi / thọ nguyên (‰). */
 export function ageRatio(c: CharacterState, tick: Tick): number {
   return idiv((tick - c.birthTick) * 1000, lifespanCap(c));
@@ -53,7 +56,8 @@ function startCondition(c: CharacterState, def: IllnessDef | InjuryDef, kind: Co
 }
 
 /** Pha "Sự kiện", nhịp tuần: khởi phát bệnh và tai nạn. Trả về cái chết nếu tai nạn chết ngay. */
-export function eventsPhase(c: CharacterState, tick: Tick, illnessRng: Rng, accidentRng: Rng, log: Log): Death | null {
+/** `epidemic`: quận đang đứng có dịch và chưa phòng (S6) — dễ mắc bệnh gấp ba. */
+export function eventsPhase(c: CharacterState, tick: Tick, illnessRng: Rng, accidentRng: Rng, log: Log, epidemic = false): Death | null {
   const age = ageYearsAt(c.birthTick, tick);
   const ratio = ageRatio(c, tick);
 
@@ -68,6 +72,7 @@ export function eventsPhase(c: CharacterState, tick: Tick, illnessRng: Rng, acci
     ppm = mulDiv(ppm, fatiguePct(c, tick), 100);
     // Đói tính như sức khỏe yếu (ADR 0013)
     if (c.health < ILLNESS_WEAK_THRESHOLD || c.household.hunger > 0) ppm = mulDiv(ppm, ILLNESS_WEAK_PCT, 100);
+    if (epidemic) ppm = mulDiv(ppm, EPIDEMIC_ILLNESS_PCT, 100);
     if (illnessRng.chance(ppm)) {
       const pool = ILLNESSES.filter((d) => ratio >= (d.minAgeRatio ?? 0));
       const w = pool.map((d) => mulDiv(mulDiv(d.weight * 100, d.season[season], 100), d.place[c.birthplaceKind], 100));

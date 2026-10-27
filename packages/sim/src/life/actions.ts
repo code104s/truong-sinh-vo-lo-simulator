@@ -26,6 +26,9 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'action.heal', group: 'heal', slots: 1, stamina: 20, riskPpm: 0, places: ['town', 'city'] },
   { id: 'action.travel', group: 'travel', slots: 1, stamina: 100, riskPpm: 300, minStamina: 30 },
   { id: 'action.corvee', group: 'livelihood', slots: 2, stamina: 180, riskPpm: 500, hidden: true },
+  // Sự kiện đặt vào (S6): việc gấp (gánh nước, đắp bờ, đuổi châu chấu, đốn củi, gánh lúa), đóng cửa tránh dịch
+  { id: 'action.toil', group: 'livelihood', slots: 1, stamina: 180, riskPpm: 300, hidden: true },
+  { id: 'action.shelter', group: 'rest', slots: 1, stamina: 0, riskPpm: 0, hidden: true },
 ];
 export const actionDef = (id: string) => ACTIONS.find((a) => a.id === id);
 /** Việc nặng: thể lực tốn từ mức "cao" trở lên. */

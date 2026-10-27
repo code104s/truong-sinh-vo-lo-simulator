@@ -15,7 +15,23 @@ export interface CountyEconomy {
   /** Giá niêm yết tháng này và tháng trước (văn/đấu). */
   price: number;
   prevPrice: number;
+  /** Tai họa của năm nay (G3, S6): tên gọi của năm thời tiết xấu, phát ra ở `disasterMonth` (0 = không có). */
+  disaster: DisasterKind | null;
+  disasterMonth: number;
+  /** Dịch trong quận: [từ tick, tới tick); −1 = không có. */
+  epidemicFrom: number;
+  epidemicUntil: number;
 }
+
+export const DISASTERS = ['drought', 'flood', 'locust'] as const;
+export type DisasterKind = (typeof DISASTERS)[number];
+/** Tháng phát của từng tai họa (mùa hạn, mùa lũ, mùa châu chấu). */
+export const DISASTER_MONTHS: Record<DisasterKind, readonly [number, number]> = { drought: [5, 7], flood: [7, 9], locust: [6, 8] };
+/** Năm thời tiết quận từ mức này trở xuống thì có tên tai họa. */
+export const DISASTER_WEATHER_PCT = 85;
+/** Xác suất dịch mỗi quận mỗi năm (ppm) và độ dài (tick). */
+export const EPIDEMIC_PPM = 30_000;
+export const EPIDEMIC_TICKS = 9;
 
 export interface EconomyState {
   /** Mức thời tiết chung của vùng năm nay (%). */
@@ -87,7 +103,10 @@ export function createEconomy(logic: RegionLogic, tick: Tick): EconomyState {
   const untilHarvest = (HARVEST_MONTH - month + 12) % 12;
   const counties = logic.counties.map((county, i): CountyEconomy => {
     const mouths = Math.max(1, mulDiv(county.area * MOUTHS_PER_CELL[logic.settlementKind[i]!], logic.fertilityPct[i]!, 100));
-    const ce: CountyEconomy = { mouths, grain: mouths * MONTHLY_NEED_PER_MOUTH * (INITIAL_RESERVE_MONTHS + untilHarvest), money: mouths * MONEY_PER_MOUTH, weatherPct: 100, price: 0, prevPrice: 0 };
+    const ce: CountyEconomy = {
+      mouths, grain: mouths * MONTHLY_NEED_PER_MOUTH * (INITIAL_RESERVE_MONTHS + untilHarvest), money: mouths * MONEY_PER_MOUTH, weatherPct: 100, price: 0, prevPrice: 0,
+      disaster: null, disasterMonth: 0, epidemicFrom: -1, epidemicUntil: -1,
+    };
     ce.price = ce.prevPrice = priceOf(ce);
     return ce;
   });
@@ -99,6 +118,30 @@ export function rollWeather(eco: EconomyState, rng: Rng): void {
   eco.regionWeatherPct = WEATHER_LEVELS[rng.weighted([...WEATHER_WEIGHTS])]!;
   for (const ce of eco.counties) ce.weatherPct = clamp(eco.regionWeatherPct + rng.int(-WEATHER_COUNTY_NOISE, WEATHER_COUNTY_NOISE), 30, 130);
 }
+
+/**
+ * Đầu năm, sau khi rút thời tiết: năm xấu của quận được gọi tên (hạn, lũ, châu chấu) và định tháng phát; mỗi quận có
+ * thể có dịch. Không đổi thời tiết — tai họa là cách năm xấu hiện ra, nên phân bố mùa màng và đói kém giữ nguyên (G3).
+ */
+export function labelDisasters(eco: EconomyState, rng: Rng, yearStart: Tick): void {
+  for (const ce of eco.counties) {
+    ce.disaster = null;
+    ce.disasterMonth = 0;
+    if (ce.weatherPct <= DISASTER_WEATHER_PCT) {
+      const kind = DISASTERS[rng.int(0, DISASTERS.length - 1)]!;
+      const [from, to] = DISASTER_MONTHS[kind];
+      ce.disaster = kind;
+      ce.disasterMonth = rng.int(from, to);
+    }
+    if (rng.chance(EPIDEMIC_PPM)) {
+      ce.epidemicFrom = yearStart + rng.int(0, 11) * 3;
+      ce.epidemicUntil = ce.epidemicFrom + EPIDEMIC_TICKS;
+    }
+  }
+}
+
+/** Quận đang có dịch ở tick này. */
+export const epidemicAt = (ce: CountyEconomy, tick: Tick) => ce.epidemicFrom <= tick && tick < ce.epidemicUntil;
 
 /**
  * Pha Thế giới, đầu tháng: thu hoạch (tháng thu hoạch), dân nền ăn, hao hụt, buôn quận kề, niêm yết giá.

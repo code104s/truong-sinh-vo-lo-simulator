@@ -57,7 +57,7 @@ interface ChoiceDef {
 - **Sự kiện quận** (thiên tai) rút riêng ở pha Thế giới, theo tháng.
 - **Giới hạn nhịp:**
   - tối đa 1 sự kiện có lựa chọn mỗi tháng;
-  - mục tiêu trung bình 4–8 sự kiện có lựa chọn mỗi năm sau 12 tuổi.
+  - mục tiêu trung bình 2–4 sự kiện có lựa chọn mỗi năm sau 12 tuổi (v0.3; ban đầu 4–8, hạ sau S6 — xem ghi chú S6). Nâng lại khi tuyển tập có thêm sự kiện.
 - Cờ đã xảy ra, cooldown và bộ đếm instance nằm trong snapshot, nên save và digest có đủ.
 
 ### Chờ lựa chọn
@@ -156,3 +156,41 @@ Danh mục dự kiến, chi tiết điều kiện và lựa chọn viết ở S6
   - Lựa chọn có chip giá; lựa chọn bị khóa vẫn hiện kèm lý do; phím 1–4 để chọn nhanh.
   - Thẻ không có nút đóng.
   - Dải "Có biến" vẫn dùng cho tin lớn không cần chọn.
+
+## Ghi chú triển khai S6 (2026-10-27)
+
+- **Giọng văn E** (`docs/van-phong.md`, đã duyệt): ngôi ba ngầm, không "bạn/hắn/nàng"; Hán-Việt chỉ cho thiết chế; lựa chọn ≤ 10 chữ, mở bằng động từ; kết quả 1–2 câu. Các câu nhật ký cũ đã sửa theo mục 5. Test văn phong chặn từ cấm và lựa chọn quá dài.
+- **Văn bản** nằm riêng ở `packages/content/src/strings/events.vi.ts`, gộp vào `VI`.
+- **Tuyển tập 29 sự kiện**, mỗi nhóm một tệp trong `packages/sim/src/events/defs/`:
+
+  | Nhóm | Sự kiện |
+  |---|---|
+  | Thường ngày | lập thân, người xin ăn, hội làng, gặt giúp hàng xóm, ẩu đả ở chợ, đám ma trong làng, lời thầy đồ |
+  | Kinh tế | được mùa, lái lúa, gạo lên giá, quan sai đòi thuế, chủ nợ, trộm kho thóc, địa chủ tăng tô |
+  | Tai họa | hạn, lũ, châu chấu, dịch, cháy nhà, rét đậm |
+  | Đường sá (nhóm mới `road`) | cướp đường, thú dữ, lạc trong núi |
+  | Sức khỏe | thầy thuốc qua làng, lang băm, đồ ăn ôi |
+  | Cơ duyên | chuyện người tiên (một lần trong đời), cây thuốc quý, sách cũ |
+
+- **G2 — lập thân:** viết đủ ba lựa chọn (ở lại / lên trấn / ra riêng) nhưng `COMING_OF_AGE_LIVE = false` nên chưa xảy ra trong đời thật tới S7. "Ở lại" giữ người ở nhà tới hai mươi tuổi: mỗi đầu năm nộp nửa túi về quận nhà, rồi ra riêng với phần chia lớn hơn (`STAY_SHARE_PCT = 150`).
+- **G3 — tai họa theo quận:**
+  - Đầu năm, sau khi gieo thời tiết, `labelDisasters` gọi tên năm xấu (thời tiết ≤ 85%): hạn, lũ hoặc châu chấu, kèm tháng phát đúng mùa. Hàm này không đổi thời tiết, nên kinh tế quận giữ nguyên.
+  - Dịch gieo riêng theo quận, kéo dài 9 tuần, làm dễ mắc bệnh gấp ba.
+  - Ai ở quận cũng nhận tin trong nhật ký. Người chơi chỉ được hỏi chọn khi có ruộng mùa này ở quận đó (dịch thì hỏi khi đang ở quận và chưa phòng).
+- **Hiệu ứng mới:**
+  - Cứu phần thiệt mùa: `reliefPct`, ví dụ gánh nước, đắp bờ.
+  - Tô tăng: `rentHikePct`. Cả hai hết sau mùa gặt.
+  - Nợ vay: `loan` / `loanDue`. Tới hạn thì trả tiền trước, rồi lấy thóc theo giá mua; còn thiếu thì khất năm sau, lãi 36%. Tiền vay lấy từ quỹ quận, nên sổ cái không thủng.
+  - `shieldUntil`: đã phòng dịch.
+  - Hành động ẩn `action.toil` (lao lực một hoặc hai ô) và `action.shelter` (đóng cửa tránh dịch).
+- **Giá thật:** test toàn tuyển tập kiểm mỗi lựa chọn hoặc đổi trạng thái, hoặc rút RNG, hoặc khai giá `opportunity` (bỏ lỡ cơ hội).
+- **Đo tần suất** (tsvl-01, 90 đời, làng làm ruộng + hái lượm/săn, trấn làm thuê + học, 4.437 năm sau 12 tuổi): **2,48 sự kiện/năm**, trong mục tiêu mới 2–4.
+  - Nhiều nhất: lái lúa 0,37 · người xin ăn 0,31 · đám ma 0,21 · rét đậm 0,20 · thú dữ 0,19.
+  - Sự kiện có điều kiện (tai họa, dịch, chuyện người tiên) chỉ khoảng 0,01–0,04 mỗi năm.
+  - Giới hạn chính là thời gian chờ: 29 sự kiện mà muốn 4–8 lần một năm thì mỗi sự kiện phải lặp lại sau khoảng 4–7 năm, người chơi thấy lặp nhiều.
+  - **Quyết định (chủ dự án duyệt 2026-10-27):** giữ khoảng 2,5 sự kiện/năm; mục tiêu v0.3 hạ từ 4–8 xuống 2–4 mỗi năm. Nâng lại khi có thêm sự kiện (v0.4 trở đi), để mỗi sự kiện vẫn ít lặp.
+- **Cân bằng sau S6:**
+  - Batch 1000 đời × 5 chính sách đều PASS: 84–91% chết trong khoảng 40–80 tuổi.
+  - Economy 10 seed PASS: đói kém 1 lần mỗi 11,9 năm mỗi quận; quỹ cạn 1,0%.
+  - Digest pin đổi vì đời mẫu nay gặp sự kiện.
+

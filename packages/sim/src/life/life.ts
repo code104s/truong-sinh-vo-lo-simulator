@@ -6,17 +6,17 @@ import {
 import type { RegionLogic } from '@tsvl/worldgen';
 import { digestOf } from '../core/digest';
 import { hash32 } from '../core/hash';
-import { idiv } from '../core/math';
+import { idiv, mulDiv } from '../core/math';
 import { RngStreams, type RngStreamsSnapshot } from '../core/rng';
 import { createCharacter, toView, type CharacterState } from './character';
 import { agingPhase, consequencesPhase, eventsPhase, type Death } from './health';
-import { feedPhase } from './household';
+import { becomeIndependent, feedPhase } from './household';
 import { harvestPlayer } from '../economy/farming';
 import { EVENTS } from '../events/catalog';
 import { choose as chooseEvent, makeContext, newEventsState, pendingView, rollEvent, type EventsState } from '../events/engine';
 import { headTax, HEAD_TAX, tradeGrain } from '../economy/income';
 import {
-  buyGrain, buyPrice, countyMoney, createEconomy, economyMonth, HARVEST_MONTH, marketView, rollWeather, supplyOf, type EconomyState,
+  buyGrain, buyPrice, countyMoney, createEconomy, economyMonth, epidemicAt, HARVEST_MONTH, labelDisasters, marketView, rollWeather, supplyOf, type EconomyState,
 } from '../economy/market';
 import { AGE_MILESTONES, UNTIL_EVENT_MAX_TICKS } from './params';
 import { staminaMax } from './stamina';
@@ -141,7 +141,9 @@ export class Life {
     // 1 Thế giới: thời tiết (năm), chợ quận (tháng). 2 Thế lực, 3 NPC: chưa có
     this.worldPhase(t, log);
     // 4 Sự kiện (tuần): bệnh, tai nạn, rồi sự kiện có lựa chọn
-    let death = eventsPhase(c, t, this.streams.get('illness'), this.streams.get('accident'), log);
+    const here = this.s.economy.counties[c.location]!;
+    const epidemic = epidemicAt(here, t) && !(c.household.shieldUntil > t);
+    let death = eventsPhase(c, t, this.streams.get('illness'), this.streams.get('accident'), log, epidemic);
     if (!death) rollEvent(this.s.events, EVENTS, this.context(t), this.streams.get('events'));
     // 5 Người chơi: tuổi thơ hoặc ô kế hoạch tháng (ADR 0008).
     const action = death ? { death, carePct: 0 } : playerPhase(this.s, c, t, this.logic, this.s.economy, this.streams, log);
@@ -184,6 +186,8 @@ export class Life {
     const c = this.s.character;
     if (isYearStart(t)) {
       rollWeather(eco, this.streams.get('weather'));
+      labelDisasters(eco, this.streams.get('weather'), t);
+      this.stayAtHome(t, log);
       const debtBefore = c.household.taxDebt;
       const paid = headTax(c, eco.counties[c.home]!, t);
       // Thiếu thuế là chuyện lớn với người tự nuôi mình; quan sai tới đòi ở S5
@@ -208,6 +212,50 @@ export class Life {
     const after = supplyOf(here);
     if (after === 'famine' && before !== 'famine') log({ key: 'log.world.famine', params: { county }, importance: 'major' });
     else if (before === 'famine' && after !== 'famine') log({ key: 'log.world.famine_end', params: { county }, importance: 'minor' });
+    // Tai họa và dịch: tin cho mọi người ở quận ấy (G3); người chơi chỉ được hỏi chọn nếu chạm tới mình (sự kiện)
+    if (here.disaster && here.disasterMonth === calendarOf(t).month) log({ key: `log.world.${here.disaster}`, params: { county }, importance: 'major' });
+    if (here.epidemicFrom === t) log({ key: 'log.world.epidemic', params: { county }, importance: 'major' });
+    this.settleLoan(t, log);
+  }
+
+  /**
+   * Nợ vay nặng lãi tới hạn (S6): trả bằng tiền, thiếu thì chủ nợ lấy lương theo giá mua ở quận nhà; còn thiếu nữa thì
+   * khất sang năm, lãi thêm ba phân (36%). Tiền và lương đều về quỹ, kho quận nhà (sổ cái).
+   */
+  private settleLoan(t: Tick, log: (e: Omit<LogEntry, 'tick'>) => void): void {
+    const h = this.s.character.household;
+    if (h.loan <= 0 || t < h.loanDue) return;
+    const home = this.s.economy.counties[this.s.character.home]!;
+    const paid = Math.min(h.money, h.loan);
+    h.money -= paid; home.money += paid; h.loan -= paid;
+    const price = Math.max(1, buyPrice(home));
+    const grainTaken = Math.min(h.grain, idiv(h.loan * GRAIN_PER_DOU + price - 1, price));
+    h.grain -= grainTaken; home.grain += grainTaken;
+    h.loan = Math.max(0, h.loan - idiv(grainTaken * price, GRAIN_PER_DOU));
+    if (h.loan === 0) {
+      h.loanDue = -1;
+      log({ key: 'log.loan.paid', params: { paid, grain: idiv(grainTaken, GRAIN_PER_DOU) }, importance: 'minor' });
+    } else {
+      h.loan = mulDiv(h.loan, 136, 100);
+      h.loanDue = t + TICKS_PER_YEAR;
+      log({ key: 'log.loan.rolled', params: { owed: h.loan }, importance: 'major' });
+    }
+  }
+
+  /** Lập thân "ở lại" (ADR 0013): mỗi đầu năm nửa túi về quỹ, kho quận nhà; tới tuổi hẹn thì ra riêng với phần chia lớn hơn. */
+  private stayAtHome(t: Tick, log: (e: Omit<LogEntry, 'tick'>) => void): void {
+    const c = this.s.character;
+    const h = c.household;
+    if (h.independent || h.stayUntil === 0) return;
+    const home = this.s.economy.counties[c.home]!;
+    if (ageYearsAt(c.birthTick, t) >= h.stayUntil) {
+      const got = becomeIndependent(c, home, { sharePct: STAY_SHARE_PCT });
+      log({ key: 'log.coming_of_age.leave_late', params: { money: got.money, grain: idiv(got.grain, GRAIN_PER_DOU), land: got.landMu }, importance: 'major' });
+      return;
+    }
+    const money = idiv(h.money, 2), grain = idiv(h.grain, 2);
+    h.money -= money; home.money += money;
+    h.grain -= grain; home.grain += grain;
   }
 
   /** Lệnh TRADE (ADR 0012): mua (> 0) hoặc bán (< 0) thăng ở chợ đang đứng, không tốn ô. Trả lý do từ chối hoặc null. */
@@ -276,7 +324,7 @@ export class Life {
   }
 
   private context(t: Tick) {
-    return makeContext(this.s.character, this.s, this.s.economy, this.logic, t);
+    return makeContext(this.s.character, this.s.events, this.s, this.s.economy, this.logic, t);
   }
 
   /** Sự kiện đang chờ chọn như người chơi thấy; null nếu không có. */
@@ -308,6 +356,9 @@ export class Life {
     };
   }
 }
+
+/** Ở lại làm cho nhà tới hẹn thì phần chia lớn hơn một nửa (ADR 0013). */
+export const STAY_SHARE_PCT = 150;
 
 /** Lựa chọn đầu tiên đang mở; luôn có vì lựa chọn cuối là lối ra không điều kiện (ADR 0014). */
 export const firstOpenChoice = (p: PendingEvent): string => p.choices.find((ch) => ch.locked === null)!.id;

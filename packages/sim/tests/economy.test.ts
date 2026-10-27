@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { birthplaceId, regionId, vMarketView } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { Life, Rng, simulateEconomy } from '../src/index';
+import { autoAdvance } from './auto';
 import {
   buyGrain, buyPrice, countyMoney, createEconomy, economyMonth, HARVEST_MONTH, INITIAL_RESERVE_MONTHS, marketView, MONTHLY_NEED_PER_MOUTH,
   MOUTHS_PER_CELL, PRICE_BASE, priceOf, rollWeather, stockMonths, supplyOf, WEATHER_COUNTY_NOISE, WEATHER_LEVELS, type CountyEconomy,
@@ -139,7 +140,7 @@ describe('người chơi và chợ', () => {
     const l = adult('ledger', (c) => { c.household.independent = true; c.household.money = 50_000; c.household.grain = 0; });
     const total = l.totalMoney();
     for (let i = 0; i < 3 * 36 && l.alive; i++) {
-      l.advance('week');
+      autoAdvance(l, 'week'); // sự kiện cũng phải giữ sổ cái
       expect(l.totalMoney()).toBe(total);
     }
     expect(l.character.household.money).toBeLessThan(50_000);
