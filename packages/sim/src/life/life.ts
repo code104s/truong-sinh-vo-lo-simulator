@@ -12,6 +12,7 @@ import { createCharacter, toView, type CharacterState } from './character';
 import { agingPhase, consequencesPhase, eventsPhase, type Death } from './health';
 import { feedPhase } from './household';
 import { harvestPlayer } from '../economy/farming';
+import { headTax, HEAD_TAX, tradeGrain } from '../economy/income';
 import {
   buyGrain, buyPrice, countyMoney, createEconomy, economyMonth, HARVEST_MONTH, marketView, rollWeather, supplyOf, type EconomyState,
 } from '../economy/market';
@@ -79,7 +80,7 @@ export class Life {
 
   get plan(): MonthPlan | null { return this.s.plan ? { slots: this.s.plan.slots.map((p) => ({ ...p })) as MonthPlan['slots'] } : null; }
   get active(): PlayerState['active'] { return this.s.active ? JSON.parse(JSON.stringify(this.s.active)) as PlayerState['active'] : null; }
-  actions() { return actionOptions(this.s.character, this.displayTick, this.logic); }
+  actions() { return actionOptions(this.s.character, this.displayTick, this.logic, this.s.economy); }
   travel() { return this.logic.counties.flatMap((_, county) => { const p = previewTravel(this.logic, this.s.character.location, county); return p ? [{ county, slots: p.slots, risk: p.risk }] : []; }); }
   previewTravel(county: number) { return previewTravel(this.logic, this.s.character.location, county); }
   setPlan(plan: MonthPlan): boolean {
@@ -136,7 +137,7 @@ export class Life {
     // 4 Sự kiện (tuần)
     let death = eventsPhase(c, t, this.streams.get('illness'), this.streams.get('accident'), log);
     // 5 Người chơi: tuổi thơ hoặc ô kế hoạch tháng (ADR 0008).
-    const action = death ? { death, carePct: 0 } : playerPhase(this.s, c, t, this.logic, this.streams, log);
+    const action = death ? { death, carePct: 0 } : playerPhase(this.s, c, t, this.logic, this.s.economy, this.streams, log);
     death = action.death;
     // 6 Hậu quả: ăn (tuần), lão hóa (năm), diễn tiến (tuần), tử vong (cuối pha)
     if (!death) {
@@ -172,9 +173,16 @@ export class Life {
   /** Pha Thế giới. Tin tức chỉ về quận đang đứng: người chơi không biết chuyện nơi khác. */
   private worldPhase(t: Tick, log: (e: Omit<LogEntry, 'tick'>) => void): void {
     const eco = this.s.economy;
-    if (isYearStart(t)) rollWeather(eco, this.streams.get('weather'));
-    if (!isMonthStart(t)) return;
     const c = this.s.character;
+    if (isYearStart(t)) {
+      rollWeather(eco, this.streams.get('weather'));
+      const debtBefore = c.household.taxDebt;
+      const paid = headTax(c, eco.counties[c.home]!, t);
+      // Thiếu thuế là chuyện lớn với người tự nuôi mình; quan sai tới đòi ở S5
+      if (c.household.taxDebt > debtBefore) log({ key: 'log.tax.short', params: { paid, owed: c.household.taxDebt }, importance: 'major' });
+      else if (paid > 0) log({ key: 'log.tax.paid', params: { paid: HEAD_TAX }, importance: 'minor' });
+    }
+    if (!isMonthStart(t)) return;
     const here = eco.counties[c.location]!;
     const before = supplyOf(here);
     economyMonth(eco, this.logic, t);
@@ -192,6 +200,13 @@ export class Life {
     const after = supplyOf(here);
     if (after === 'famine' && before !== 'famine') log({ key: 'log.world.famine', params: { county }, importance: 'major' });
     else if (before === 'famine' && after !== 'famine') log({ key: 'log.world.famine_end', params: { county }, importance: 'minor' });
+  }
+
+  /** Lệnh TRADE (ADR 0012): mua (> 0) hoặc bán (< 0) thăng ở chợ đang đứng, không tốn ô. Trả lý do từ chối hoặc null. */
+  trade(grain: number): string | null {
+    if (!this.alive) return 'đã chết';
+    if (ageYearsAt(this.s.character.birthTick, this.s.tick) < ACTION_MIN_AGE) return 'chưa đủ tuổi tự lo liệu';
+    return tradeGrain(this.s.character.household, this.s.economy.counties[this.s.character.location]!, grain);
   }
 
   /** Chợ quận đang đứng. */

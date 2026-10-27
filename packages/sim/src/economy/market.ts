@@ -45,6 +45,12 @@ export const SELL_PCT = 85;
 /** Buôn quận kề: mỗi tháng chở tối đa 2% kho quận rẻ; phí chở (văn/đấu) = km × địa hình% × 5 / 10000. */
 export const TRADE_SHARE_PERMILLE = 20;
 export const TRANSPORT_PER_DOU_KM = 5;
+/**
+ * Lưu thông tiền ngoài lương thực (vải, đồ thủ công, chi tiêu): mỗi tháng, theo từng cạnh, chuyển bấy nhiêu ‰ phần chênh
+ * để tiền trên đầu người hai quận bằng nhau. Không có kênh này thì quận hay phải mua lương bị rút cạn tiền vĩnh viễn
+ * (đo 50 năm, 3 vùng: 41–49% tháng-quận có quỹ dưới 10% ban đầu; 20‰ còn 4–8%, 50‰ còn 1–2%, đói kém không đổi).
+ */
+export const MONEY_FLOW_PERMILLE = 50;
 
 /** Mức thời tiết năm của vùng và trọng số: mất mùa, kém, thường, khá, được mùa. */
 export const WEATHER_LEVELS = [50, 80, 100, 110, 120] as const;
@@ -119,6 +125,13 @@ export function economyMonth(eco: EconomyState, logic: RegionLogic, tick: Tick):
     const pay = idiv(amount * pc, GRAIN_PER_DOU);
     cheap.grain -= amount; dear.grain += amount;
     dear.money -= pay; cheap.money += pay;
+  });
+  logic.adjacency.forEach(([a, b]) => {
+    const A = eco.counties[a]!, B = eco.counties[b]!;
+    // x làm A.money/A.mouths = B.money/B.mouths; dương thì A giàu hơn
+    const x = idiv(A.money * B.mouths - B.money * A.mouths, A.mouths + B.mouths);
+    const flow = idiv(x * MONEY_FLOW_PERMILLE, 1000);
+    A.money -= flow; B.money += flow;
   });
   for (const ce of eco.counties) {
     ce.prevPrice = ce.price;

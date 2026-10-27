@@ -92,7 +92,7 @@ export class SimHost {
       return;
     }
     const cmd = parsed.value;
-    const mutates = cmd.type === 'NEW_LIFE' || cmd.type === 'SET_PLAN' || cmd.type === 'ADVANCE';
+    const mutates = cmd.type === 'NEW_LIFE' || cmd.type === 'SET_PLAN' || cmd.type === 'ADVANCE' || cmd.type === 'TRADE';
     const key = mutates ? canonical(cmd) : '';
     const cached = mutates ? this.handled.get(cmd.reqId) : undefined;
     if (cached) {
@@ -163,8 +163,14 @@ export class SimHost {
         if (!preview) throw new HostError('BAD_COMMAND', 'đích đi không hợp lệ');
         this.emit({ type: 'TRAVEL_PREVIEW', reqId: cmd.reqId, preview }); return;
       }
-      case 'TRADE':
-        throw new HostError('BAD_COMMAND', 'mua bán chưa có (v0.3 S4)');
+      case 'TRADE': {
+        const life = this.requireLife();
+        if (!life.alive) throw new HostError('DEAD', 'nhân vật đã chết');
+        const refused = life.trade(cmd.grain);
+        if (refused) throw new HostError('BAD_COMMAND', refused);
+        this.record({ type: 'TRADE', grain: cmd.grain });
+        this.emitState(cmd.reqId); return;
+      }
       case 'CHOOSE':
         throw new HostError('BAD_COMMAND', 'không có sự kiện nào đang chờ (v0.3 S5)');
       case 'PAUSE':

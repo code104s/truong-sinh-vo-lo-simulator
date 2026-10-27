@@ -232,3 +232,27 @@ describe('SimHost — v0.3 Bước 0', () => {
     expect(out.length - n).toBeGreaterThan(0); // trả lại phản hồi cũ
   });
 });
+
+describe('SimHost — v0.3 S4: lệnh TRADE', () => {
+  it('mua bán được ghi vào nhật ký lệnh, phát lại cùng digest; lệnh bị từ chối không ghi, không đổi đời', () => {
+    const { h, send } = host();
+    newLife(send, 3);
+    while (!h.current.life!.view().canAct) send({ type: 'ADVANCE', mode: 'year' });
+    // Làm thuê/hái lượm vài tháng để có tiền và lương trong túi
+    const kind = region.logic.settlementKind[h.current.life!.character.location];
+    const work = kind === 'village' ? 'action.forage' : 'action.hire';
+    send({ type: 'SET_PLAN', plan: { slots: [{ action: work }, { action: work }, { action: work }] } });
+    for (let i = 0; i < 4; i++) send({ type: 'ADVANCE', mode: 'month' });
+    const hh = h.current.life!.character.household;
+    const before = (send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>).save;
+    expect(send({ type: 'TRADE', grain: hh.grain + 1 })[0]).toMatchObject({ type: 'ERROR', code: 'BAD_COMMAND' });
+    expect((send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>).save.commandLog).toEqual(before.commandLog);
+    const amount = hh.grain > 0 ? -1 : 1;
+    const ok = send({ type: 'TRADE', grain: amount });
+    expect(ok.map((m) => m.type)).toEqual(['STATE']);
+    const save = (send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>).save;
+    expect(save.commandLog.at(-1)!.cmd).toEqual({ type: 'TRADE', grain: amount });
+    expect(save.digest).not.toBe(before.digest);
+    expect(replaySave(save)).toBe(save.digest);
+  });
+});

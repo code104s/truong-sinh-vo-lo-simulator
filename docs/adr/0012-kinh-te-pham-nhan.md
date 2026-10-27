@@ -162,3 +162,39 @@ Số liệu là điểm khởi đầu, chốt bằng batch ở S7.
   | Thành, trấn | 0 | Không làm ruộng được |
 
   Đây là mức "tá điền sống lay lắt" mà phương án A nhắm tới.
+
+## Ghi chú triển khai S4 (2026-10-27)
+- **Mã:** `packages/sim/src/economy/income.ts`. Mọi đồng tiền đi giữa túi người chơi và quỹ một quận: sổ cái vẫn bảo toàn.
+- **Số liệu khởi điểm:**
+
+  | Mục | Giá trị |
+  |---|---|
+  | Làm thuê | 60 văn/tuần × (100% + tới 60% theo thủ công), trả từ quỹ quận; quỹ dưới mức lương thì khóa `lock.no_work` |
+  | Học chữ | 20 văn/tuần |
+  | Thầy thuốc | khám 30, bệnh nhẹ 30, nặng 100, nguy kịch 300 văn (theo bệnh nặng nhất) |
+  | Đi đường | 10 văn/ô tiền trọ; thiếu thì vẫn đi nhưng ngủ bụi, rủi ro ×1,5 (không nhốt người nghèo một chỗ) |
+  | Hái lượm | xuân 4, hạ 6, thu 5, đông 2 thăng/tuần × (100% + tới 60% theo săn) |
+  | Săn | thịt 10 thăng, da 20 văn (quỹ quận mua), cùng hệ số kỹ năng săn |
+  | Thuế đinh | 200 văn/năm, nộp đầu năm vào quỹ quận nhà; chỉ người đã ra riêng từ 16 tuổi |
+
+  - Thiếu thuế: nộp được bao nhiêu thì nộp, phần còn lại ghi `taxDebt` và ngắt tua; sự kiện đòi thuế ở S5.
+  - Khóa vì tiền (`lock.money`, `lock.no_work`) là khóa tạm: ô đó nghỉ, không báo kế hoạch hỏng.
+- **Buôn bán nhỏ** (`action.trade`, trấn/thành, kỹ năng mới `trade`, cần vốn ≥ 200 văn):
+  - Lãi/lỗ mỗi tuần theo vốn, tính tối đa trên 5.000 văn.
+  - Lãi 15‰ → 40‰, lỗ 40‰ → 20‰, xác suất lỗ 25% → 10% (người mới → người thạo).
+  - Kỳ vọng mỗi tuần: người mới +1,25‰, gần hòa vốn và dao động lớn; người thạo +34‰. Vốn nhiều và tay nghề mới làm giàu được.
+  - Bản đầu tính sai: người mới kỳ vọng âm, 300 tuần từ 2.000 văn còn 253 văn. Đã sửa.
+- **Lệnh `TRADE`:**
+  - Mua/bán đúng số thăng ở chợ đang đứng, từ 12 tuổi.
+  - Vượt túi, kho mình, kho hoặc quỹ chợ thì từ chối cả lệnh và không ghi nhật ký lệnh.
+  - Lệnh được nhận thì ghi nhật ký lệnh và vào bộ đệm chống trùng; phát lại cho cùng digest.
+- **Mức tiền trong kế hoạch dùng khóa `money.*` riêng.** Bước 0 dùng nhầm `cost.none`, mà chuỗi đó hiện "Không tốn thể lực".
+- **Lỗi kinh tế tìm ra và đã sửa — quỹ quận cạn tiền vĩnh viễn:**
+  - Buôn quận kề chỉ có lương đi một chiều, tiền đi chiều ngược lại. Đo 50 năm trên 3 vùng: 41–49% tháng-quận có quỹ dưới 10% ban đầu, nhiều quận về 0. Hệ quả: hết việc thuê, chợ không mua nổi lương của người chơi.
+  - Thêm lưu thông tiền: mỗi tháng, theo từng cạnh, chuyển 50‰ phần chênh để tiền trên đầu người hai quận bằng nhau. Kênh này đại diện cho hàng hóa khác và chi tiêu; vẫn bảo toàn tiền.
+  - Sau khi sửa còn 1,0% tháng-quận; tần suất đói kém không đổi.
+  - `pnpm sim economy` kiểm thêm tiêu chí ≤ 5%, có test hồi quy.
+- **Chiến lược batch "học giả":** trước đây coi "không học được" là "không ở trấn" nên lên đường. Thiếu học phí, nó đi hết trấn này sang trấn khác và ngủ bụi; tuổi thọ trung bình tụt từ 62,6 xuống 52,9. Sửa tối thiểu: thiếu tiền thì làm thuê; học được thì 2 ô học + 1 ô làm thuê tự trả học phí. Chiến lược đầy đủ ở S7.
+- **Chưa bật ra riêng trong đời thật:**
+  - Lý do: các chiến lược batch chưa biết bán lương thừa, giữ tiền nộp thuế, mua ăn.
+  - Bật ra riêng cùng chiến lược có kinh tế (S7) và sự kiện lập thân (S5/S6). Xem câu hỏi trong báo cáo S4.

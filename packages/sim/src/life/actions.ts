@@ -4,6 +4,8 @@ import type { CharacterState } from './character';
 import { isStarving } from './household';
 import type { Skill } from './skills';
 import { previewTravel } from './travel';
+import { moneyCost, moneyGains, moneyLock } from '../economy/income';
+import type { CountyEconomy, EconomyState } from '../economy/market';
 
 export const ACTION_MIN_AGE = 12;
 export interface ActionDef {
@@ -15,6 +17,7 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'action.hire', group: 'livelihood', slots: 1, stamina: 120, riskPpm: 200, skill: 'crafting', places: ['town', 'city'] },
   { id: 'action.forage', group: 'livelihood', slots: 1, stamina: 130, riskPpm: 350, skill: 'hunting' },
   { id: 'action.hunt', group: 'livelihood', slots: 1, stamina: 200, riskPpm: 1400, skill: 'hunting', places: ['village'], minStamina: 60 },
+  { id: 'action.trade', group: 'livelihood', slots: 1, stamina: 60, riskPpm: 0, skill: 'trade', places: ['town', 'city'] },
   { id: 'action.study', group: 'study', slots: 1, stamina: 30, riskPpm: 0, skill: 'literacy', places: ['town', 'city'] },
   { id: 'action.train', group: 'study', slots: 1, stamina: 240, riskPpm: 800, skill: 'martial', minStamina: 80 },
   { id: 'action.rest', group: 'rest', slots: 1, stamina: 0, riskPpm: 0 },
@@ -27,7 +30,8 @@ export const HEAVY_STAMINA = 160;
 
 export const restPlan = (): MonthPlan => ({ slots: [{ action: 'action.rest' }, { action: 'action.rest' }, { action: 'action.rest' }] });
 
-export function actionLock(def: ActionDef, c: CharacterState, tick: Tick, kind: SettlementKind): string | null {
+/** `market`: chợ quận đang đứng, để xét khóa tiền; bỏ trống khi chỉ xét luật không phụ thuộc tiền. */
+export function actionLock(def: ActionDef, c: CharacterState, tick: Tick, kind: SettlementKind, market?: CountyEconomy): string | null {
   if (ageYearsAt(c.birthTick, tick) < ACTION_MIN_AGE) return 'lock.child';
   if (def.places && !def.places.includes(kind)) return 'lock.place';
   if (def.id === 'action.farm' && calendarOf(tick).season === 'winter') return 'lock.winter';
@@ -35,18 +39,18 @@ export function actionLock(def: ActionDef, c: CharacterState, tick: Tick, kind: 
   if (c.stamina < (def.minStamina ?? 0)) return 'lock.stamina';
   // Đói lả không làm nổi việc nặng (ADR 0013)
   if (isStarving(c.household) && def.stamina >= HEAVY_STAMINA) return 'lock.hunger';
-  return null;
+  return market ? moneyLock(def.id, c, market) : null;
 }
 
-export function actionOptions(c: CharacterState, tick: Tick, logic: RegionLogic): ActionOption[] {
+export function actionOptions(c: CharacterState, tick: Tick, logic: RegionLogic, eco: EconomyState): ActionOption[] {
   const kind = logic.settlementKind[c.location]!;
+  const market = eco.counties[c.location]!;
   return ACTIONS.map((d) => ({
     id: d.id, group: d.group, slots: d.slots,
     cost: { stamina: d.stamina === 0 ? 'cost.none' : d.stamina < 80 ? 'cost.low' : d.stamina < HEAVY_STAMINA ? 'cost.medium' : 'cost.high', risk: d.riskPpm === 0 ? 'risk.none' : d.riskPpm < 300 ? 'risk.low' : d.riskPpm < 1000 ? 'risk.medium' : 'risk.high',
-      // Tạm tới S4 (ADR 0012): chưa hành động nào tốn tiền
-      money: 'cost.none' },
-    gains: d.skill ? [`skill.${d.skill}`] : [d.group === 'rest' ? 'gain.recovery' : d.group === 'heal' ? 'gain.healing' : 'gain.location'],
-    locked: actionLock(d, c, tick, kind),
+      money: moneyCost(d.id) },
+    gains: [...moneyGains(d.id), ...(d.skill ? [`skill.${d.skill}`] : [d.group === 'rest' ? 'gain.recovery' : d.group === 'heal' ? 'gain.healing' : 'gain.location'])],
+    locked: actionLock(d, c, tick, kind, market),
   }));
 }
 
@@ -57,10 +61,10 @@ export function validatePlan(plan: MonthPlan, logic: RegionLogic): boolean {
     : s.target === undefined));
 }
 
-export function slotLock(slot: PlanSlot, c: CharacterState, tick: Tick, logic: RegionLogic): string | null {
+export function slotLock(slot: PlanSlot, c: CharacterState, tick: Tick, logic: RegionLogic, market?: CountyEconomy): string | null {
   const def = actionDef(slot.action);
   if (!def) return 'lock.action';
-  const lock = actionLock(def, c, tick, logic.settlementKind[c.location]!);
+  const lock = actionLock(def, c, tick, logic.settlementKind[c.location]!, market);
   if (lock) return lock;
   if (def.group === 'travel' && (slot.target === undefined || !previewTravel(logic, c.location, slot.target))) return 'lock.route';
   return null;

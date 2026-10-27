@@ -3,12 +3,12 @@ import { idiv, mulDiv } from '../core/math';
 import type { CharacterState } from './character';
 import { fatiguePct } from './stamina';
 
-export const SKILLS = ['farming', 'hunting', 'crafting', 'literacy', 'martial'] as const;
+export const SKILLS = ['farming', 'hunting', 'crafting', 'literacy', 'martial', 'trade'] as const;
 export type Skill = (typeof SKILLS)[number];
 export const SKILL_XP_MAX = 10_000;
 export const SKILL_BASE_GAIN = 35;
 export const SKILL_ANNUAL_DECAY_PCT = 5;
-export const emptySkills = (value = 0): Record<Skill, number> => ({ farming: value, hunting: value, crafting: value, literacy: value, martial: value });
+export const emptySkills = (value = 0): Record<Skill, number> => ({ farming: value, hunting: value, crafting: value, literacy: value, martial: value, trade: value });
 
 export function gainSkill(c: CharacterState, skill: Skill, tick: Tick, base = SKILL_BASE_GAIN): void {
   let gain = mulDiv(base, 50 + c.aptitude * 10, 100);

@@ -163,7 +163,7 @@ describe('hậu quả của đói', () => {
   it('đói lả khóa việc nặng (khóa tạm thời), không khóa nghỉ ngơi', () => {
     const lockOf = (hunger: number, id: string) => {
       const l = adult('lock', (c) => { c.household.hunger = hunger; });
-      return actionOptions(l.character as CharacterState, l.tick, region).find((a) => a.id === id)!.locked;
+      return actionOptions(l.character as CharacterState, l.tick, region, l.snapshot().economy).find((a) => a.id === id)!.locked;
     };
     expect(lockOf(3, 'action.hunt')).toBeNull();
     expect(lockOf(4, 'action.hunt')).toBe('lock.hunger');

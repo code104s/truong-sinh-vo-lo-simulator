@@ -13,7 +13,7 @@ import type { ActiveAction } from './player';
 import { HUNGER_MAX, type HouseholdState } from './household';
 import type { CountyEconomy, EconomyState } from '../economy/market';
 
-const skillRecord = (value: Validator<number>) => obj<Record<Skill, number>>({ farming: value, hunting: value, crafting: value, literacy: value, martial: value });
+const skillRecord = (value: Validator<number>) => obj<Record<Skill, number>>({ farming: value, hunting: value, crafting: value, literacy: value, martial: value, trade: value });
 
 const u32 = intRange(0, 0xffffffff);
 const vRngState: Validator<RngState> = {
@@ -46,7 +46,7 @@ const vCharacter = obj<CharacterState>({
   scars: nat,
   conditions: arr(obj<Condition>({ id: nonEmpty, kind: oneOf(['illness', 'injury'] as const), severity, weeksLeft: nat })),
   household: obj<HouseholdState>({ independent: bool, money: nat, grain: nat, landMu: nat, tenure: oneOf(TENURES), hunger: intRange(0, HUNGER_MAX),
-    farmWeeks: intRange(0, 36), farmCounty: intRange(-1, 10_000) }),
+    farmWeeks: intRange(0, 36), farmCounty: intRange(-1, 10_000), taxDebt: nat }),
   alive: bool,
 });
 

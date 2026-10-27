@@ -245,22 +245,24 @@ async function economyCmd(n: number, years: number, threads: number) {
   const seeds = Array.from({ length: n }, (_, i) => `tsvl-${String(i + 1).padStart(2, '0')}`);
   console.log(`Chợ quận ${years} năm × ${n} vùng, không người chơi`);
   const regions = await regionPool(seeds.map((seed) => ({ seed })), threads);
-  let famines = 0, countyYears = 0, famineMonths = 0, scarceMonths = 0, minPrice = Infinity, maxPrice = 0, ledgerBad = 0, negative = 0;
+  let famines = 0, countyYears = 0, famineMonths = 0, scarceMonths = 0, lowMoney = 0, minPrice = Infinity, maxPrice = 0, ledgerBad = 0, negative = 0;
   for (const r of regions) {
     if (!r.ok) throw new Error(`${r.seed}: ${r.error}`);
     const s = simulateEconomy(r.logic!, years, r.seed);
     famines += s.famines; countyYears += s.counties * years;
-    famineMonths += s.famineMonthsPermille * s.counties; scarceMonths += s.scarceMonthsPermille * s.counties;
+    famineMonths += s.famineMonthsPermille * s.counties; scarceMonths += s.scarceMonthsPermille * s.counties; lowMoney += s.lowMoneyMonthsPermille * s.counties;
     minPrice = Math.min(minPrice, s.minPricePct); maxPrice = Math.max(maxPrice, s.maxPricePct);
     if (s.moneyStart !== s.moneyEnd) ledgerBad++;
     if (s.minGrain < 0) negative++;
-    console.log(`  ${r.seed}: ${s.counties} quận · đói kém ${s.famines} lần · tháng đói kém ${s.famineMonthsPermille / 10}% · khan hiếm ${s.scarceMonthsPermille / 10}% · giá ${s.minPricePct}–${s.maxPricePct}% · tiền ${s.moneyStart === s.moneyEnd ? 'bảo toàn' : `LỆCH ${s.moneyEnd - s.moneyStart}`}`);
+    console.log(`  ${r.seed}: ${s.counties} quận · đói kém ${s.famines} lần · tháng đói kém ${s.famineMonthsPermille / 10}% · khan hiếm ${s.scarceMonthsPermille / 10}% · quỹ cạn ${s.lowMoneyMonthsPermille / 10}% · giá ${s.minPricePct}–${s.maxPricePct}% · tiền ${s.moneyStart === s.moneyEnd ? 'bảo toàn' : `LỆCH ${s.moneyEnd - s.moneyStart}`}`);
   }
   const counties = countyYears / years;
   const every = famines ? countyYears / famines : Infinity;
   console.log(`Đói kém: ${famines} lần trên ${counties} quận × ${years} năm → mỗi quận 1 lần / ${every.toFixed(1)} năm (mục tiêu 8–15)`);
   console.log(`Tháng đói kém ${(famineMonths / counties / 10).toFixed(1)}% · khan hiếm ${(scarceMonths / counties / 10).toFixed(1)}% · giá ${minPrice}–${maxPrice}% (mục tiêu trong 70–500)`);
-  const pass = ledgerBad === 0 && negative === 0 && minPrice >= 70 && maxPrice <= 500 && every >= 8 && every <= 15;
+  const lowMoneyPct = lowMoney / counties / 10;
+  console.log(`Tháng-quận quỹ tiền dưới 10% ban đầu: ${lowMoneyPct.toFixed(1)}% (mục tiêu ≤ 5)`);
+  const pass = ledgerBad === 0 && negative === 0 && minPrice >= 70 && maxPrice <= 500 && every >= 8 && every <= 15 && lowMoneyPct <= 5;
   console.log(`Sổ cái lệch: ${ledgerBad} vùng · kho âm: ${negative} vùng`);
   console.log(pass ? 'KẾT QUẢ: PASS' : 'KẾT QUẢ: FAIL');
   if (!pass) process.exitCode = 1;

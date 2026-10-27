@@ -21,7 +21,11 @@ export function policyPlan(name: PolicyName, c: PolicyContext): MonthPlan | null
   if (name === 'balanced') plan.slots = [{ action: work }, { action: work }, { action: 'action.rest' }];
   if (name === 'overwork') setAll(work);
   if (name === 'scholar') {
-    if (usable('action.study')) plan.slots = [{ action: 'action.study' }, { action: 'action.study' }, { action: 'action.rest' }];
+    // v0.3: học phải trả học phí; một ô làm thuê tự nuôi việc học, hết tiền thì đi làm. Chỉ lên đường khi nơi này không có trường.
+    const lock = c.actions.find((a) => a.id === 'action.study')?.locked;
+    const earn = usable('action.hire') ? 'action.hire' : 'action.rest';
+    if (usable('action.study')) plan.slots = [{ action: 'action.study' }, { action: 'action.study' }, { action: earn }];
+    else if (lock === 'lock.money') setAll(earn);
     else if (usable('action.travel')) {
       const destination = c.travel.find((p) => c.settlements[p.county] !== 'village');
       if (destination) travelTo(destination.county);

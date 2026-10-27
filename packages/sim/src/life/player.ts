@@ -10,6 +10,8 @@ import { gainSkill, skillRiskPct } from './skills';
 import { fatiguePct, recoverStamina, spendStamina } from './stamina';
 import { previewTravel, routeTerrainPct } from './travel';
 import { recordFarmWeek } from '../economy/farming';
+import { settleAction } from '../economy/income';
+import type { CountyEconomy, EconomyState } from '../economy/market';
 
 export interface ActiveAction { slot: PlanSlot; remaining: number; total: number; preview: TravelPreview | null }
 export interface PlayerState {
@@ -25,10 +27,10 @@ const REST: PlanSlot = { action: 'action.rest' };
  * Khóa tạm thời: tự hết theo mùa hoặc khi hồi sức. Ô đó nghỉ, không ngắt tua, chuyến đi dở giữ nguyên.
  * Các khóa khác (sai nơi, không có đường) là kế hoạch hỏng: nghỉ và ngắt tua một lần để người chơi sửa.
  */
-export const TRANSIENT_LOCKS: ReadonlySet<string> = new Set(['lock.winter', 'lock.stamina', 'lock.health', 'lock.hunger']);
+export const TRANSIENT_LOCKS: ReadonlySet<string> = new Set(['lock.winter', 'lock.stamina', 'lock.health', 'lock.hunger', 'lock.money', 'lock.no_work']);
 
 /** Pha 5. Mỗi ô chỉ trừ giá một lần; hành động đang dở tiếp tục qua ranh tháng. */
-export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic: RegionLogic, rng: RngStreams, log: Log): { death: Death | null; carePct: number } {
+export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic: RegionLogic, eco: EconomyState, rng: RngStreams, log: Log): { death: Death | null; carePct: number } {
   const age = ageYearsAt(c.birthTick, tick);
   if (age < ACTION_MIN_AGE) {
     if (age >= 5 && isYearStart(tick)) {
@@ -43,14 +45,15 @@ export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic
   if (tick - c.birthTick === ACTION_MIN_AGE * TICKS_PER_YEAR) log({ key: 'log.adulthood', params: { age }, importance: 'major' });
 
   const planned = s.active?.slot ?? s.plan?.slots[tick % TICKS_PER_MONTH] ?? REST;
-  const lock = slotLock(planned, c, tick, logic);
+  const market = eco.counties[c.location]!;
+  const lock = slotLock(planned, c, tick, logic, market);
   if (lock && !TRANSIENT_LOCKS.has(lock)) {
     if (!s.planWarned) log({ key: 'log.plan.invalid', params: { action: planned.action, reason: lock }, importance: 'minor' });
     s.planWarned = true;
     s.active = null;
   }
   // Khóa tạm thời mà đang đi dở: nghỉ ô này, chuyến đi chờ ô sau.
-  if (lock) return perform(actionDef(REST.action)!, null, c, tick, logic, rng, log, age);
+  if (lock) return perform(actionDef(REST.action)!, null, c, tick, logic, market, rng, log, age);
 
   const d = actionDef(planned.action)!;
   if (!s.active) {
@@ -59,7 +62,7 @@ export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic
     s.active = { slot: { ...planned }, total, remaining: total, preview };
   }
   const active = s.active;
-  const result = perform(d, active.preview, c, tick, logic, rng, log, age);
+  const result = perform(d, active.preview, c, tick, logic, market, rng, log, age);
   if (result.death) return result;
   active.remaining--;
   if (active.remaining === 0) {
@@ -80,12 +83,14 @@ function arrive(s: PlayerState, c: CharacterState, county: number, logic: Region
 }
 
 /** Trừ giá, cho kết quả và tính rủi ro của một ô. Việc thường ngày không ghi nhật ký. */
-function perform(d: ActionDef, route: TravelPreview | null, c: CharacterState, tick: Tick, logic: RegionLogic, rng: RngStreams, log: Log, age: number): { death: Death | null; carePct: number } {
+function perform(d: ActionDef, route: TravelPreview | null, c: CharacterState, tick: Tick, logic: RegionLogic, market: CountyEconomy, rng: RngStreams, log: Log, age: number): { death: Death | null; carePct: number } {
   const tired = fatiguePct(c, tick);
   if (spendStamina(c, d.stamina)) log({ key: 'log.exhaustion', params: {}, importance: 'minor' });
   if (d.skill) gainSkill(c, d.skill, tick);
   // Tuần công tính cho mùa tới; gặt đầu tháng thu hoạch (ADR 0012)
   if (d.id === 'action.farm') recordFarmWeek(c.household, c.location);
+  // Tiền, lương của ô này ở chợ đang đứng (ADR 0012); đi đường thiếu tiền trọ thì rủi ro cao hơn
+  const moneyRiskPct = settleAction(d.id, c, tick, market, rng.get('actions'));
   let carePct = 0;
   if (d.group === 'rest') { c.health = Math.min(c.healthMax, c.health + 18); carePct = 10; }
   if (d.group === 'heal') {
@@ -95,7 +100,7 @@ function perform(d: ActionDef, route: TravelPreview | null, c: CharacterState, t
   // Mỗi hệ thống dùng luồng riêng; nguy hiểm đường tính trên dữ liệu nguyên đã lưu.
   const r = rng.get(d.group === 'travel' ? 'travel' : 'actions');
   const terrain = route ? routeTerrainPct(logic, route.route) : 100;
-  let ppm = mulDiv(mulDiv(d.riskPpm, terrain, 100), tired, 100);
+  let ppm = mulDiv(mulDiv(mulDiv(d.riskPpm, terrain, 100), tired, 100), moneyRiskPct, 100);
   if (d.skill) ppm = mulDiv(ppm, skillRiskPct(c, d.skill), 100);
   if (d.riskPpm > 0 && r.chance(ppm)) {
     if (r.chance(mulDiv(ACCIDENT_FATAL_PPM, skillRiskPct(c, 'martial'), 100))) return { death: { tick, cause: 'accident', detail: d.group === 'travel' ? 'accident.travel' : 'accident.action' }, carePct };

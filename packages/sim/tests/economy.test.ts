@@ -117,6 +117,8 @@ describe('buôn quận kề và sổ cái tiền', () => {
       expect(s.minPricePct).toBeGreaterThanOrEqual(70);
       expect(s.maxPricePct).toBeLessThanOrEqual(500);
       expect(s.famineMonthsPermille).toBeLessThan(100);
+      // Hồi quy S4: thiếu lưu thông tiền thì ~40% tháng-quận cạn quỹ, quận hết việc thuê, không mua nổi lương
+      expect(s.lowMoneyMonthsPermille).toBeLessThan(50);
     }
     const total = [0, 1, 2, 3, 4].reduce((n, i) => n + simulateEconomy(region, 100, `unit-${i}`).famines, 0);
     expect(total).toBeGreaterThan(0);
