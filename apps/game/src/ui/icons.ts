@@ -19,6 +19,8 @@ export function logSeal(e: LogEntry): { char: string; tone: SealTone } | null {
   if (e.key === 'log.birth') return { char: '生', tone: 'red' };
   if (e.key === 'log.death' || e.key === 'log.death.hungry') return { char: '終', tone: 'ink' };
   if (e.key === 'log.age.milestone') return { char: '壽', tone: 'red' };
+  if (e.key === 'log.npc.death') return { char: '喪', tone: 'ink' };
+  if (e.key === 'log.npc.birth') return { char: '嬰', tone: 'jade' };
   if (e.key === 'log.illness.onset') return { char: '病', tone: 'ink' };
   if (e.key === 'log.injury.onset') return { char: '傷', tone: 'ink' };
   if (e.key === 'log.health.worse') return { char: '危', tone: 'ink' };

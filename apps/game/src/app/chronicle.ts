@@ -33,13 +33,26 @@ export function groupByYear(log: readonly LogEntry[], birthTick: Tick): YearGrou
   return groups;
 }
 
-export type ChronicleFilter = 'all' | 'major';
+export type ChronicleFilter = 'all' | 'major' | 'people';
+export const CHRONICLE_FILTERS: readonly ChronicleFilter[] = ['all', 'major', 'people'];
+
+/** Tin về người có tên (v0.4 F2): sinh, mất của người quanh mình, và sự kiện có người thật (kết quả mang tên người ấy). */
+export const isPeopleNews = (e: LogEntry): boolean => e.key.startsWith('log.npc.') || (e.key.startsWith('event.') && e.params.name !== undefined);
+/** Tin sinh, mất của người chưa quen: việc thường ngày, gập cả ở năm mới nhất. Người đã gặp mất là việc lớn, không gập. */
+const isNeighbourNews = (e: LogEntry): boolean => e.importance === 'minor' && e.key.startsWith('log.npc.');
 
 /**
- * Những dòng hiện cho một năm. "Chuyện lớn": chỉ việc lớn. "Tất cả": năm mới nhất hiện đủ; năm cũ gập việc thường
- * ngày lại trừ khi người chơi mở năm đó.
+ * Những dòng hiện cho một năm:
+ * - "Chuyện lớn": chỉ việc lớn;
+ * - "Người quanh mình": chỉ tin về người có tên, không gập;
+ * - "Tất cả": năm mới nhất hiện đủ, trừ tin sinh, mất của người chưa quen (F2); năm cũ gập mọi việc thường ngày. Người
+ *   chơi mở năm nào thì năm đó hiện đủ.
  */
 export function visibleItems(g: YearGroup, filter: ChronicleFilter, latest: boolean, unfolded: boolean): { items: ChronicleItem[]; folded: number } {
-  if (filter === 'all' && (latest || unfolded)) return { items: g.items, folded: 0 };
-  return { items: g.items.filter((it) => it.entry.importance === 'major'), folded: filter === 'all' ? g.minorCount : 0 };
+  if (filter === 'people') return { items: g.items.filter((it) => isPeopleNews(it.entry)), folded: 0 };
+  if (filter === 'major') return { items: g.items.filter((it) => it.entry.importance === 'major'), folded: 0 };
+  if (unfolded) return { items: g.items, folded: 0 };
+  const hide = latest ? isNeighbourNews : (e: LogEntry) => e.importance !== 'major';
+  const items = g.items.filter((it) => !hide(it.entry));
+  return { items, folded: g.items.length - items.length };
 }

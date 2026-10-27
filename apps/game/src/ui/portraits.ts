@@ -1,6 +1,6 @@
 // Chân dung nhân vật (nhập bằng tools/portraits/import.mjs). Chỉ để hiển thị, không phải luật game:
 // mỗi đời gắn cố định một gương mặt cùng giới tính, chọn bằng băm các trường ổn định của nhân vật.
-import type { CharacterView, EventFigure } from '@tsvl/shared';
+import type { CharacterView, EventFigure, NpcView } from '@tsvl/shared';
 import index from '../assets/portraits/index.json';
 import npcIndex from '../assets/portraits-npc/index.json';
 
@@ -47,4 +47,22 @@ export function npcPortraitOf(figure: EventFigure, key: string): string | null {
   if (!pool) return null;
   const pick = pool[hash(key) % pool.length]!;
   return npcUrls[`../assets/portraits-npc/${pick.id}.webp`] ?? null;
+}
+
+/**
+ * Chân dung người có tên (v0.4 F1): cùng kho người vô danh, khóa là id nên cùng người luôn cùng gương mặt; đổi lứa tuổi
+ * thì có thể đổi ảnh (người già đi). Trẻ con vẽ bóng mực như người chơi lúc nhỏ: kho không có ảnh trẻ con.
+ */
+export function personPortraitOf(p: Pick<NpcView, 'gender' | 'portrait'>): string | null {
+  if (p.portrait.ageBand === 'child') return null;
+  return npcPortraitOf({ gender: p.gender, ageBand: p.portrait.ageBand, class: p.portrait.class }, p.portrait.key);
+}
+
+/**
+ * Chân dung người trong thẻ sự kiện (v0.4 F3). Người thật (`npcId`) dùng id làm khóa, nên cùng gương mặt với khối
+ * "Người ở…"; người vô danh dùng `anonKey` (số thứ tự sự kiện). Trẻ con vẽ bóng mực.
+ */
+export function figurePortraitOf(figure: EventFigure, anonKey: string): string | null {
+  if (figure.ageBand === 'child') return null;
+  return npcPortraitOf(figure, figure.npcId ?? anonKey);
 }

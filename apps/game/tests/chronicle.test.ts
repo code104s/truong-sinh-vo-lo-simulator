@@ -1,6 +1,6 @@
 import type { LogEntry } from '@tsvl/shared';
 import { describe, expect, it } from 'vitest';
-import { groupByYear, visibleItems } from '../src/app/chronicle';
+import { groupByYear, isPeopleNews, visibleItems } from '../src/app/chronicle';
 import { planDirty } from '../src/app/plan';
 
 const e = (tick: number, importance: LogEntry['importance'] = 'minor', key = 'log.child.help'): LogEntry => ({ tick, key, params: {}, importance });
@@ -31,6 +31,29 @@ describe('biên niên theo năm (đề xuất giao diện P0)', () => {
     const [latest, y3] = groupByYear(log, 10);
     expect(visibleItems(latest!, 'major', true, false).items.every((it) => it.entry.importance === 'major')).toBe(true);
     expect(visibleItems(y3!, 'major', false, false)).toEqual({ items: [], folded: 0 });
+  });
+
+  it('tin sinh, mất của người chưa quen gập cả ở năm mới nhất; người quen mất vẫn hiện; mở ra thì hiện đủ (v0.4 F2)', () => {
+    const news: LogEntry[] = [
+      e(10, 'major', 'log.birth'), e(40), e(50, 'minor', 'log.npc.birth'), e(60, 'minor', 'log.npc.death'), e(70, 'major', 'log.npc.death'),
+    ];
+    const [latest, older] = groupByYear(news, 10);
+    const shown = visibleItems(latest!, 'all', true, false);
+    expect(shown.folded).toBe(2);
+    expect(shown.items.map((it) => it.entry.tick)).toEqual([70, 40]); // việc thường của mình vẫn hiện; người quen mất hiện
+    expect(visibleItems(latest!, 'all', true, true)).toMatchObject({ folded: 0 });
+    expect(visibleItems(latest!, 'all', true, true).items).toHaveLength(4);
+    expect(visibleItems(older!, 'all', false, false)).toMatchObject({ folded: 0 });
+  });
+
+  it('"Người quanh mình": chỉ tin sinh, mất và sự kiện có người thật, không gập', () => {
+    const named: LogEntry = { tick: 45, key: 'event.beggar.result.give', params: { name: 'Lý An', lost: 10 }, importance: 'major' };
+    const anon: LogEntry = { tick: 46, key: 'event.beggar.result.give', params: { lost: 10 }, importance: 'major' };
+    const news = [e(10, 'major', 'log.birth'), e(40), named, anon, e(50, 'minor', 'log.npc.birth'), e(60, 'major', 'log.npc.death')];
+    expect(news.map(isPeopleNews)).toEqual([false, false, true, false, true, true]);
+    const [g] = groupByYear(news, 40);
+    expect(visibleItems(g!, 'people', true, false)).toMatchObject({ folded: 0 });
+    expect(visibleItems(g!, 'people', false, false).items.map((it) => it.entry.tick)).toEqual([60, 50, 45]);
   });
 
   it('nhật ký rỗng thì không có năm nào', () => {

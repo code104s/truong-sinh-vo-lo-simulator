@@ -21,3 +21,15 @@ export function turningPoints(milestones: readonly LogEntry[], birthTick: Tick):
   }
   return out;
 }
+
+export interface Departed { entry: LogEntry; name: string; age: number; playerAge: number }
+
+/**
+ * Những người đã đi trước (v0.4 F4): người quen (đã gặp qua sự kiện) mất trong đời người chơi. Tin mất của họ là mốc
+ * lớn (S6), nên lấy từ những mốc lớn; người chưa quen chỉ là việc thường ngày, không vào đây.
+ */
+export function departedPeople(milestones: readonly LogEntry[], birthTick: Tick): Departed[] {
+  return milestones
+    .filter((e) => e.key === 'log.npc.death' && e.importance === 'major')
+    .map((entry) => ({ entry, name: String(entry.params.name), age: Number(entry.params.age), playerAge: ageYearsAt(birthTick, entry.tick) }));
+}

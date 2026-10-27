@@ -1,7 +1,7 @@
 import { t } from '@tsvl/content';
 import { calendarOf, type LogEntry, type Tick } from '@tsvl/shared';
 import { useMemo, useState } from 'preact/hooks';
-import { groupByYear, visibleItems, type ChronicleFilter } from '../app/chronicle';
+import { CHRONICLE_FILTERS, groupByYear, visibleItems, type ChronicleFilter } from '../app/chronicle';
 import { logText, shortDate } from '../app/format';
 import { logSeal } from '../ui/icons';
 import { Seal } from '../ui/ink';
@@ -32,16 +32,18 @@ export function Chronicle({ log, birthTick }: { log: LogEntry[]; birthTick: Tick
       <div class="chronicle-head">
         <span class="section-title">{t('ui.life.chronicle')}</span>
         <span class="tabs" role="tablist">
-          {(['all', 'major'] as const).map((f) => (
+          {CHRONICLE_FILTERS.map((f) => (
             <button key={f} type="button" role="tab" aria-selected={filter === f} class={`tab${filter === f ? ' on' : ''}`} onClick={() => setFilter(f)}>{t(`ui.chron.${f}`)}</button>
           ))}
         </span>
       </div>
       <div class="log">
-        {years.length === 0 && <p class="muted small">{t('ui.chron.empty')}</p>}
+        {(years.length === 0 || (filter === 'people' && !years.some((g) => visibleItems(g, filter, false, false).items.length))) && (
+          <p class="muted small">{t(filter === 'people' ? 'ui.chron.people_empty' : 'ui.chron.empty')}</p>
+        )}
         {years.map((g, k) => {
           const { items, folded } = visibleItems(g, filter, k === 0, open.has(g.year));
-          if (!items.length && !folded && filter === 'major') return null;
+          if (!items.length && !folded && filter !== 'all') return null;
           // Năm chỉ có việc thường ngày: gộp số việc vào dòng tiêu đề, khỏi thêm một dòng gập riêng
           const quiet = !items.length && folded > 0;
           const foldButton = folded > 0 && <button type="button" class="fold" onClick={() => toggle(g.year)}>{t('ui.chron.folded', { count: folded })} · {t('ui.chron.unfold')}</button>;
@@ -54,7 +56,7 @@ export function Chronicle({ log, birthTick }: { log: LogEntry[]; birthTick: Tick
               </h3>
               {items.map((it) => <LogLine key={it.index} e={it.entry} monthOnly />)}
               {!quiet && foldButton}
-              {filter === 'all' && k > 0 && open.has(g.year) && g.minorCount > 0 && <button type="button" class="fold" onClick={() => toggle(g.year)}>{t('ui.chron.fold')}</button>}
+              {filter === 'all' && open.has(g.year) && visibleItems(g, filter, k === 0, false).folded > 0 && <button type="button" class="fold" onClick={() => toggle(g.year)}>{t('ui.chron.fold')}</button>}
             </div>
           );
         })}

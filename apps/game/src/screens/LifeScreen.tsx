@@ -1,5 +1,5 @@
 import { t } from '@tsvl/content';
-import type { AdvanceMode, CalendarDate, CharacterView, LogEntry, MarketView, MonthPlan, ActionOption, ActionProgress, PendingEvent, TravelOption, TravelPreview } from '@tsvl/shared';
+import type { AdvanceMode, CalendarDate, CharacterView, LogEntry, MarketView, MonthPlan, ActionOption, ActionProgress, NpcView, PendingEvent, TravelOption, TravelPreview } from '@tsvl/shared';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { logText } from '../app/format';
@@ -12,6 +12,7 @@ import { ActionPlanner } from './ActionPlanner';
 import { Chronicle } from './Chronicle';
 import { EventCard } from './EventCard';
 import { MarketDialog, MarketPanel } from './Market';
+import { PeoplePanel } from './People';
 import { StatusBar } from './StatusBar';
 import { TravelDialog } from './TravelDialog';
 
@@ -35,6 +36,8 @@ interface Props {
   pending: PendingEvent | null; onChoose: (instance: number, choice: string) => void;
   /** Chợ quận đang đứng (F2); mua bán bằng lệnh TRADE, không tốn ô. */
   market: MarketView | null; onTrade: (grain: number) => void;
+  /** Người có tên ở quận đang đứng (v0.4 F1). */
+  people: NpcView[];
 }
 
 const copyPlan = (p: MonthPlan | null): MonthPlan => (p ? { slots: p.slots.map((s) => ({ ...s })) as MonthPlan['slots'] } : defaultPlan());
@@ -82,7 +85,7 @@ function Dossier({ c, world, children }: { c: CharacterView; world: WorldInfo | 
   );
 }
 
-export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview, pending, onChoose, market, onTrade }: Props) {
+export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview, pending, onChoose, market, onTrade, people }: Props) {
   const [travelOpen, setTravelOpen] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);
   const place = world?.map.counties[c.location]?.name ?? '';
@@ -128,6 +131,7 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
             </main>
             <Dossier c={c} world={world}>
               {market && <MarketPanel market={market} place={place} locked={lock} onOpen={() => setMarketOpen(true)} />}
+              <PeoplePanel people={people} place={place} />
             </Dossier>
           </div>
         </div>

@@ -385,7 +385,9 @@ p { margin: 0; }
 .running { font-style: italic; }
 
 .epitaph { align-items: center; text-align: center; justify-content: safe center; }
-.epitaph .portrait img, .epitaph .portrait svg { width: 140px; height: 210px; }
+/* Khung rộng bằng ảnh: khung mặc định 92px làm ảnh 140px tràn sang phải, lệch khỏi tâm cột */
+.epitaph .portrait, .epitaph .portrait img, .epitaph .portrait svg { width: 140px; }
+.epitaph .portrait img, .epitaph .portrait svg { height: 210px; }
 .epitaph-name { font-size: 32px; }
 .epitaph .lived { font: 700 24px var(--display); color: var(--cinnabar); display: flex; align-items: center; gap: 8px; }
 
@@ -740,3 +742,28 @@ p { margin: 0; }
 .hunger-banner.tone-warn { color: #6b4a12; border-color: rgba(166, 116, 30, 0.45); background: rgba(196, 140, 40, 0.1); }
 .hunger-banner.tone-bad { color: var(--cinnabar); border-color: rgba(158, 43, 31, 0.5); background: rgba(158, 43, 31, 0.08); }
 
+/* —— Người trong quận (v0.4 F1): thẻ người ở cột phải, xem nhanh bằng tờ giấy như bảng chọn việc —— */
+.people-panel { padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.people-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.person { width: 100%; display: flex; align-items: center; gap: 10px; padding: 4px 6px; text-align: left; font: inherit; color: var(--ink); background: transparent; border: 1px solid transparent; cursor: pointer; }
+.person:hover { background: rgba(255, 255, 255, 0.5); border-color: var(--line); }
+.person:focus-visible { outline: 2px dashed var(--cinnabar); outline-offset: 1px; }
+.person .portrait, .person .portrait img, .person .portrait svg { width: 34px; }
+.person .portrait img, .person .portrait svg { height: 51px; border-width: 2px; box-shadow: none; }
+.person-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.25; }
+.person-text strong { font: 600 15px/1.2 var(--display); }
+.person-text .tone-good { color: var(--jade); }
+.person-text .tone-warn { color: var(--ochre); }
+.person-text .tone-bad { color: var(--cinnabar); font-weight: 600; }
+.people-more { align-self: flex-start; }
+.person-card { width: min(420px, 100%); }
+.person-card-body { display: flex; gap: 16px; align-items: flex-start; }
+.person-card .portrait, .person-card .portrait img, .person-card .portrait svg { width: 120px; }
+.person-card .portrait img, .person-card .portrait svg { height: 180px; }
+.person-card .attrs { font-size: 14px; margin: 0; }
+.person-card .tone-good { color: var(--jade); }
+.person-card .tone-warn { color: var(--ochre); }
+.person-card .tone-bad { color: var(--cinnabar); }
+
+/* Người thật trong thẻ sự kiện (v0.4 F3): tên dưới chân dung */
+.event-figure .portrait figcaption { margin-top: 6px; font: 600 15px/1.3 var(--display); }

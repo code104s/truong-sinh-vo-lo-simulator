@@ -3,7 +3,7 @@ import type { CalendarDate, PendingEvent } from '@tsvl/shared';
 import { useEffect } from 'preact/hooks';
 import { dateText } from '../app/format';
 import { Portrait, Seal } from '../ui/ink';
-import { npcPortraitOf } from '../ui/portraits';
+import { figurePortraitOf } from '../ui/portraits';
 
 /**
  * Thẻ sự kiện có lựa chọn (ADR 0014, F3): hiện giữa màn, thời gian dừng tới khi chọn. Không có nút đóng — phải chọn
@@ -12,6 +12,8 @@ import { npcPortraitOf } from '../ui/portraits';
 export function EventCard({ pending, date, busy, onChoose }: { pending: PendingEvent; date: CalendarDate; busy: boolean; onChoose: (choice: string) => void }) {
   const key = pending.eventId;
   const params = pending.params;
+  // Người thật (v0.4 F3): tên ghi dưới chân dung, như người quen mặt trong khối "Người ở…"
+  const named = pending.figure?.npcId && typeof params.name === 'string' ? params.name : undefined;
   // Phím số 1–4 chọn nhanh lựa chọn tương ứng (nếu đang mở)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -27,7 +29,8 @@ export function EventCard({ pending, date, busy, onChoose }: { pending: PendingE
       <section class="event-card" role="dialog" aria-modal="true" aria-labelledby="event-title">
         <div class="event-figure">
           {pending.figure
-            ? <Portrait src={npcPortraitOf(pending.figure, `${pending.eventId}#${pending.instance}`)} age={pending.figure.ageBand === 'child' ? 8 : 40} />
+            ? <Portrait src={figurePortraitOf(pending.figure, `${pending.eventId}#${pending.instance}`)} age={pending.figure.ageBand === 'child' ? 8 : 40}
+                alt={named ?? ''} caption={named} />
             : <Seal char="變" />}
         </div>
         <div class="event-text">

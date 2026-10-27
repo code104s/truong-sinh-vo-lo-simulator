@@ -3,12 +3,14 @@ import { GRAIN_PER_DOU, type CharacterView, type LifeSummary } from '@tsvl/share
 import { useState } from 'preact/hooks';
 import { logText, shortDate } from '../app/format';
 import type { WorldInfo } from '../app/state';
-import { turningPoints } from '../app/summary';
+import { departedPeople, turningPoints } from '../app/summary';
 import { BrushLabel, InkLandscape, Portrait, Scroll, Seal } from '../ui/ink';
 import { PORTRAIT_MIN_AGE, portraitOf } from '../ui/portraits';
 import { LogLine } from './LifeScreen';
 
-type Tab = 'turning' | 'milestones';
+type Tab = 'turning' | 'departed' | 'milestones';
+const TABS: readonly Tab[] = ['turning', 'departed', 'milestones'];
+const TAB_LABEL: Record<Tab, string> = { turning: 'ui.summary.turning', departed: 'ui.summary.departed', milestones: 'ui.summary.milestones' };
 
 /**
  * Màn tổng kết (F5): bia đời bên trái — tuổi, nguyên do, của cải lúc nhắm mắt, số năm phải nhịn đói; bên phải các ngã
@@ -17,6 +19,7 @@ type Tab = 'turning' | 'milestones';
 export function SummaryScreen({ summary: s, character, world, onBack }: { summary: LifeSummary; character: CharacterView | null; world: WorldInfo | null; onBack: () => void }) {
   const place = world?.birthplaces.find((b) => b.id === s.birthplaceId);
   const turns = turningPoints(s.milestones, s.birthTick);
+  const departed = departedPeople(s.milestones, s.birthTick);
   const [tab, setTab] = useState<Tab>(turns.length ? 'turning' : 'milestones');
   const e = s.estate;
   const land = e.landMu > 0 ? `${t('ui.hud.mu', { mu: e.landMu })} · ${t(`tenure.${e.tenure}`)}` : e.tenure === 'tenant' ? t('tenure.tenant') : t('ui.hud.no_land');
@@ -41,6 +44,7 @@ export function SummaryScreen({ summary: s, character, world, onBack }: { summar
                 <dt>{t('ui.summary.hunger')}</dt>
                 <dd class={s.hungerYears > 0 ? 'hungry' : ''}>{s.hungerYears > 0 ? t('ui.summary.hunger_years', { count: s.hungerYears }) : t('ui.summary.hunger_none')}</dd>
                 <dt>{t('ui.summary.turning')}</dt><dd>{t('ui.summary.turning_count', { count: turns.length })}</dd>
+                <dt>{t('ui.summary.departed')}</dt><dd>{t('ui.summary.departed_count', { count: departed.length })}</dd>
               </dl>
             </div>
             <p class="muted tiny">{t('ui.summary.digest', { digest: s.digest })}</p>
@@ -48,11 +52,11 @@ export function SummaryScreen({ summary: s, character, world, onBack }: { summar
           </aside>
           <main class="chronicle">
             <header class="date-bar">
-              <BrushLabel>{t(tab === 'turning' ? 'ui.summary.turning' : 'ui.summary.milestones')}</BrushLabel>
+              <BrushLabel>{t(TAB_LABEL[tab])}</BrushLabel>
               <span class="tabs" role="tablist">
-                {(['turning', 'milestones'] as const).map((x) => (
+                {TABS.map((x) => (
                   <button key={x} type="button" role="tab" aria-selected={tab === x} class={`tab${tab === x ? ' on' : ''}`} onClick={() => setTab(x)}>
-                    {t(x === 'turning' ? 'ui.summary.turning' : 'ui.summary.milestones')}
+                    {t(TAB_LABEL[x])}
                   </button>
                 ))}
               </span>
@@ -60,6 +64,16 @@ export function SummaryScreen({ summary: s, character, world, onBack }: { summar
             <div class="log">
               {tab === 'milestones'
                 ? s.milestones.map((x, i) => <LogLine key={i} e={x} forceMajor />)
+                : tab === 'departed'
+                  ? departed.length
+                    ? departed.map((d, i) => (
+                      <p key={i} class="entry major departed">
+                        <span class="entry-date">{shortDate(d.entry.tick)}<br /><span class="muted small">{t('ui.summary.at_age', { age: d.playerAge })}</span></span>
+                        <span class="entry-seal"><Seal char="喪" tone="ink" /></span>
+                        <span>{logText(d.entry)}</span>
+                      </p>
+                    ))
+                    : <p class="muted">{t('ui.summary.departed_none')}</p>
                 : turns.length
                   ? turns.map((p, i) => (
                     <p key={i} class="entry major turn">
