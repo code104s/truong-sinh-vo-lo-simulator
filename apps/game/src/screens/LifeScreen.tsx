@@ -3,6 +3,7 @@ import type { AdvanceMode, CalendarDate, CharacterView, LogEntry, MarketView, Mo
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { logText } from '../app/format';
+import { hungerAlert } from '../app/hunger';
 import { defaultPlan, planDirty, planInvalid } from '../app/plan';
 import type { WorldInfo } from '../app/state';
 import { KIND_CHAR } from '../ui/icons';
@@ -37,6 +38,19 @@ interface Props {
 }
 
 const copyPlan = (p: MonthPlan | null): MonthPlan => (p ? { slots: p.slots.map((s) => ({ ...s })) as MonthPlan['slots'] } : defaultPlan());
+
+/** Dải cảnh báo đói (F1): ngay dưới thanh trạng thái, nói đói làm gì mình và làm gì được ngay. */
+function HungerBanner({ c, actions, locked, onMarket }: { c: CharacterView; actions: ActionOption[]; locked: boolean; onMarket: (() => void) | null }) {
+  const a = hungerAlert(c.household, c.canAct, actions);
+  if (!a) return null;
+  return (
+    <div class={`hunger-banner tone-${a.tone}`} role="status">
+      <Seal char="飢" tone={a.tone === 'bad' ? 'red' : 'ochre'} />
+      <p><strong>{t(a.key)}</strong>{a.advice && <> {t(a.advice.key, { actions: a.advice.actions.map((id) => t(id).toLowerCase()).join(', ') })}</>}</p>
+      {a.market && onMarket && <button type="button" class="btn small-btn" disabled={locked} onClick={onMarket}>{t('ui.hunger.to_market')}</button>}
+    </div>
+  );
+}
 
 /** Thân thế: những gì không đổi hoặc ít đổi. Đặt bên phải để thanh trạng thái và biên niên được chỗ (đề xuất P0). */
 function Dossier({ c, world, children }: { c: CharacterView; world: WorldInfo | null; children?: ComponentChildren }) {
@@ -88,6 +102,7 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
       <Scroll className="wide">
         <div class="life">
           <StatusBar c={c} date={date} saved={saved} world={world} />
+          <HungerBanner c={c} actions={actions} locked={lock} onMarket={market ? () => setMarketOpen(true) : null} />
           <div class="life-body">
             <main class="chronicle">
               {c.canAct

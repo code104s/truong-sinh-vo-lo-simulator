@@ -106,6 +106,15 @@ export const VI: Readonly<Record<string, string>> = {
   'ui.hud.health': 'Sức khỏe', 'ui.hud.stamina': 'Thể lực', 'ui.hud.belly': 'Bụng', 'ui.hud.food': 'Lương thực', 'ui.hud.money': 'Tiền', 'ui.hud.land': 'Ruộng',
   'ui.hud.parents': 'Cha mẹ nuôi', 'ui.hud.pocket': 'túi riêng {dou} đấu', 'ui.hud.dou': '{dou} đấu', 'ui.hud.coin': '{coin} văn', 'ui.hud.mu': '{mu} mẫu',
   'ui.hud.no_land': 'Chưa có',
+  // Cảnh báo đói (F1)
+  'ui.hunger.hungry': 'Đang đói: thể lực, sức khỏe chỉ hồi một nửa.',
+  'ui.hunger.starving': 'Đói lả: sức khỏe sụt mỗi tuần, không làm nổi việc nặng.',
+  'ui.hunger.famished': 'Kiệt sức vì đói: sức khỏe sụt nhanh, chết đói tới nơi.',
+  'ui.hunger.empty': 'Kho đã cạn, tiền không đủ mua một tuần ăn: tuần tới sẽ đói.',
+  'ui.hunger.advice': 'Mua lương ở chợ, hoặc xếp việc có cái ăn ngay: {actions}.',
+  'ui.hunger.advice_market': 'Lúc này không làm nổi việc gì kiếm ăn ngay: chỉ còn cách mua lương ở chợ.',
+  'ui.hunger.advice_child': 'Quận nhà đói kém, cha mẹ không đủ cho con ăn.',
+  'ui.hunger.to_market': 'Ra chợ',
   // Dự báo đủ ăn trong kế hoạch tháng (F4)
   'ui.food.none': 'Hết cái ăn: tuần này phải mua hay kiếm được ngay.',
   'ui.food.until': 'Kho đủ ăn tới {until} (khoảng {weeks} tuần).',
