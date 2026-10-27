@@ -3,6 +3,8 @@ import { ageYearsAt, seasonOfMonth, calendarOf, type DeathCause, type LogEntry, 
 import { clamp, idiv, lerpTable, mulDiv } from '../core/math';
 import type { Rng } from '../core/rng';
 import { healthBandOf, lifespanCap, traitDef, type CharacterState, type Condition } from './character';
+import { fatiguePct } from './stamina';
+import { skillRiskPct } from './skills';
 import {
   ACCIDENT_BY_AGE, ACCIDENT_FATAL_PPM, HEALTH_MAX_BY_AGE_RATIO, HEALTH_MAX_FLOOR, ILLNESS_BY_BACKGROUND, ILLNESS_BY_SEASON,
   ILLNESS_ONSET_BY_AGE, ILLNESS_WEAK_PCT, ILLNESS_WEAK_THRESHOLD, ILLNESSES, INJURIES, MEDICINE_BY_BACKGROUND,
@@ -33,7 +35,7 @@ const traitPct = (c: CharacterState, key: 'illnessPct' | 'accidentPct') =>
   c.traits.reduce((p, t) => mulDiv(p, traitDef(t)[key] ?? 100, 100), 100);
 
 export function computeHealthMax(c: CharacterState, tick: Tick): number {
-  let m = lerpTable(HEALTH_MAX_BY_AGE_RATIO, ageRatio(c, tick)) - c.scars;
+  let m = Math.min(1000, lerpTable(HEALTH_MAX_BY_AGE_RATIO, ageRatio(c, tick)) + idiv(c.skillXp.martial, 1000) * 5) - c.scars;
   for (const t of c.traits) m += traitDef(t).healthMaxDelta ?? 0;
   return Math.max(HEALTH_MAX_FLOOR, m);
 }
@@ -62,6 +64,7 @@ export function eventsPhase(c: CharacterState, tick: Tick, illnessRng: Rng, acci
     ppm = mulDiv(ppm, ILLNESS_BY_BACKGROUND[c.background], 100);
     ppm = mulDiv(ppm, 160 - c.constitution * 10, 100);
     ppm = mulDiv(ppm, traitPct(c, 'illnessPct'), 100);
+    ppm = mulDiv(ppm, fatiguePct(c, tick), 100);
     if (c.health < ILLNESS_WEAK_THRESHOLD) ppm = mulDiv(ppm, ILLNESS_WEAK_PCT, 100);
     if (illnessRng.chance(ppm)) {
       const pool = ILLNESSES.filter((d) => ratio >= (d.minAgeRatio ?? 0));
@@ -71,9 +74,9 @@ export function eventsPhase(c: CharacterState, tick: Tick, illnessRng: Rng, acci
   }
 
   // Tai nạn
-  const appm = mulDiv(byAge(ACCIDENT_BY_AGE, age), traitPct(c, 'accidentPct'), 100);
+  const appm = mulDiv(mulDiv(byAge(ACCIDENT_BY_AGE, age), traitPct(c, 'accidentPct'), 100), fatiguePct(c, tick), 100);
   if (accidentRng.chance(appm)) {
-    if (accidentRng.chance(ACCIDENT_FATAL_PPM)) return { tick, cause: 'accident', detail: 'accident.fatal' };
+    if (accidentRng.chance(mulDiv(ACCIDENT_FATAL_PPM, skillRiskPct(c, 'martial'), 100))) return { tick, cause: 'accident', detail: 'accident.fatal' };
     if (!c.conditions.some((x) => x.kind === 'injury')) {
       startCondition(c, INJURIES[accidentRng.weighted(INJURIES.map((d) => d.weight))]!, 'injury', accidentRng, log, age);
     }
@@ -92,7 +95,7 @@ const defOf = (x: Condition): IllnessDef | InjuryDef => {
  * Pha "Hậu quả", nhịp tuần: diễn tiến bệnh, hồi phục, kiểm tra tử vong (cuối pha).
  * Trả về cái chết nếu có.
  */
-export function consequencesPhase(c: CharacterState, tick: Tick, healthRng: Rng, log: Log): Death | null {
+export function consequencesPhase(c: CharacterState, tick: Tick, healthRng: Rng, log: Log, carePct = 0): Death | null {
   const age = ageYearsAt(c.birthTick, tick);
   const bandBefore = healthBandOf(c);
   let worst: { id: string; damage: number } | null = null;
@@ -106,7 +109,7 @@ export function consequencesPhase(c: CharacterState, tick: Tick, healthRng: Rng,
     const still: Condition[] = [];
     for (const x of c.conditions) {
       const def = defOf(x);
-      const damage = mulDiv(healthRng.int(def.damage[0], def.damage[1]), 100 - MEDICINE_BY_BACKGROUND[c.background], 100);
+      const damage = mulDiv(mulDiv(healthRng.int(def.damage[0], def.damage[1]), 100 - MEDICINE_BY_BACKGROUND[c.background], 100), 100 - carePct, 100);
       c.health -= damage;
       if (!worst || damage > worst.damage) worst = { id: x.id, damage };
       x.weeksLeft -= 1;
@@ -131,6 +134,7 @@ export function consequencesPhase(c: CharacterState, tick: Tick, healthRng: Rng,
   if (c.health <= 0) {
     c.health = 0;
     if (worst) return { tick, cause: worst.id.startsWith('injury.') ? 'accident' : 'illness', detail: worst.id };
+    if (c.stamina === 0) return { tick, cause: 'illness', detail: 'illness.exhaustion' };
     return { tick, cause: 'old_age', detail: 'old_age.natural' };
   }
 

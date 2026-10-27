@@ -61,3 +61,9 @@ Test duyệt toàn bộ danh mục: mọi `ActionDef` có ít nhất một giá 
 - Người chơi ra quyết định thật; digest phụ thuộc chuỗi lệnh (ADR 0011).
 - v0.2 chưa có tiền và lương thực (ADR 0010): làm ruộng/làm thuê chỉ cho kỹ năng; thu nhập vào ở v0.3. Rủi ro "không có gì để làm" (GDD 7) tồn tại tới v0.3.
 - Save đổi định dạng (version 2): save v0.1 bị từ chối, như ADR 0004 đã định.
+
+## Chỉnh khi triển khai (2026-10-27, sau review)
+- **Ô không làm được:** khóa tạm thời (`lock.winter`, `lock.stamina`, `lock.health`) chỉ làm ô đó thành nghỉ, không ngắt tua và giữ hành động nhiều ô đang dở. Khóa do kế hoạch sai (`lock.place`, `lock.route`, `lock.action`) nghỉ và **ngắt tua một lần**; không báo lại cho tới khi người chơi đặt kế hoạch mới hoặc tới nơi ở mới. Lý do: kế hoạch tự lặp; ngắt ở mọi ô làm tua năm chỉ đi được vài tuần.
+- **Di chuyển là việc một lần:** tới nơi thì ô "đi tới X" trong kế hoạch thành nghỉ.
+- **Giao diện** không chặn kế hoạch theo khóa của lúc này; chỉ chặn kế hoạch sai ý nghĩa, khóa hiện thành cảnh báo.
+- **Nhật ký** không ghi việc thường ngày; chỉ ghi tới nơi, đang đi đường, lao lực, chấn thương, kế hoạch sai và các mốc.

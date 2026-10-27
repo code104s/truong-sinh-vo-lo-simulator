@@ -17,6 +17,7 @@
     "@types/node": "^26.6.5"
   },
   "scripts": {
-    "sim": "tsx src/cli.ts"
+    "sim": "tsx src/cli.ts",
+    "test": "vitest run"
   }
 }

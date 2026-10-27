@@ -3,6 +3,9 @@ import { GIVEN_FEMALE, GIVEN_MALE, SURNAMES } from '@tsvl/content';
 import { TICKS_PER_YEAR, ageYearsAt, type BirthplaceId, type CharacterView, type Gender, type HealthBand, type SettlementKind, type Tick } from '@tsvl/shared';
 import { clamp, idiv } from '../core/math';
 import type { Rng } from '../core/rng';
+import { staminaBand } from './stamina';
+import { emptySkills, skillViews, type Skill } from './skills';
+import { ACTION_MIN_AGE } from './actions';
 import {
   BACKGROUND_WEIGHTS, BACKGROUNDS, ELEMENTS, HEALTH_FULL, LIFESPAN_BASE_YEARS, LIFESPAN_BY_BACKGROUND, LIFESPAN_BY_CONSTITUTION,
   LIFESPAN_DICE, LIFESPAN_DIE_MAX, LIFESPAN_MAX_YEARS, LIFESPAN_MIN_YEARS, PERSONALITIES, SPIRIT_ROOT_COUNT_WEIGHTS, SPIRIT_ROOT_PPM,
@@ -34,6 +37,9 @@ export interface CharacterState {
   /** Quận nhà (quận sinh) và quận đang ở (ADR 0009). */
   home: number;
   location: number;
+  stamina: number;
+  skillXp: Record<Skill, number>;
+  skillLastUsed: Record<Skill, number>;
   background: Background;
   personality: string;
   /** 1..10 */
@@ -116,7 +122,7 @@ export function createCharacter(
 
   const c: CharacterState = {
     name, gender, birthTick: input.birthTick, birthplaceId: input.birthplaceId, birthplaceKind: input.birthplaceKind,
-    home: input.county, location: input.county,
+    home: input.county, location: input.county, stamina: 0, skillXp: emptySkills(), skillLastUsed: emptySkills(input.birthTick),
     background, personality, constitution, aptitude, luck, traits, spiritRoot,
     lifespanBase, lifespanBonus: 0, health: 0, healthMax: 0, scars: 0, conditions: [], alive: true,
   };
@@ -157,9 +163,8 @@ export function toView(c: CharacterState, tick: Tick): CharacterView {
     alive: c.alive,
     location: c.location,
     home: c.home,
-    // Thể lực, kỹ năng, quyền tự xếp kế hoạch: giá trị tạm của Bước 0, làm thật ở S3, S4, S6
-    staminaBand: 'fresh',
-    skills: [],
-    canAct: false,
+    staminaBand: staminaBand(c, tick),
+    skills: skillViews(c),
+    canAct: c.alive && ageYearsAt(c.birthTick, tick) >= ACTION_MIN_AGE,
   };
 }

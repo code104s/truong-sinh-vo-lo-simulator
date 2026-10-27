@@ -8,8 +8,9 @@ import {
 import { Namer } from '../cartographer/gen/naming';
 import { hashString, RNG } from '../cartographer/gen/rng';
 import { DEFAULT_PARAMS, type World } from '../cartographer/gen/types';
-import { generateWorld } from '../cartographer/gen/world';
+import { generateWorld, riverThreshold } from '../cartographer/gen/world';
 import { toHanViet } from './hanviet';
+import { countyAdjacency, reachableCounties } from './connectivity';
 
 export const REGION_WORLD_W = 1024;
 export const REGION_WORLD_H = 768;
@@ -25,9 +26,13 @@ const MIN_SPACING = 3;
 export interface RegionLogic {
   /** km/ô × 1000 */
   kmPerCellMilli: number;
-  counties: { worldIndex: number; area: number; seat: CellPos }[];
+  counties: { worldIndex: number; area: number; seat: CellPos; name?: string }[];
+  /** Loại khu dân cư tại trị sở mỗi quận (ADR 0009); làng phụ không đổi loại trị sở. */
+  settlementKind: SettlementKind[];
   /** Cặp quận kề nhau (chỉ số cục bộ, a < b), sắp xếp. */
   adjacency: [number, number][];
+  /** Hệ số địa hình (%) ứng với từng cạnh adjacency; núi ×2, sông lớn ×1,5. */
+  terrainPct: number[];
   /** Khoảng cách đường chim bay giữa trị sở (km), ma trận đối xứng. */
   seatKm: number[][];
 }
@@ -83,12 +88,14 @@ function cut(world: World, worldSeed: WorldSeed, ri: number, placeVariant: numbe
 
   // Quận cùng nước có trị sở trong bán kính (so bình phương, tránh Math.hypot có thể lệch giữa engine)
   const r = REGION_RADIUS_KM / world.kmPerCell;
-  const chosen: number[] = [];
+  const candidates: number[] = [];
   pol.counties.forEach((c, i) => {
     const dx = c.x - cap.x;
     const dy = c.y - cap.y;
-    if (i === capCounty || (c.realm === ri && dx * dx + dy * dy <= r * r)) chosen.push(i);
+    if (i === capCounty || (c.realm === ri && dx * dx + dy * dy <= r * r)) candidates.push(i);
   });
+  const connected = reachableCounties(capCounty, countyAdjacency(pol.county, W, world.H, new Set(candidates)));
+  const chosen = candidates.filter((i) => connected.has(i));
   const localOf = new Map(chosen.map((wi, li) => [wi, li]));
 
   // Hộp bao
@@ -243,23 +250,33 @@ function cut(world: World, worldSeed: WorldSeed, ri: number, placeVariant: numbe
   };
 
   // —— Lớp logic ——
-  const pairs = new Set<number>();
-  for (let y = 0; y < RH; y++) {
-    for (let x = 0; x < RW; x++) {
-      const a = county[y * RW + x];
-      if (a < 0) continue;
-      for (const b of [x + 1 < RW ? county[y * RW + x + 1] : -1, y + 1 < RH ? county[(y + 1) * RW + x] : -1]) {
-        if (b >= 0 && b !== a) pairs.add(Math.min(a, b) * 65536 + Math.max(a, b));
-      }
-    }
-  }
-  const adjacency = [...pairs].sort((a, b) => a - b).map((k): [number, number] => [Math.floor(k / 65536), k % 65536]);
+  const adjacency = countyAdjacency(county, RW, RH);
+  const settlementKind: SettlementKind[] = chosen.map(() => 'village');
+  for (const p of birthplaces) if (p.kind !== 'village') settlementKind[p.county] = p.kind;
   const seats = chosen.map((wi) => pol.counties[wi]);
   const seatKm = seats.map((a) => seats.map((b) => Math.round(Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2) * world.kmPerCell)));
+  // Chỉ worldgen đọc mảng số thực. Sim nhận hệ số nguyên đã lưu, không đọc bản đồ vẽ.
+  // Sông lớn = dòng chảy đủ để renderer vẽ thành sông (cùng ngưỡng); ngưỡng cũ 10 làm 91% cạnh bị tính là qua sông.
+  const bigRiver = riverThreshold(world.W);
+  const terrainPct = adjacency.map(([a, b]) => {
+    const p = counties[a]!.seat, q = counties[b]!.seat;
+    const steps = Math.max(Math.abs(q.x - p.x), Math.abs(q.y - p.y), 1);
+    let mountain = false, river = false;
+    for (let k = 0; k <= steps; k++) {
+      const x = Math.round(p.x + (q.x - p.x) * k / steps);
+      const y = Math.round(p.y + (q.y - p.y) * k / steps);
+      const i = (y0 + y) * W + x0 + x;
+      mountain ||= world.elevation[i]! >= 1; // độ cao km
+      river ||= world.flow[i]! >= bigRiver;
+    }
+    return (mountain ? 200 : 100) * (river ? 150 : 100) / 100;
+  });
   const logic: RegionLogic = {
     kmPerCellMilli: Math.round(world.kmPerCell * 1000),
-    counties: chosen.map((wi, li) => ({ worldIndex: wi, area: pol.counties[wi].area, seat: counties[li].seat })),
+    counties: chosen.map((wi, li) => ({ worldIndex: wi, area: pol.counties[wi].area, seat: counties[li].seat, name: counties[li].name })),
+    settlementKind,
     adjacency,
+    terrainPct,
     seatKm,
   };
 

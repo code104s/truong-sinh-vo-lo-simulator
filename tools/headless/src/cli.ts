@@ -1,6 +1,7 @@
 // CLI mô phỏng không giao diện (GDD 3.2 O). Dùng cùng SimHost với worker trong trình duyệt.
 //   pnpm sim life --seed tsvl-01 --birthplace "Phố Kỳ" [--life-seed N] [--save-at TICK --out f.json] [--load f.json] [--quiet]
-//   pnpm sim batch --seeds 1000 [--worlds 10] [--threads K]
+//   pnpm sim batch --seeds 1000 [--worlds 10] [--threads K] [--policy balanced|all] [--out report.json]
+//   pnpm sim replay --save file.json
 //   pnpm sim regions --seeds 100 [--threads K] [--once]
 import { readFileSync, writeFileSync } from 'node:fs';
 import { cpus } from 'node:os';
@@ -10,20 +11,28 @@ import { parseArgs } from 'node:util';
 import { isMainThread, parentPort, Worker } from 'node:worker_threads';
 import { t } from '@tsvl/content';
 import { calendarOf, decodeSave, encodeSave, type Birthplace, type Command, type LogEntry, type RegionId, type SettlementKind, type Tick, type WorkerMessage } from '@tsvl/shared';
-import { digestOf, Life, SimHost } from '@tsvl/sim';
-import { buildRegion, regionIdentity } from '@tsvl/worldgen';
+import { digestOf, replaySave, SimHost } from '@tsvl/sim';
+import { buildRegion, regionIdentity, type RegionLogic } from '@tsvl/worldgen';
+import { runPolicyBatch } from './batch';
 
 // —— Luồng phụ: sinh vùng ——
 interface RegionJob { seed: string }
-interface RegionResult { seed: string; ok: boolean; error?: string; digest: string; regionId: RegionId; birthplaces: Birthplace[]; counties: number; landKm2: number; size: [number, number]; ms: number }
+interface RegionResult { logic: RegionLogic | null; seed: string; ok: boolean; error?: string; digest: string; regionId: RegionId; birthplaces: Birthplace[]; counties: number; landKm2: number; size: [number, number]; ms: number }
 
 function regionJob({ seed }: RegionJob): RegionResult {
   const t0 = performance.now();
   try {
     const b = buildRegion(seed);
-    return { seed, ok: true, digest: digestOf(regionIdentity(b)), regionId: b.summary.id, birthplaces: b.birthplaces, counties: b.map.counties.length, landKm2: b.summary.landKm2, size: [b.map.W, b.map.H], ms: performance.now() - t0 };
+    const capital = b.birthplaces.find((p) => p.kind === 'city')!;
+    const seen = new Set([capital.county]);
+    for (let pass = 0; pass < b.logic.counties.length; pass++) for (const [a, c] of b.logic.adjacency) {
+      if (seen.has(a)) seen.add(c);
+      if (seen.has(c)) seen.add(a);
+    }
+    if (seen.size !== b.logic.counties.length || b.birthplaces.some((p) => !seen.has(p.county))) throw new Error('vùng không liên thông tới kinh đô');
+    return { logic: b.logic, seed, ok: true, digest: digestOf(regionIdentity(b)), regionId: b.summary.id, birthplaces: b.birthplaces, counties: b.map.counties.length, landKm2: b.summary.landKm2, size: [b.map.W, b.map.H], ms: performance.now() - t0 };
   } catch (e) {
-    return { seed, ok: false, error: (e as Error).message, digest: '', regionId: 'r0' as RegionId, birthplaces: [], counties: 0, landKm2: 0, size: [0, 0], ms: performance.now() - t0 };
+    return { logic: null, seed, ok: false, error: (e as Error).message, digest: '', regionId: 'r0' as RegionId, birthplaces: [], counties: 0, landKm2: 0, size: [0, 0], ms: performance.now() - t0 };
   }
 }
 
@@ -66,7 +75,6 @@ const shortDate = (tick: Tick) => {
   return t('date.short', { year: d.year, month: `month.${d.month}` });
 };
 const logText = (e: LogEntry) => t(e.params.scar === 1 ? `${e.key}.scar` : e.key, e.params);
-const pct = (k: number, n: number) => `${((100 * k) / n).toFixed(1)}%`;
 
 function makeHost() {
   let reqId = 0;
@@ -93,6 +101,8 @@ async function main() {
       'save-at': { type: 'string' },
       out: { type: 'string' },
       load: { type: 'string' },
+      save: { type: 'string' },
+      policy: { type: 'string', default: 'balanced' },
       quiet: { type: 'boolean', default: false },
       seeds: { type: 'string', default: '1000' },
       worlds: { type: 'string', default: '10' },
@@ -104,11 +114,17 @@ async function main() {
     case 'life':
       return lifeCmd(a);
     case 'batch':
-      return batchCmd(Number(a.seeds), Number(a.worlds), Number(a.threads));
+      return batchCmd(Number(a.seeds), Number(a.worlds), Number(a.threads), a.policy!, a.out);
+    case 'replay': {
+      if (!a.save) throw new Error('Dùng: pnpm sim replay --save file.json');
+      const decoded = decodeSave(readFileSync(resolve(cwd(), a.save), 'utf8'));
+      if (!decoded.ok) throw new Error(decoded.error);
+      console.log(`KẾT QUẢ: PASS · replay digest ${replaySave(decoded.value)}`); return;
+    }
     case 'regions':
       return regionsCmd(Number(a.seeds), Number(a.threads), a.once ?? false);
     default:
-      console.log('Dùng: pnpm sim life|batch|regions …  (xem đầu tools/headless/src/cli.ts)');
+      console.log('Dùng: pnpm sim life|batch|regions|replay …  (xem đầu tools/headless/src/cli.ts)');
       process.exit(cmd ? 1 : 0);
   }
 }
@@ -176,68 +192,14 @@ function lifeCmd(a: { seed?: string; birthplace?: string; 'life-seed'?: string; 
 }
 
 // —— batch ——
-async function batchCmd(n: number, worldsWanted: number, threads: number) {
-  if (!Number.isInteger(n) || n <= 0) throw new Error('--seeds phải là số nguyên dương');
-  const W = Math.max(1, Math.min(worldsWanted, n));
-  console.log(`Batch ${n} đời trên ${W} thế giới (${threads} luồng sinh vùng)`);
-  const t0 = performance.now();
-  const regions = await regionPool(Array.from({ length: W }, (_, w) => ({ seed: `batch-${String(w + 1).padStart(2, '0')}` })), threads);
-  const genMs = performance.now() - t0;
+async function batchCmd(n: number, worldsWanted: number, threads: number, policy: string, out?: string) {
+  if (!Number.isInteger(n) || n <= 0 || !Number.isInteger(worldsWanted) || worldsWanted <= 0 || !Number.isInteger(threads) || threads <= 0) throw new Error('seeds/worlds/threads phải là số nguyên dương');
+  const worlds = Math.min(worldsWanted, n);
+  console.log(`Batch ${n} đời × ${policy} trên ${worlds} thế giới`);
+  const regions = await regionPool(Array.from({ length: worlds }, (_, i) => ({ seed: `batch-${String(i + 1).padStart(2, '0')}` })), threads);
   const bad = regions.filter((r) => !r.ok);
   if (bad.length) throw new Error(`sinh vùng lỗi: ${bad.map((r) => `${r.seed}: ${r.error}`).join('; ')}`);
-
-  const ages: number[] = [];
-  const causes = new Map<string, number>();
-  const details = new Map<string, number>();
-  const byKind = new Map<SettlementKind, number[]>();
-  let stuck = 0, overCap = 0, ticks = 0;
-  const t1 = performance.now();
-  for (let i = 0; i < n; i++) {
-    const r = regions[i % W]!;
-    const bp = r.birthplaces[Math.floor(i / W) % r.birthplaces.length]!;
-    const life = Life.create({ worldSeed: r.seed, regionId: r.regionId, birthplaceId: bp.id, lifeSeed: i }, bp);
-    const start = life.tick;
-    life.runToDeath();
-    ticks += life.tick - start;
-    if (life.alive) {
-      stuck++;
-      continue;
-    }
-    const c = life.character;
-    if (life.death!.tick - c.birthTick > c.lifespanBase + c.lifespanBonus) overCap++;
-    const s = life.summary();
-    ages.push(s.ageYears);
-    causes.set(s.cause, (causes.get(s.cause) ?? 0) + 1);
-    details.set(s.causeDetail, (details.get(s.causeDetail) ?? 0) + 1);
-    byKind.set(bp.kind, [...(byKind.get(bp.kind) ?? []), s.ageYears]);
-  }
-  const lifeMs = performance.now() - t1;
-  ages.sort((x, y) => x - y);
-  const q = (p: number) => ages[Math.min(ages.length - 1, Math.floor(p * (ages.length - 1)))];
-  const inRange = ages.filter((x) => x >= 40 && x <= 80).length;
-  const mean = ages.reduce((s, x) => s + x, 0) / Math.max(1, ages.length);
-
-  console.log(`\nĐời kẹt (quá 200 năm chưa chết): ${stuck} · vượt trần thọ nguyên: ${overCap}`);
-  console.log(`Tuổi chết: trung bình ${mean.toFixed(1)} · p5 ${q(0.05)} · p10 ${q(0.1)} · p25 ${q(0.25)} · trung vị ${q(0.5)} · p75 ${q(0.75)} · p90 ${q(0.9)} · p95 ${q(0.95)} · lớn nhất ${ages.at(-1)}`);
-  console.log(`Trong 40–80: ${pct(inRange, n)} · dưới 15: ${pct(ages.filter((x) => x < 15).length, n)} · dưới 40: ${pct(ages.filter((x) => x < 40).length, n)} · trên 80: ${pct(ages.filter((x) => x > 80).length, n)}`);
-  console.log('Phân bố theo thập niên:');
-  for (let d = 0; d <= Math.floor((ages.at(-1) ?? 0) / 10); d++) {
-    const k = ages.filter((x) => Math.floor(x / 10) === d).length;
-    console.log(`  ${String(d * 10).padStart(3)}–${String(d * 10 + 9).padEnd(3)} ${String(k).padStart(5)}  ${'█'.repeat(Math.round((60 * k) / n))}`);
-  }
-  console.log('Nguyên nhân chết:');
-  for (const [k, v] of [...causes].sort((x, y) => y[1] - x[1])) console.log(`  ${k.padEnd(12)} ${String(v).padStart(5)}  ${pct(v, n)}`);
-  console.log('Chi tiết:');
-  for (const [k, v] of [...details].sort((x, y) => y[1] - x[1])) console.log(`  ${k.padEnd(22)} ${String(v).padStart(5)}  ${pct(v, n)}  (${t(k)})`);
-  console.log('Trung vị tuổi chết theo nơi sinh:');
-  for (const kind of ['village', 'town', 'city'] as const) {
-    const xs = (byKind.get(kind) ?? []).sort((x, y) => x - y);
-    if (xs.length) console.log(`  ${t(`kind.${kind}`).padEnd(6)} ${String(xs.length).padStart(5)} đời · trung vị ${xs[Math.floor(xs.length / 2)]}`);
-  }
-  console.log(`\nĐo: sinh ${W} vùng ${(genMs / 1000).toFixed(1)} s (song song) · ${n} đời ${lifeMs.toFixed(0)} ms · ${ticks} tick · ${((lifeMs * 1000) / ticks).toFixed(2)} µs/tick · ${(lifeMs / n).toFixed(2)} ms/đời`);
-  const pass = stuck === 0 && overCap === 0 && inRange / n >= 0.9;
-  console.log(pass ? 'KẾT QUẢ: PASS (0 kẹt, 0 vượt trần, ≥ 90% trong 40–80)' : 'KẾT QUẢ: FAIL');
-  if (!pass) process.exitCode = 1;
+  runPolicyBatch(regions, n, policy, out);
 }
 
 // —— regions ——

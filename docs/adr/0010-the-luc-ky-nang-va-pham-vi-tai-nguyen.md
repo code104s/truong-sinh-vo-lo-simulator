@@ -1,5 +1,13 @@
 # ADR 0010 — Thể lực, kỹ năng và phạm vi tài nguyên ở v0.2
 
+## Tham số triển khai và cân bằng — 2026-10-27
+- Trần thể lực: `(600 + thể chất × 35 + floor(võ / 1000) × 8) × hệ số tuổi`, giới hạn 250–1000. Hệ số tuổi theo tỉ lệ tuổi/thọ nguyên: 0‰ → 50%, 200‰ → 100%, 650‰ → 100%, 1000‰ → 50%.
+- Hồi mỗi tick: `(45 + thể chất × 4) × trần / 1000`; nghỉ cộng 240. Cạn thể lực khi làm việc mất 24 sức khỏe. Mỏi tăng xác suất bệnh/tai nạn ×1,3; kiệt sức ×1,4 (khởi điểm ×2 không đạt tuổi thọ chiến lược lao lực).
+- Giá thể lực: ruộng 180, thuê 120, hái lượm 130, săn 200, chữ 30, võ 240, nghỉ 0, thầy thuốc 20, di chuyển 100 mỗi ô. Mọi hành động còn tốn ít nhất một ô thời gian.
+- Nghỉ hồi thêm 18 sức khỏe, giảm 10% tổn hại bệnh của tick; thầy thuốc hồi 100, giảm 50% tổn hại, rút bớt một tick bệnh (vẫn qua pha kết thúc bệnh bình thường).
+- Kỹ năng: cơ sở 35 XP/lần, nhân `(50 + ngộ tính × 10)%`, chữ hỗ trợ tối đa 20%, mệt giảm hiệu quả. Không dùng một năm thì mất 5% mỗi năm. Trần 10.000; bậc ở 1.000/4.000/8.000. Kỹ năng cùng loại giảm rủi ro tối đa 60%; võ giảm tai nạn chết ngay, tăng trần sức khỏe tối đa 50 và sức bền tối đa 80; tác dụng mất dần khi mai một.
+- Kết quả 5.000 đời và giới hạn còn lại: [báo cáo nghiệm thu](../v0.2-bao-cao-nghiem-thu.md).
+
 - Trạng thái: **ĐÃ DUYỆT** (2026-10-26, chủ dự án đồng ý mọi khuyến nghị Q1–Q8 ở `docs/v0.2-giai-doan-a.md`)
 - Ngày: 2026-10-26
 - Liên quan: GDD 1.1, 3.2 A (thuộc tính phải có tác động), 3.2 E, 3.2 F, 5; ADR 0005, 0008

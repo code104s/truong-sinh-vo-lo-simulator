@@ -12,11 +12,12 @@ import type { SimClient } from './client';
 import { randomSeed } from './format';
 import { initialState, reduce } from './state';
 import { storage } from './storage';
+import { downloadSave } from './exportSave';
 
 /** Khi tua liên tục: mỗi bước một tháng, cách nhau chừng này mili giây để người chơi kịp thấy đời trôi. */
 const RUN_STEP_MS = 60;
 
-type Kind = 'advance' | 'newLife' | 'other';
+type Kind = 'advance' | 'newLife' | 'plan' | 'export' | 'other';
 
 export function App({ client }: { client: SimClient }) {
   const [s, dispatch] = useReducer(reduce, initialState);
@@ -32,7 +33,7 @@ export function App({ client }: { client: SimClient }) {
   const send = useCallback((cmd: Parameters<SimClient['send']>[0], kind: Kind = 'other') => {
     const id = client.send(cmd);
     kinds.current.set(id, kind);
-    if (kind === 'advance') setBusy(true);
+    if (kind === 'advance' || kind === 'plan') setBusy(true);
     return id;
   }, [client]);
 
@@ -56,16 +57,17 @@ export function App({ client }: { client: SimClient }) {
         runRef.current = false;
         break;
       case 'STATE':
-        if (kind === 'advance') setBusy(false);
+        if (kind === 'advance' || kind === 'plan') setBusy(false);
         if (runRef.current && kind === 'advance') {
           setTimeout(() => {
             if (runRef.current && !deadRef.current) advance('month');
           }, RUN_STEP_MS);
-        } else if (kind === 'advance' || kind === 'newLife') {
+        } else if (kind === 'advance' || kind === 'newLife' || kind === 'plan') {
           send({ type: 'SAVE' });
         }
         break;
       case 'SAVED':
+        if (kind === 'export') { downloadSave(m.save); break; }
         if (deadRef.current) break;
         queue(async () => {
           if (deadRef.current) return;
@@ -136,6 +138,10 @@ export function App({ client }: { client: SimClient }) {
         <LifeScreen
           world={s.world} date={s.date} character={s.character} log={s.log} interrupt={s.interrupt}
           running={s.running} busy={busy} saved={saved} onAdvance={advance} onRun={onRun} onPause={onPause}
+          plan={s.plan} active={s.active} actions={s.actions} travel={s.travel} travelPreview={s.travelPreview}
+          onPlan={(plan) => { setSaved(false); send({ type: 'SET_PLAN', plan }, 'plan'); }}
+          onPreview={(county) => send({ type: 'PREVIEW_TRAVEL', county })}
+          onExport={() => send({ type: 'SAVE' }, 'export')}
         />
       )}
       {s.screen === 'summary' && s.summary && <SummaryScreen summary={s.summary} character={s.character} world={s.world} onBack={() => dispatch({ type: 'go', screen: 'menu' })} />}

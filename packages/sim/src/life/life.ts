@@ -1,19 +1,25 @@
 // Một đời người: vòng tick theo pha có nhịp (ADR 0002), tua, nhật ký, snapshot (ADR 0004).
 import {
   TICKS_PER_MONTH, TICKS_PER_YEAR, ageYearsAt, isYearStart,
-  type AdvanceMode, type Birthplace, type CharacterView, type LifeSummary, type LogEntry, type NewLifeConfig, type Tick,
+  type AdvanceMode, type Birthplace, type CharacterView, type LifeSummary, type LogEntry, type NewLifeConfig, type Tick, type MonthPlan,
 } from '@tsvl/shared';
+import type { RegionLogic } from '@tsvl/worldgen';
 import { digestOf } from '../core/digest';
 import { hash32 } from '../core/hash';
 import { RngStreams, type RngStreamsSnapshot } from '../core/rng';
 import { createCharacter, toView, type CharacterState } from './character';
 import { agingPhase, consequencesPhase, eventsPhase, type Death } from './health';
 import { AGE_MILESTONES, UNTIL_EVENT_MAX_TICKS } from './params';
+import { staminaMax } from './stamina';
+import { decaySkills } from './skills';
+import { ACTION_MIN_AGE, actionOptions, validatePlan } from './actions';
+import { playerPhase, type PlayerState } from './player';
+import { previewTravel } from './travel';
 
 export const SIM_VERSION = '0.2.0';
-export const STREAMS = ['accident', 'character', 'health', 'illness', 'names'] as const;
+export const STREAMS = ['accident', 'actions', 'character', 'health', 'illness', 'names', 'travel'] as const;
 
-export interface LifeSnapshot {
+export interface LifeSnapshot extends PlayerState {
   simVersion: string;
   config: NewLifeConfig;
   /** Tick kế tiếp sẽ chạy. */
@@ -40,9 +46,10 @@ export class Life {
     private s: LifeSnapshot,
     private streams: RngStreams,
     readonly log: LogEntry[],
+    readonly logic: RegionLogic,
   ) {}
 
-  static create(config: NewLifeConfig, birthplace: Birthplace): Life {
+  static create(config: NewLifeConfig, birthplace: Birthplace, logic: RegionLogic = singleCounty(birthplace)): Life {
     if (birthplace.id !== config.birthplaceId) throw new Error('nơi sinh không khớp cấu hình');
     const streams = RngStreams.create(lifeRoot(config), STREAMS);
     // Sinh vào một tuần bất kỳ của năm 1
@@ -50,15 +57,28 @@ export class Life {
     const character = createCharacter({ birthTick, birthplaceId: birthplace.id, birthplaceKind: birthplace.kind, county: birthplace.county }, streams.get('character'), streams.get('names'));
     agingPhase(character, birthTick);
     character.health = character.healthMax;
+    character.stamina = staminaMax(character, birthTick);
     // Tuần sinh coi như đã qua: tick kế tiếp là tuần sau khi sinh
-    const life = new Life({ simVersion: SIM_VERSION, config, tick: birthTick + 1, character, rng: streams.snapshot(), death: null }, streams, []);
+    const life = new Life({ simVersion: SIM_VERSION, config, tick: birthTick + 1, character, rng: streams.snapshot(), death: null, plan: null, active: null, planWarned: false }, streams, [], logic);
     life.push({ tick: birthTick, key: 'log.birth', params: { birthplace: birthplace.name, background: `background.${character.background}` }, importance: 'major' });
     return life;
   }
 
-  static restore(snap: LifeSnapshot, log: LogEntry[]): Life {
+  static restore(snap: LifeSnapshot, log: LogEntry[], logic: RegionLogic = singleCounty({ county: snap.character.home, kind: snap.character.birthplaceKind })): Life {
     const s = structuredCloneSnapshot(snap);
-    return new Life(s, RngStreams.restore(s.rng), [...log]);
+    return new Life(s, RngStreams.restore(s.rng), [...log], logic);
+  }
+
+  get plan(): MonthPlan | null { return this.s.plan ? { slots: this.s.plan.slots.map((p) => ({ ...p })) as MonthPlan['slots'] } : null; }
+  get active(): PlayerState['active'] { return this.s.active ? JSON.parse(JSON.stringify(this.s.active)) as PlayerState['active'] : null; }
+  actions() { return actionOptions(this.s.character, this.displayTick, this.logic); }
+  travel() { return this.logic.counties.flatMap((_, county) => { const p = previewTravel(this.logic, this.s.character.location, county); return p ? [{ county, slots: p.slots, risk: p.risk }] : []; }); }
+  previewTravel(county: number) { return previewTravel(this.logic, this.s.character.location, county); }
+  setPlan(plan: MonthPlan): boolean {
+    if (!this.alive || ageYearsAt(this.s.character.birthTick, this.s.tick) < ACTION_MIN_AGE || !validatePlan(plan, this.logic)) return false;
+    this.s.plan = { slots: plan.slots.map((p) => ({ ...p })) as MonthPlan['slots'] };
+    this.s.planWarned = false;
+    return true;
   }
 
   get tick(): Tick {
@@ -106,11 +126,13 @@ export class Life {
     // 1 Thế giới, 2 Thế lực, 3 NPC: chưa có ở v0.1
     // 4 Sự kiện (tuần)
     let death = eventsPhase(c, t, this.streams.get('illness'), this.streams.get('accident'), log);
-    // 5 Người chơi: chưa có hành động ở v0.1
+    // 5 Người chơi: tuổi thơ hoặc ô kế hoạch tháng (ADR 0008).
+    const action = death ? { death, carePct: 0 } : playerPhase(this.s, c, t, this.logic, this.streams, log);
+    death = action.death;
     // 6 Hậu quả: lão hóa (năm), diễn tiến (tuần), tử vong (cuối pha)
     if (!death) {
-      if (isYearStart(t)) agingPhase(c, t);
-      death = consequencesPhase(c, t, this.streams.get('health'), log);
+      if (isYearStart(t)) { agingPhase(c, t); decaySkills(c, t); }
+      death = consequencesPhase(c, t, this.streams.get('health'), log, action.carePct);
     }
     if (!death) {
       const age = ageYearsAt(c.birthTick, t);
@@ -154,7 +176,7 @@ export class Life {
       const death = this.step();
       const entries = this.log.slice(from);
       if (death) return { status: 'died', entries };
-      const major = this.log.slice(before).find((e) => e.importance === 'major');
+      const major = this.log.slice(before).find((e) => e.importance === 'major' || e.key === 'log.plan.invalid');
       if (major) return { status: 'interrupted', entries, entry: major };
     }
     const entries = this.log.slice(from);
@@ -188,4 +210,10 @@ export class Life {
 
 function structuredCloneSnapshot(s: LifeSnapshot): LifeSnapshot {
   return JSON.parse(JSON.stringify(s)) as LifeSnapshot;
+}
+
+/** Môi trường một quận cho test/đời độc lập; SimHost luôn truyền logic vùng thật. */
+function singleCounty(b: Pick<Birthplace, 'county' | 'kind'>): RegionLogic {
+  const n = b.county + 1;
+  return { kmPerCellMilli: 1000, counties: Array.from({ length: n }, (_, i) => ({ worldIndex: i, area: 1, seat: { x: i, y: 0 } })), settlementKind: Array.from({ length: n }, () => b.kind), adjacency: [], terrainPct: [], seatKm: Array.from({ length: n }, () => Array<number>(n).fill(0)) };
 }

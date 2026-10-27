@@ -107,7 +107,7 @@ export const ILLNESSES: readonly IllnessDef[] = [
   { id: 'fever', severity: 'serious', weight: 25, season: { spring: 100, summer: 300, autumn: 200, winter: 100 }, place: SAME, weeks: [2, 6], damage: [30, 90], scarPpm: 200_000, scar: [20, 60] },
   { id: 'dysentery', severity: 'grave', weight: 12, season: { spring: 100, summer: 300, autumn: 150, winter: 50 }, place: { village: 100, town: 140, city: 200 }, weeks: [1, 3], damage: [80, 200], scarPpm: 400_000, scar: [40, 120] },
   { id: 'consumption', severity: 'serious', weight: 2, season: { spring: 100, summer: 100, autumn: 100, winter: 100 }, place: { village: 100, town: 120, city: 150 }, weeks: [12, 60], damage: [5, 20], scarPpm: 1_000_000, scar: [80, 200] },
-  { id: 'stroke', severity: 'grave', weight: 10, season: { spring: 100, summer: 100, autumn: 100, winter: 150 }, place: SAME, minAgeRatio: 700, weeks: [1, 1], damage: [300, 700], scarPpm: 1_000_000, scar: [100, 300] },
+  { id: 'stroke', severity: 'grave', weight: 5, season: { spring: 100, summer: 100, autumn: 100, winter: 150 }, place: SAME, minAgeRatio: 700, weeks: [1, 1], damage: [300, 700], scarPpm: 1_000_000, scar: [100, 300] },
 ];
 
 // —— Tai nạn ——

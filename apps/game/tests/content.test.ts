@@ -17,9 +17,10 @@ describe('chuỗi nội dung phủ hết đầu ra của sim', () => {
       while (life.alive) {
         life.advance('year');
         const v = life.view();
-        for (const id of [v.background, v.personality, v.constitution, v.aptitude, `health.${v.healthBand}`, `gender.${v.gender}`, ...v.traits, ...v.conditions.map((c) => c.id), ...v.conditions.map((c) => `severity.${c.severity}`)]) {
+        for (const id of [v.background, v.personality, v.constitution, v.aptitude, `health.${v.healthBand}`, `gender.${v.gender}`, `stamina.${v.staminaBand}`, ...v.skills.flatMap((s) => [s.id, s.rank]), ...v.traits, ...v.conditions.map((c) => c.id), ...v.conditions.map((c) => `severity.${c.severity}`)]) {
           expect(hasKey(id), id).toBe(true);
         }
+        for (const option of life.actions()) for (const id of [option.id, option.cost.stamina, option.cost.risk, ...option.gains, ...(option.locked ? [option.locked] : [])]) expect(hasKey(id), id).toBe(true);
       }
       for (const e of life.log) {
         seen.add(e.key);

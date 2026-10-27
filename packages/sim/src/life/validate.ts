@@ -1,13 +1,17 @@
 // Validate snapshot sim khi tải save (ADR 0004): save hỏng hoặc bị sửa tay thì từ chối trước khi chạy.
 import {
   arr, bool, intRange, lit, nat, nonEmpty, nullable, obj, oneOf, record, str,
-  DEATH_CAUSES, GENDERS, SETTLEMENT_KINDS, vBirthplaceId, vNewLifeConfig, type Validator,
+  DEATH_CAUSES, GENDERS, SETTLEMENT_KINDS, vBirthplaceId, vNewLifeConfig, vMonthPlan, vPlanSlot, vTravelPreview, type Validator,
 } from '@tsvl/shared';
 import type { RngState, RngStreamsSnapshot } from '../core/rng';
 import type { CharacterState, Condition, SpiritRoot } from './character';
 import type { Death } from './health';
 import { SIM_VERSION, type LifeSnapshot } from './life';
 import { BACKGROUNDS, ELEMENTS, PERSONALITIES, TRAITS } from './params';
+import type { Skill } from './skills';
+import type { ActiveAction } from './player';
+
+const skillRecord = (value: Validator<number>) => obj<Record<Skill, number>>({ farming: value, hunting: value, crafting: value, literacy: value, martial: value });
 
 const u32 = intRange(0, 0xffffffff);
 const vRngState: Validator<RngState> = {
@@ -23,6 +27,9 @@ const vCharacter = obj<CharacterState>({
   birthplaceKind: oneOf(SETTLEMENT_KINDS),
   home: nat,
   location: nat,
+  stamina: intRange(0, 1000),
+  skillXp: skillRecord(intRange(0, 10_000)),
+  skillLastUsed: skillRecord(nat),
   background: oneOf(BACKGROUNDS),
   personality: oneOf(PERSONALITIES) as Validator<string>,
   constitution: intRange(1, 10),
@@ -46,4 +53,7 @@ export const vLifeSnapshot = obj<LifeSnapshot>({
   character: vCharacter,
   rng: obj<RngStreamsSnapshot>({ root: u32, streams: record(vRngState) }),
   death: nullable(obj<Death>({ tick: nat, cause: oneOf(DEATH_CAUSES), detail: str })),
+  plan: nullable(vMonthPlan),
+  active: nullable(obj<ActiveAction>({ slot: vPlanSlot, remaining: intRange(1, 1000), total: intRange(1, 1000), preview: nullable(vTravelPreview) })),
+  planWarned: bool,
 });

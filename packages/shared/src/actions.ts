@@ -58,6 +58,10 @@ export interface TravelPreview {
   risk: ContentId;
 }
 
+/** Tiến độ để giao diện khóa các ô của hành động đang dở. */
+export interface ActionProgress { action: ActionId; remaining: number; total: number; target?: CountyIndex }
+export const vActionProgress = obj<ActionProgress>({ action: vActionId, remaining: nat, total: nat, target: opt(nat) });
+
 export const STAMINA_BANDS = ['fresh', 'tired', 'exhausted'] as const;
 export type StaminaBand = (typeof STAMINA_BANDS)[number];
 

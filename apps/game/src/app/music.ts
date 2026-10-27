@@ -117,7 +117,8 @@ class Music {
     const from = a.volume;
     const t0 = performance.now();
     const step = (now: number) => {
-      const k = Math.min(1, (now - t0) / ms);
+      // RAF có thể mang thời điểm đầu khung hình, sớm hơn t0 vài phần mili giây.
+      const k = Math.max(0, Math.min(1, (now - t0) / ms));
       a.volume = from + (target - from) * k;
       if (k < 1) this.fadeRaf = requestAnimationFrame(step);
       else done?.();

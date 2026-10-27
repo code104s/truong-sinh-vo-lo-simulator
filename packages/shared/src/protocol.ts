@@ -1,7 +1,7 @@
 // Giao thức UI ↔ worker (ADR 0001).
 import {
-  ADVANCE_MODES, vActionOption, vMonthPlan, vTravelOption, vTravelPreview,
-  type ActionOption, type AdvanceMode, type CountyIndex, type MonthPlan, type TravelOption, type TravelPreview,
+  ADVANCE_MODES, vActionOption, vActionProgress, vMonthPlan, vTravelOption, vTravelPreview,
+  type ActionOption, type ActionProgress, type AdvanceMode, type CountyIndex, type MonthPlan, type TravelOption, type TravelPreview,
 } from './actions';
 import { vCharacterView, vLifeSummary, vLogEntry, type CharacterView, type LifeSummary, type LogEntry } from './character';
 import { type CalendarDate } from './calendar';
@@ -43,6 +43,7 @@ export type WorkerMessage =
       type: 'STATE'; reqId: number; date: CalendarDate; character: CharacterView; running: boolean;
       /** Kế hoạch đang áp, null khi chưa có hoặc chưa tới tuổi tự quyết. */
       plan: MonthPlan | null;
+      active: ActionProgress | null;
       /** Ô sẽ chạy kế tiếp trong tháng. */
       slotIndex: TenDay;
       /** Hành động và đích đi được ở nơi đang đứng, sim tính sẵn. */
@@ -83,7 +84,7 @@ export const vWorkerMessage: Validator<WorkerMessage> = tagged<WorkerMessage>({
   WORLD: obj<M<'WORLD'>>({ type: lit('WORLD'), reqId: nat, worldSeed: vWorldSeed, region: vRegionSummary, map: vRegionMapData, birthplaces: arr(vBirthplace) }),
   STATE: obj<M<'STATE'>>({
     type: lit('STATE'), reqId: nat, date: vCalendarDate, character: vCharacterView, running: bool,
-    plan: nullable(vMonthPlan), slotIndex: oneOf([0, 1, 2] as const), actions: arr(vActionOption), travel: arr(vTravelOption),
+    plan: nullable(vMonthPlan), active: nullable(vActionProgress), slotIndex: oneOf([0, 1, 2] as const), actions: arr(vActionOption), travel: arr(vTravelOption),
   }),
   TRAVEL_PREVIEW: obj<M<'TRAVEL_PREVIEW'>>({ type: lit('TRAVEL_PREVIEW'), reqId: nat, preview: vTravelPreview }),
   LOG: obj<M<'LOG'>>({ type: lit('LOG'), reqId: nat, entries: arr(vLogEntry) }),

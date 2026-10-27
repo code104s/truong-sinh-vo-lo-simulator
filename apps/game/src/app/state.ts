@@ -1,6 +1,6 @@
 // Máy trạng thái màn hình (thuần, test được không cần DOM). Không có luật game: mọi số liệu đến từ worker.
 import type {
-  Birthplace, BirthplaceId, CalendarDate, CharacterView, LifeSummary, LogEntry, RegionMapData, RegionSummary, WorkerMessage, WorldSeed,
+  Birthplace, BirthplaceId, CalendarDate, CharacterView, LifeSummary, LogEntry, RegionMapData, RegionSummary, WorkerMessage, WorldSeed, MonthPlan, ActionOption, ActionProgress, TravelOption, TravelPreview,
 } from '@tsvl/shared';
 
 export type Screen = 'menu' | 'settings' | 'loading' | 'birthplace' | 'life' | 'summary';
@@ -31,11 +31,13 @@ export interface AppState {
   running: boolean;
   error: string | null;
   seedInput: string;
+  plan: MonthPlan | null; active: ActionProgress | null; actions: ActionOption[]; travel: TravelOption[]; travelPreview: TravelPreview | null;
 }
 
 export const initialState: AppState = {
   screen: 'menu', ready: false, hasSave: false, loadingSave: false, progress: null, world: null, selected: null,
   date: null, character: null, log: [], interrupt: null, summary: null, running: false, error: null, seedInput: '',
+  plan: null, active: null, actions: [], travel: [], travelPreview: null,
 };
 
 export type Action =
@@ -66,7 +68,7 @@ export function reduce(s: AppState, a: Action): AppState {
     case 'loadStart':
       return { ...s, screen: 'loading', progress: null, loadingSave: true, log: [], interrupt: null, summary: null, character: null, error: null };
     case 'newLifeStart':
-      return { ...s, log: [], interrupt: null, summary: null, character: null, running: false };
+      return { ...s, log: [], interrupt: null, summary: null, character: null, running: false, plan: null, active: null, actions: [], travel: [], travelPreview: null };
     case 'select':
       return { ...s, selected: a.id };
     case 'advanceStart':
@@ -99,7 +101,7 @@ function onMessage(s: AppState, m: WorkerMessage): AppState {
     }
     case 'STATE': {
       const toLife = s.screen === 'loading' || s.screen === 'birthplace';
-      return { ...s, date: m.date, character: m.character, loadingSave: false, screen: toLife ? 'life' : s.screen };
+      return { ...s, date: m.date, character: m.character, plan: m.plan, active: m.active, actions: m.actions, travel: m.travel, travelPreview: null, loadingSave: false, screen: toLife ? 'life' : s.screen };
     }
     case 'INTERRUPT':
       return { ...s, interrupt: m.entry, running: false };
@@ -108,8 +110,7 @@ function onMessage(s: AppState, m: WorkerMessage): AppState {
     case 'SAVED':
       return s;
     case 'TRAVEL_PREVIEW':
-      // Bản đồ di chuyển làm ở task F3
-      return s;
+      return { ...s, travelPreview: m.preview };
     case 'ERROR': {
       const back = s.screen === 'loading';
       return { ...s, error: `${m.code}: ${m.message}`, running: false, loadingSave: false, screen: back ? 'menu' : s.screen };

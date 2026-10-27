@@ -1,7 +1,7 @@
 import { decodeSave, encodeSave, parseWorkerMessage, type Command, type SaveFile, type WorkerMessage } from '@tsvl/shared';
 import { buildRegion, type RegionBundle } from '@tsvl/worldgen';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { SimHost } from '../src/index';
+import { SimHost, replaySave, Rng } from '../src/index';
 
 let region: RegionBundle;
 beforeAll(() => {
@@ -119,18 +119,20 @@ describe('SimHost', () => {
   });
 });
 
-describe('SimHost — Bước 0 v0.2', () => {
-  it('lệnh v0.2 hợp lệ về mặt hợp đồng nhưng chưa xử lý thì trả BAD_COMMAND, không làm đổi đời', () => {
+describe('SimHost — v0.2', () => {
+  it('trẻ chưa được đặt kế hoạch; xem trước đường không đổi đời hay nhật ký lệnh', () => {
     const { send } = host();
     newLife(send);
     const before = send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>;
     const plan = { slots: [{ action: 'action.farm' }, { action: 'action.rest' }, { action: 'action.rest' }] };
     expect(send({ type: 'SET_PLAN', plan })).toMatchObject([{ type: 'ERROR', code: 'BAD_COMMAND' }]);
-    expect(send({ type: 'PREVIEW_TRAVEL', county: 0 })).toMatchObject([{ type: 'ERROR', code: 'BAD_COMMAND' }]);
+    const county = (before.save.sim as { character: { location: number } }).character.location === 0 ? 1 : 0;
+    expect(send({ type: 'PREVIEW_TRAVEL', county })).toMatchObject([{ type: 'TRAVEL_PREVIEW' }]);
     const after = send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>;
     expect(after.save.digest).toBe(before.save.digest);
     expect(after.save.version).toBe(2);
-    expect(after.save.commandLog).toEqual([]);
+    expect(after.save.commandLog).toEqual(before.save.commandLog);
+    expect(after.save.commandLog[0]!.cmd.type).toBe('NEW_LIFE');
   });
 
   it('STATE mang nơi ở = quận nơi sinh, kế hoạch rỗng', () => {
@@ -141,5 +143,57 @@ describe('SimHost — Bước 0 v0.2', () => {
     expect(st.character.home).toBe(region.birthplaces[2]!.county);
     expect(st.plan).toBeNull();
     expect(st.actions).toEqual([]);
+  });
+
+  it('cùng reqId không áp dụng ADVANCE hai lần, payload khác bị từ chối', () => {
+    const a = host(); newLife(a.send);
+    a.h.handle({ type: 'ADVANCE', reqId: 900, mode: 'week' });
+    const before = a.h.save();
+    a.h.handle({ type: 'ADVANCE', reqId: 900, mode: 'week' });
+    expect(a.h.save().digest).toBe(before.digest); expect(a.h.save().commandLog).toEqual(before.commandLog);
+    a.h.handle({ type: 'ADVANCE', reqId: 900, mode: 'year' });
+    expect(a.out.at(-1)).toMatchObject({ type: 'ERROR', code: 'BAD_COMMAND' });
+  });
+
+  it('save/tải host giữa chuyến đi giữ tiến độ, vị trí và giá đã trả', () => {
+    const a = host(); newLife(a.send, 0);
+    while (a.h.current.life!.alive && !a.h.current.life!.view().canAct) a.send({ type: 'ADVANCE', mode: 'year' });
+    const life = a.h.current.life!;
+    const target = life.travel().find((p) => p.slots > 1)!;
+    expect(target).toBeDefined();
+    const plan = { slots: [{ action: 'action.rest' }, { action: 'action.rest' }, { action: 'action.rest' }] as { action: string; target?: number }[] };
+    plan.slots[life.tick % 3] = { action: 'action.travel', target: target.county };
+    a.send({ type: 'SET_PLAN', plan }); a.send({ type: 'ADVANCE', mode: 'week' });
+    expect(life.active?.remaining).toBeGreaterThan(0);
+    const decoded = decodeSave(encodeSave(a.h.save())); if (!decoded.ok) throw new Error(decoded.error);
+    const b = new SimHost(() => {}); b.load(decoded.value);
+    a.send({ type: 'ADVANCE', mode: 'week' }); b.handle({ type: 'ADVANCE', reqId: 1, mode: 'week' });
+    expect(b.save().digest).toBe(a.h.save().digest); expect(b.current.life!.character.location).toBe(life.character.location);
+  });
+
+  it('10 seed: kế hoạch ngẫu nhiên có seed, lưu/tải giữa tháng, phát lại cùng digest', () => {
+    for (let i = 0; i < 10; i++) {
+      const worldSeed = `replay-${i}`;
+      const local = { ...region, worldSeed };
+      const a = new SimHost((m) => { if (m.type === 'ERROR') throw new Error(m.message); }, { buildRegion: () => local });
+      let id = 0;
+      const call = (c: Record<string, unknown>) => a.handle({ ...c, reqId: ++id });
+      call({ type: 'GEN_WORLD', worldSeed });
+      call({ type: 'NEW_LIFE', config: { worldSeed, regionId: local.summary.id, birthplaceId: local.birthplaces[0]!.id, lifeSeed: i } });
+      while (a.current.life!.alive && !a.current.life!.view().canAct) call({ type: 'ADVANCE', mode: 'year' });
+      const rng = Rng.fromSeed(i);
+      for (let k = 0; k < 80 && a.current.life!.alive; k++) {
+        const choices = a.current.life!.actions().filter((x) => !x.locked && x.id !== 'action.travel');
+        call({ type: 'SET_PLAN', plan: { slots: [0, 1, 2].map(() => ({ action: choices[rng.int(0, choices.length - 1)]!.id })) } });
+        call({ type: 'ADVANCE', mode: 'week' });
+      }
+      const saved = a.save(); expect(replaySave(saved)).toBe(saved.digest);
+      const decoded = decodeSave(encodeSave(saved)); if (!decoded.ok) throw new Error(decoded.error);
+      const b = new SimHost(() => {}); b.load(decoded.value);
+      if (a.current.life!.alive) { call({ type: 'ADVANCE', mode: 'year' }); b.handle({ type: 'ADVANCE', reqId: 1, mode: 'year' }); }
+      expect(b.save().digest).toBe(a.save().digest);
+      const broken = { ...saved, commandLog: saved.commandLog.map((r) => ({ ...r })) }; broken.commandLog[0]!.seq = 1;
+      expect(() => b.load(broken)).toThrow(/thứ tự/);
+    }
   });
 });

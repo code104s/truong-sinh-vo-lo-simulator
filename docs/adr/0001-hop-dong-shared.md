@@ -252,6 +252,12 @@ export function decodeSave(text: string): Result<SaveFile>;
 - Bước 0 gồm: code các kiểu trên, `calendarOf`, `parseCommand`/`parseWorkerMessage`, `encodeSave`/`decodeSave`, và test (round-trip, từ chối dữ liệu sai, view không lộ trường ẩn).
 
 ## Nhật ký thay đổi hợp đồng
+
+### 2026-10-27 — Ghép v0.2
+- `STATE` thêm `active: ActionProgress | null` (`action`, `remaining`, `total`, `target?`) để FE hiện hành động đang chiếm ô qua ranh tháng. Cập nhật validator và fixture ở cả hai phía; protocol vẫn là 2 của v0.2 chưa phát hành.
+- Các trường tạm B0 đã nối vào mô phỏng thật. `SET_PLAN`/`PREVIEW_TRAVEL` được xử lý; save chứa nhật ký lệnh thật và tiến độ hành động.
+- Lớp logic vùng lưu `settlementKind`, hệ số nguyên `terrainPct` theo cạnh và tên quận cho nhật ký. Snapshot bổ sung thể lực, kỹ năng, lần dùng kỹ năng, kế hoạch và hành động dở. Save thử nghiệm B0 thiếu các trường này bị từ chối; không có migration v0.x.
+
 **Nguồn sự thật từ Bước 0 là code `packages/shared/src/`**; các khối TypeScript ở trên là bản nháp lúc duyệt.
 
 ### 2026-10-25 — Bước 0 (B0-1), chỉnh khi code, trước khi hai nhánh bắt đầu

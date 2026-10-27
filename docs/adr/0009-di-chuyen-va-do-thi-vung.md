@@ -44,3 +44,13 @@ v0.1 không cần di chuyển nên không lộ ra. v0.2 thì có: sinh ở làng
 - Sửa `worldgen/region` (code dự án, không đụng bản chụp upstream). Digest vùng pin cập nhật có ghi chú.
 - Đường thẳng giữa trị sở chỉ là xấp xỉ; mạng đường thật để v0.6 (thế lực kiểm soát đường) hoặc khi cần.
 - Đi lại trong cùng một quận (làng ↔ ruộng) không tốn ô riêng: đã nằm trong hành động.
+
+## Triển khai S1 — 2026-10-27
+- Lọc thành phần chứa kinh đô trước khi cắt vùng; bước lọc và đồ thị cuối cùng dùng chung quy tắc kề 8 hướng.
+- `RegionLogic.settlementKind` lưu loại trị sở theo quận; làng phụ không ghi đè thành/trấn của quận chủ.
+- `pnpm typecheck`: PASS. `pnpm test`: PASS, 128 test (shared 46, worldgen 26, sim 49, game 7).
+- `pnpm sim regions --seeds 100 --threads 8`: PASS, 200 lần sinh độc lập, 0 lỗi liên thông/sinh vùng, 0/100 lệch digest; 230,3 s. Quận 7–18; làng 5–10; trấn 1–3; thành luôn 1.
+- Ba seed pin `tsvl-01..03` giữ nguyên digest vùng; không cập nhật snapshot khi giá trị không đổi.
+
+## Chỉnh khi triển khai (2026-10-27, sau review)
+- "Sông lớn" dùng cùng ngưỡng renderer vẽ sông (`riverThreshold(W)`, 90 ở 1024 ô). Ngưỡng ban đầu `flow >= 10` làm 91% cạnh bị tính qua sông. Đo lại 9 seed: 81 cạnh đường bằng, 106 qua sông, 1 đường núi (vùng quanh kinh đô ít núi).

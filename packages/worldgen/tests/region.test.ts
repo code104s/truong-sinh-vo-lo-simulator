@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { BIRTHPLACE_ID_RE, vBirthplace, vRegionMapData, vRegionSummary } from '@tsvl/shared';
 import { describe, expect, it } from 'vitest';
 import { buildRegion, HANVIET_CHARS, regionIdentity, toHanViet, type RegionBundle } from '../src/index';
+import { reachableCounties } from '../src/region/connectivity';
 
 const SEEDS = ['tsvl-01', 'tsvl-02', 'tsvl-03'];
 const built = new Map<string, RegionBundle>();
@@ -45,6 +46,7 @@ describe('vùng chơi (1024×768)', () => {
     const a = region('tsvl-01');
     const b = buildRegion('tsvl-01');
     expect(regionIdentity(b)).toEqual(regionIdentity(a));
+    expect(b.logic).toEqual(a.logic);
     expect(Array.from(b.map.elevation)).toEqual(Array.from(a.map.elevation));
   });
 
@@ -89,6 +91,13 @@ describe('vùng chơi (1024×768)', () => {
     const { logic, map } = region(seed);
     const n = map.counties.length;
     expect(logic.counties).toHaveLength(n);
+    expect(logic.settlementKind).toHaveLength(n);
+    expect(logic.terrainPct).toHaveLength(logic.adjacency.length);
+    expect(logic.terrainPct.every((p) => [100, 150, 200, 300].includes(p))).toBe(true);
+    const capital = region(seed).birthplaces.find((p) => p.kind === 'city')!;
+    expect(reachableCounties(capital.county, logic.adjacency).size).toBe(n);
+    expect(logic.settlementKind[capital.county]).toBe('city');
+    for (const p of region(seed).birthplaces) if (p.kind !== 'village') expect(logic.settlementKind[p.county]).toBe(p.kind);
     expect(logic.seatKm).toHaveLength(n);
     for (let i = 0; i < n; i++) {
       expect(logic.seatKm[i]![i]).toBe(0);
@@ -99,6 +108,13 @@ describe('vùng chơi (1024×768)', () => {
     }
     for (const [a, b] of logic.adjacency) expect(a).toBeLessThan(b);
     expect(logic.adjacency.length).toBeGreaterThanOrEqual(n - 1);
+  });
+
+  it('hệ số địa hình phân biệt được tuyến (hồi quy: ngưỡng sông cũ tính 91% cạnh là qua sông)', () => {
+    const all = SEEDS.flatMap((seed) => region(seed).logic.terrainPct);
+    const plain = all.filter((p) => p === 100).length;
+    expect(plain / all.length).toBeGreaterThanOrEqual(0.25);
+    expect(all.some((p) => p > 100)).toBe(true);
   });
 
   it('digest vùng pin (bắt trôi do sửa code hoặc engine)', () => {

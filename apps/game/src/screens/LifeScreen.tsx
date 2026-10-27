@@ -1,11 +1,13 @@
 import { t } from '@tsvl/content';
-import type { AdvanceMode, CalendarDate, CharacterView, LogEntry } from '@tsvl/shared';
-import { useEffect, useRef } from 'preact/hooks';
+import type { AdvanceMode, CalendarDate, CharacterView, LogEntry, MonthPlan, ActionOption, ActionProgress, TravelOption, TravelPreview } from '@tsvl/shared';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { dateText, logText, shortDate } from '../app/format';
 import type { WorldInfo } from '../app/state';
 import { KIND_CHAR, SEASON_CHAR, logSeal } from '../ui/icons';
 import { BrushLabel, Enso, InkLandscape, Portrait, Scroll, Seal } from '../ui/ink';
 import { PORTRAIT_MIN_AGE, portraitOf } from '../ui/portraits';
+import { ActionPlanner } from './ActionPlanner';
+import { TravelDialog } from './TravelDialog';
 
 interface Props {
   world: WorldInfo | null;
@@ -19,6 +21,8 @@ interface Props {
   onAdvance: (mode: AdvanceMode) => void;
   onRun: () => void;
   onPause: () => void;
+  plan: MonthPlan | null; active: ActionProgress | null; actions: ActionOption[]; travel: TravelOption[]; travelPreview: TravelPreview | null;
+  onPlan: (plan: MonthPlan) => void; onPreview: (county: number) => void; onExport: () => void;
 }
 
 export function LogLine({ e, forceMajor = false }: { e: LogEntry; forceMajor?: boolean }) {
@@ -32,7 +36,8 @@ export function LogLine({ e, forceMajor = false }: { e: LogEntry; forceMajor?: b
   );
 }
 
-export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause }: Props) {
+export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview, onExport }: Props) {
+  const [travelOpen, setTravelOpen] = useState(false);
   const place = world?.birthplaces.find((b) => b.id === c.birthplaceId);
   const logEnd = useRef<HTMLDivElement>(null);
   useEffect(() => logEnd.current?.scrollIntoView({ block: 'end' }), [log.length]);
@@ -62,6 +67,9 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
               <dt>{t('ui.life.personality')}</dt><dd>{t(c.personality)}</dd>
               <dt>{t('ui.life.constitution')}</dt><dd>{t(c.constitution)}</dd>
               <dt>{t('ui.life.aptitude')}</dt><dd>{t(c.aptitude)}</dd>
+              <dt>{t('ui.life.location')}</dt><dd>{world?.map.counties[c.location]?.name}</dd>
+              <dt>{t('ui.life.stamina')}</dt><dd class={`stamina-${c.staminaBand}`}>{t(`stamina.${c.staminaBand}`)}</dd>
+              <dt>{t('ui.life.skills')}</dt><dd>{c.skills.length ? c.skills.map((s) => `${t(s.id)}: ${t(s.rank)}`).join(' · ') : t('ui.life.skills_none')}</dd>
               <dt>{t('ui.life.traits')}</dt>
               <dd>{c.traits.length ? c.traits.map((x) => t(x)).join(' · ') : <span class="muted">{t('ui.life.traits_none')}</span>}</dd>
             </dl>
@@ -89,6 +97,7 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
               </div>
               <BrushLabel className="right">{t('ui.life.chronicle')}</BrushLabel>
             </header>
+            {c.canAct ? <ActionPlanner plan={plan} active={active} slotIndex={date.tenDay} actions={actions} travel={travel} world={world} locked={lock} onPlan={onPlan} /> : <p class="hint childhood-hint">{t('ui.plan.childhood')}</p>}
             {interrupt && (
               <div class="interrupt" role="status">
                 <Seal char="變" /> <strong>{t('ui.interrupt')}:</strong> {logText(interrupt)}
@@ -104,11 +113,14 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
               <button class="btn" disabled={lock} onClick={() => onAdvance('month')}>{t('ui.ctrl.month')}</button>
               <button class="btn" disabled={lock} onClick={() => onAdvance('year')}>{t('ui.ctrl.year')}</button>
               <button class="btn primary" disabled={lock} onClick={onRun}>{t('ui.ctrl.until')}</button>
+              <button class="btn ghost" disabled={lock || !c.canAct || !!active || !!actions.find((a) => a.id === 'action.travel')?.locked} onClick={() => setTravelOpen(true)}>{t('ui.travel.open')}</button>
+              <button class="btn ghost" disabled={lock} onClick={onExport}>{t('ui.save.export')}</button>
               {running && <span class="muted running">{t('ui.ctrl.running')}</span>}
             </footer>
           </main>
         </div>
       </Scroll>
+      {travelOpen && world && <TravelDialog world={world} location={c.location} slotIndex={date.tenDay} plan={plan} options={travel} preview={travelPreview} onPreview={onPreview} onPlan={onPlan} onClose={() => setTravelOpen(false)} />}
     </div>
   );
 }

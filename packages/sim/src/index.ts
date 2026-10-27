@@ -6,4 +6,4 @@ export { idiv, mulDiv, clamp, lerpTable, sortedEntries } from './core/math';
 export { Life, SIM_VERSION, lifeRoot, type LifeSnapshot, type AdvanceResult } from './life/life';
 export { toView, type CharacterState } from './life/character';
 export type { Death } from './life/health';
-export { SimHost, type Emit, type HostOptions } from './host';
+export { SimHost, replaySave, type Emit, type HostOptions } from './host';

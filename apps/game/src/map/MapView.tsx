@@ -23,6 +23,8 @@ interface Props {
   birthplaces: Birthplace[];
   selected: BirthplaceId | null;
   onSelect: (id: BirthplaceId) => void;
+  location?: number;
+  route?: number[];
 }
 
 interface View {
@@ -31,7 +33,7 @@ interface View {
   k: number;
 }
 
-export function MapView({ map, region, seed, birthplaces, selected, onSelect }: Props) {
+export function MapView({ map, region, seed, birthplaces, selected, onSelect, location, route = [] }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const canvasHost = useRef<HTMLDivElement>(null);
   const viewer = useRef<AtlasViewer | null>(null);
@@ -48,6 +50,7 @@ export function MapView({ map, region, seed, birthplaces, selected, onSelect }: 
   useEffect(() => {
     const el = host.current!;
     let cancelled = false;
+    let resize: ResizeObserver | null = null;
     setReady(false);
     setLang('en');
     const world = regionWorld(map, region, seed);
@@ -58,14 +61,17 @@ export function MapView({ map, region, seed, birthplaces, selected, onSelect }: 
       const list = buildAtlasVector(world, smoothRivers(world), STYLE, { labels: true, contours: false, graticule: false, furniture: false, riverWidth: RIVER_WIDTH }, measurer, S);
       const v = (viewer.current ??= new AtlasViewer(canvasHost.current!));
       v.setList(list);
-      const k = Math.min(el.clientWidth / list.width, el.clientHeight / list.height) * 0.98;
-      const next = { x: (el.clientWidth - list.width * k) / 2, y: (el.clientHeight - list.height * k) / 2, k };
-      v.setView(next.x, next.y, next.k);
-      setView(next);
+      const fit = () => {
+        const k = Math.min(el.clientWidth / list.width, el.clientHeight / list.height) * 0.98;
+        const next = { x: (el.clientWidth - list.width * k) / 2, y: (el.clientHeight - list.height * k) / 2, k };
+        v.setView(next.x, next.y, next.k); setView(next);
+      };
+      fit(); resize = new ResizeObserver(fit); resize.observe(el);
       setReady(true);
     })();
     return () => {
       cancelled = true;
+      resize?.disconnect();
     };
   }, [map]);
 
@@ -125,6 +131,7 @@ export function MapView({ map, region, seed, birthplaces, selected, onSelect }: 
             <image href={shade} x={0} y={0} width={map.W} height={map.H} preserveAspectRatio="none" />
             <path d={lines} class="county-line" />
             <path d={outline} class="region-line" />
+            {route.length > 1 && <polyline class="travel-route" points={route.map((i) => `${map.counties[i]!.seat.x + 0.5},${map.counties[i]!.seat.y + 0.5}`).join(' ')} />}
             {birthplaces.map((b) => (
               <g
                 key={b.id}
@@ -138,6 +145,7 @@ export function MapView({ map, region, seed, birthplaces, selected, onSelect }: 
                 onPointerDown={(ev) => ev.stopPropagation()}
               >
                 <circle r={markerW(b) * 0.95} class="bp-hit" />
+                {b.county === location && <circle r={markerW(b) * 1.4} class="location-ring" />}
                 <rect x={-markerW(b) / 2 - 0.25} y={-markerW(b) / 2 - 0.25} width={markerW(b) + 0.5} height={markerW(b) + 0.5} class="bp-ring" />
                 <rect x={-markerW(b) / 2} y={-markerW(b) / 2} width={markerW(b)} height={markerW(b)} rx={0.12} class={`bp-mark seal-${b.kind === 'city' ? 'red' : 'ink'}`} />
                 <text y={markerW(b) * 0.3} class="bp-char" style={{ fontSize: `${markerW(b) * 0.8}px` }}>{KIND_CHAR[b.kind]}</text>

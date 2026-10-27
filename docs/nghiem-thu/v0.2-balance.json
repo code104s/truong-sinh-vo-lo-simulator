@@ -1,0 +1,125 @@
+{
+  "pass": true,
+  "reports": [
+    {
+      "policy": "lazy",
+      "count": 1000,
+      "stuck": 0,
+      "overCap": 0,
+      "meanAge": 61.643,
+      "medianAge": 64,
+      "inRangePct": 91.8,
+      "oldAgePct": 26.4,
+      "causes": {
+        "illness": 626,
+        "old_age": 264,
+        "accident": 110
+      },
+      "skills": {
+        "farming": 3,
+        "hunting": 0,
+        "crafting": 0,
+        "literacy": 0,
+        "martial": 0
+      },
+      "ticks": 2235668,
+      "ms": 7206.064399999999
+    },
+    {
+      "policy": "balanced",
+      "count": 1000,
+      "stuck": 0,
+      "overCap": 0,
+      "meanAge": 61.413,
+      "medianAge": 64,
+      "inRangePct": 90.4,
+      "oldAgePct": 31.8,
+      "causes": {
+        "illness": 560,
+        "accident": 122,
+        "old_age": 318
+      },
+      "skills": {
+        "farming": 5073,
+        "hunting": 4205,
+        "crafting": 1722,
+        "literacy": 1,
+        "martial": 0
+      },
+      "ticks": 2227784,
+      "ms": 7302.047999999999
+    },
+    {
+      "policy": "overwork",
+      "count": 1000,
+      "stuck": 0,
+      "overCap": 0,
+      "meanAge": 57.216,
+      "medianAge": 61,
+      "inRangePct": 86.4,
+      "oldAgePct": 15.6,
+      "causes": {
+        "illness": 682,
+        "old_age": 156,
+        "accident": 162
+      },
+      "skills": {
+        "farming": 6542,
+        "hunting": 5745,
+        "crafting": 2484,
+        "literacy": 1,
+        "martial": 0
+      },
+      "ticks": 2077343,
+      "ms": 7076.043600000001
+    },
+    {
+      "policy": "scholar",
+      "count": 1000,
+      "stuck": 0,
+      "overCap": 0,
+      "meanAge": 63.623,
+      "medianAge": 66,
+      "inRangePct": 91.2,
+      "oldAgePct": 53.4,
+      "causes": {
+        "illness": 360,
+        "accident": 106,
+        "old_age": 534
+      },
+      "skills": {
+        "farming": 3,
+        "hunting": 0,
+        "crafting": 0,
+        "literacy": 6375,
+        "martial": 0
+      },
+      "ticks": 2308265,
+      "ms": 7686.993300000002
+    },
+    {
+      "policy": "wanderer",
+      "count": 1000,
+      "stuck": 0,
+      "overCap": 0,
+      "meanAge": 59.718,
+      "medianAge": 63,
+      "inRangePct": 88.1,
+      "oldAgePct": 27.2,
+      "causes": {
+        "illness": 562,
+        "old_age": 272,
+        "accident": 166
+      },
+      "skills": {
+        "farming": 4,
+        "hunting": 0,
+        "crafting": 0,
+        "literacy": 1,
+        "martial": 0
+      },
+      "ticks": 2167088,
+      "ms": 12148.503899999996
+    }
+  ]
+}

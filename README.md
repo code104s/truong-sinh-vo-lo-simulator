@@ -2,6 +2,18 @@
 
 Monorepo pnpm (TypeScript). Thiết kế: `docs/GDD_v0_v1.0.md` (mục 10.5 mô tả cấu trúc).
 
+## Hiện trạng v0.2 — Có việc để làm
+
+Đã triển khai kế hoạch tháng 3 ô từ 12 tuổi, 9 hành động, thể lực, 5 kỹ năng và di chuyển trên vùng liên thông. Giao diện hiện giá/lý do khóa do sim tính, xem trước đường đi và xuất save. [Báo cáo nghiệm thu](docs/v0.2-bao-cao-nghiem-thu.md) có kết quả test, 5.000 đời cân bằng và ảnh 1280/1920 px.
+
+```bash
+pnpm dev
+pnpm sim batch --seeds 1000 --policy all --threads 8
+pnpm sim replay --save file.json
+```
+
+Các chiến lược: `lazy`, `balanced` (mặc định), `overwork`, `scholar`, `wanderer`; `--policy all` chạy đủ năm chiến lược. Thêm `--out report.json` để lưu báo cáo batch.
+
 | Thư mục | Vai trò |
 |---|---|
 | `packages/sim` | Lõi mô phỏng thuần |

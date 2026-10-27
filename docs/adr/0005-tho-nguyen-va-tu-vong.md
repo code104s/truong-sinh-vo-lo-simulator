@@ -1,5 +1,7 @@
 # ADR 0005 — Thọ nguyên, sức khỏe và tử vong
 
+> Cập nhật v0.2 (2026-10-27): S9 đã giải quyết mục cân bằng còn treo. Trọng số trúng phong từ 10 xuống 5; vẫn phân loại trúng phong là bệnh. Điều độ có 31,8% chết già, 90,4% chết trong 40–80 tuổi, 0 kẹt/vượt trần. [Báo cáo và dữ liệu](../v0.2-bao-cao-nghiem-thu.md).
+
 - Trạng thái: **ĐÃ DUYỆT** (2026-10-25, chủ dự án đồng ý mọi khuyến nghị Q1–Q13 ở `docs/v0.1-giai-doan-a.md`)
 - Ngày: 2026-10-25
 - Liên quan: GDD 1.1, 3.2 A, 3.2 C, 3.2 L2, 7 (rủi ro "chết quá sớm"); ADR 0002, 0003
