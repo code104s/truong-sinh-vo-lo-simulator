@@ -330,3 +330,33 @@ Lý do: v0.4 thêm người có tên quanh người chơi. `PROTOCOL_VERSION` 3 
     - `STATE.people` rỗng;
     - digest pin đổi; tuổi và nguyên nhân chết của ba đời mẫu giữ nguyên; batch v0.3 ra đúng số cũ.
   - **FE:** máy trạng thái giữ `people`; giao diện "Người trong quận" ở F1.
+
+### 2026-10-27 — v0.5 Bước 0 (ADR 0017, 0018)
+Lý do: v0.5 thêm quan hệ, gia đình, tiếng tăm. `PROTOCOL_VERSION` 4 → **5**, `SAVE_VERSION` 4 → **5**. Save v0.4 bị từ chối, không chuyển đổi (v0.5 Q11).
+- `actions.ts`:
+  - `PlanSlot` thêm `person?: NpcId` — người được nhắm tới, chỉ cho hành động xã giao;
+  - `ACTION_GROUPS` thêm `social` (Xã giao), đặt sau `study`.
+- `npc.ts`:
+  - `KinRole` (`father`, `mother`, `spouse`, `son`, `daughter`, `sibling`);
+  - `BondView { closeness, trust, hostility, owed }`, mỗi trục là một dải chữ, không lộ số;
+  - `NpcView` thêm `kin?`, `bond?`.
+- `character.ts`:
+  - `ReputationBand` (`infamous`, `disliked`, `unknown`, `respected`, `renowned`);
+  - `CharacterView` thêm `reputation` (bắt buộc) và `spouse?: NpcId`;
+  - `LifeSummary` thêm `legacy { spouse, children, friends, enemies, reputation }`.
+- Tin `STATE` thêm `circle: NpcView[]`: người thân và người có quan hệ ở mọi quận. STATE kiểu v0.4 (thiếu `circle`) bị từ chối.
+- Nhánh bị ảnh hưởng:
+  - **Sim:**
+    - `SIM_VERSION` 0.5.0;
+    - `STATE.circle` rỗng, `reputation` luôn `unknown`, `legacy` rỗng tới S1–S6;
+    - digest pin đổi; tuổi và nguyên nhân chết của ba đời mẫu giữ nguyên.
+  - **Nội dung:** chuỗi `group.social`, `kin.*`, `bond.*`, `reputation.*`.
+  - **FE:** máy trạng thái giữ `circle`; giao diện ở F1–F4.
+
+### 2026-10-28 — v0.5 F2 (ô xã giao chọn người)
+Lý do: bảng chọn người cần lý do khóa của từng việc xã giao nhắm vào từng người; giao diện không được tự tính luật. Hợp đồng v5 chưa phát hành nên không tăng `PROTOCOL_VERSION`.
+- `npc.ts`: `NpcView` thêm `social?: SocialOption[]`, `SocialOption { action: ActionId; locked: ContentId | null }` — mỗi hành động xã giao người chơi xếp được và khóa lúc này (null là làm được). Chỉ có ở `STATE.people` (người trong quận); `STATE.circle` không mang.
+- `actions.ts`: xuất `vActionId` (để `npc.ts` kiểm id hành động).
+- Nhánh bị ảnh hưởng:
+  - **Sim:** `Life.people()` tính khóa bằng `Life.socialLock` (khóa chung của hành động rồi khóa theo người), đúng như khi ô chạy;
+  - **FE:** bảng chọn việc có nhóm Xã giao → chọn người; thẻ tuần hiện tên người và lý do khóa (người đã rời quận: "không ở đây").
