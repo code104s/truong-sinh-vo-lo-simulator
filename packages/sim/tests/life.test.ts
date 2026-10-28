@@ -158,11 +158,26 @@ describe('tất định và lưu/tải (nghiệm thu Sim)', () => {
     // v0.5 S7: chín sự kiện quan hệ (đời mẫu chọn lựa chọn đầu đang mở, phần lớn tốn tiền), trộm kho có tên
     // → 51/52/42 tuổi.
     // v0.5 S8: chi dùng hằng năm tính trên phần tiền vượt 15.000 văn (trước 5.000) → digest đổi, tuổi giữ.
+    // v0.6 Bước 0: luồng RNG factions, kho thế lực (rỗng) trong snapshot, SIM_VERSION 0.6.0 → digest đổi; tuổi và nguyên nhân giữ.
+    // v0.6 S1: quan phủ lấy nửa thuế đinh, thuế điền của quận, chi một phần tư kho mỗi quý ở trị sở → digest đổi, tuổi giữ.
+    // v0.6 S2: tổ dòng cha trong liên kết ruột thịt, gia tộc trong snapshot → digest đổi, tuổi giữ.
+    // v0.6 S3: lời buôn ghi theo đường, thương hội lấy một phần, chia lãi cho thương nhân → digest đổi, tuổi giữ.
+    // v0.6 S4: băng cướp (đời mẫu không gặp: digest giữ). S5: thuế dân nền, quan, sai dịch, phát chẩn, tiễu phỉ, cát cứ
+    // (chủ dự án chọn thuế 1% quỹ quận) → digest đổi, tuổi giữ.
+    // v0.6 S6: thuế đinh, thuế điền theo độ tham của quan; lương thuê ở trấn có thương hội; rủi ro đường theo người giữ
+    // đường → digest đổi; đời thứ ba (chỉ nghỉ, sống bằng của để dành) nộp thuế theo quan khác lệ cũ nên cạn lương sớm
+    // một năm (42 → 41), cùng nguyên nhân.
+    // v0.6 S7: chín sự kiện thế lực; sáu sự kiện cũ gọi người, kho thế lực thật → đời mẫu (chọn lựa chọn đầu) gặp lệ phí,
+    // bắt phu, phát chẩn: tuổi chết đói 51 → 49, 52 → 53, 41 giữ; cùng nguyên nhân.
+    // v0.6 S8: dòng họ dựng sẵn lúc dựng vùng (luồng npc-world rút thêm, tên, cha của người lớn ban đầu), gia tộc lập từ 5
+    // người lớn, thương hội từ 2 thương nhân → digest đổi; đời 1 chết đói 49 → 51, đời 2, 3 giữ tuổi; cùng nguyên nhân.
+    // v0.6 F4: snapshot thêm thế lực đã thấy (`factionsSeen`) → digest đổi; tuổi, nguyên nhân giữ.
+    // Đóng v0.6: SIM_VERSION 0.6.0 → 0.6.1 → digest đổi; tuổi, nguyên nhân giữ.
     expect(out).toMatchInlineSnapshot(`
       [
-        "51 starvation 97d749eea598d497",
-        "52 starvation 3f4472cd29e9e4cb",
-        "42 starvation 0bd0fa7f295b5397",
+        "51 starvation e0146614fbe82fae",
+        "53 starvation 509dfcbaddf074e0",
+        "41 starvation b26dd646ab84055c",
       ]
     `);
   });

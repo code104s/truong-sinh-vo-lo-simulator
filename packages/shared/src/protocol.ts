@@ -9,6 +9,7 @@ import { vChoiceId, type ChoiceId } from './contentId';
 import { vMarketView, type MarketView } from './economy';
 import { vPendingEvent, type PendingEvent } from './events';
 import { vNpcView, type NpcView } from './npc';
+import { vFactionId, vFactionView, type FactionId, type FactionView } from './factions';
 import { vSaveFile, type SaveFile } from './save';
 import { arr, bool, intRange, lit, nat, nonEmpty, nullable, obj, oneOf, parseWith, str, tagged, type Result, type Validator } from './schema';
 import type { TenDay } from './calendar';
@@ -18,11 +19,12 @@ import {
 } from './world';
 
 /**
+ * 6: v0.6 — thế lực: STATE.factions, STATE.control, NpcView.faction, TravelOption.danger, LifeSummary.legacy.factions (ADR 0019).
  * 5: v0.5 — quan hệ, gia đình, tiếng tăm: STATE.circle, NpcView.kin/bond, CharacterView.reputation/spouse, LifeSummary.legacy,
  * PlanSlot.person (ADR 0017, 0018).
  * 4: v0.4 — STATE có người trong quận (ADR 0015, 0016). 3: v0.3 — chợ, mua bán, sự kiện có lựa chọn (ADR 0012–0014).
  */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 export { ADVANCE_MODES, type AdvanceMode } from './actions';
 
@@ -70,6 +72,10 @@ export type WorkerMessage =
       people: NpcView[];
       /** Người thân và người có quan hệ ở mọi quận, người thân trước (v0.5). */
       circle: NpcView[];
+      /** Thế lực còn sống trong vùng, theo id (v0.6, ADR 0019). */
+      factions: FactionView[];
+      /** Thế lực giữ mỗi quận, theo chỉ số quận; null là chưa ai giữ (v0.6). */
+      control: (FactionId | null)[];
     }
   | { type: 'TRAVEL_PREVIEW'; reqId: number; preview: TravelPreview }
   | { type: 'LOG'; reqId: number; entries: LogEntry[] }
@@ -111,6 +117,7 @@ export const vWorkerMessage: Validator<WorkerMessage> = tagged<WorkerMessage>({
     type: lit('STATE'), reqId: nat, date: vCalendarDate, character: vCharacterView, running: bool,
     plan: nullable(vMonthPlan), active: nullable(vActionProgress), slotIndex: oneOf([0, 1, 2] as const), actions: arr(vActionOption), travel: arr(vTravelOption),
     market: nullable(vMarketView), pending: nullable(vPendingEvent), people: arr(vNpcView), circle: arr(vNpcView),
+    factions: arr(vFactionView), control: arr(nullable(vFactionId)),
   }),
   TRAVEL_PREVIEW: obj<M<'TRAVEL_PREVIEW'>>({ type: lit('TRAVEL_PREVIEW'), reqId: nat, preview: vTravelPreview }),
   LOG: obj<M<'LOG'>>({ type: lit('LOG'), reqId: nat, entries: arr(vLogEntry) }),

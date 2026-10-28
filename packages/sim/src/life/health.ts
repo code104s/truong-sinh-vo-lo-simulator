@@ -1,5 +1,5 @@
 // Sức khỏe, lão hóa, bệnh, tai nạn, tử vong (ADR 0005). Toàn số nguyên.
-import { ageYearsAt, seasonOfMonth, calendarOf, type DeathCause, type LogEntry, type Tick } from '@tsvl/shared';
+import { ageYearsAt, seasonOf, type DeathCause, type LogEntry, type Tick } from '@tsvl/shared';
 import { clamp, idiv, lerpTable, mulDiv } from '../core/math';
 import type { Rng } from '../core/rng';
 import { hasCondition, healthBandOf, lifespanCap, traitDef, type CharacterState, type Condition } from './character';
@@ -73,7 +73,7 @@ export function compoundPpm(ppm: number, weeks: number): number {
 /** Xác suất (ppm) khởi phát bệnh trong một tuần, khi đang không bệnh. `epidemic`: quận có dịch mà chưa phòng — gấp ba. */
 export function illnessPpm(c: CharacterState, tick: Tick, epidemic = false): number {
   const age = ageYearsAt(c.birthTick, tick);
-  const season = seasonOfMonth(calendarOf(tick).month);
+  const season = seasonOf(tick);
   let ppm = byAge(ILLNESS_ONSET_BY_AGE, age);
   ppm = mulDiv(ppm, ILLNESS_BY_SEASON[season], 100);
   ppm = mulDiv(ppm, ILLNESS_BY_BACKGROUND[c.background], 100);
@@ -88,7 +88,7 @@ export function illnessPpm(c: CharacterState, tick: Tick, epidemic = false): num
 
 /** Bệnh nào khi đã khởi phát: theo tỉ lệ tuổi, mùa, loại nơi sinh. */
 export function pickIllness(c: CharacterState, tick: Tick, r: Rng): IllnessDef {
-  const season = seasonOfMonth(calendarOf(tick).month);
+  const season = seasonOf(tick);
   const ratio = ageRatio(c, tick);
   const pool = ILLNESSES.filter((d) => ratio >= (d.minAgeRatio ?? 0));
   const w = pool.map((d) => mulDiv(mulDiv(d.weight * 100, d.season[season], 100), d.place[c.birthplaceKind], 100));

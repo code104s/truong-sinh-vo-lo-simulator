@@ -24,7 +24,7 @@ const LIFESPAN_MARGIN_YEARS = 2;
 
 /** Kỹ năng chính của mỗi nghề; kinh nghiệm ban đầu theo số năm đã làm (`XP_PER_WORK_YEAR`, tối đa `XP_START_MAX`). */
 export const OCCUPATION_SKILL: Record<Exclude<Occupation, 'child'>, Skill> = {
-  farmer: 'farming', laborer: 'crafting', hunter: 'hunting', teacher: 'literacy', physician: 'literacy', merchant: 'trade',
+  farmer: 'farming', laborer: 'crafting', hunter: 'hunting', teacher: 'literacy', physician: 'literacy', merchant: 'trade', bandit: 'martial', official: 'literacy',
 };
 export const XP_PER_WORK_YEAR = 300;
 export const XP_START_MAX = 9_000;

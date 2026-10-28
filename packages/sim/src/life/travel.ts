@@ -1,12 +1,16 @@
 import { DAYS_PER_TICK, type TravelPreview } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { idiv } from '../core/math';
+import { routeRiskPct } from '../factions/impact';
 
 export const WALK_KM_PER_DAY = 30;
 const ceilDiv = (a: number, b: number) => idiv(a + b - 1, b);
 
-/** Dijkstra theo km nguyên; hòa thì chọn quận có chỉ số nhỏ trước. */
-export function previewTravel(logic: RegionLogic, from: number, to: number): TravelPreview | null {
+/**
+ * Dijkstra theo km nguyên; hòa thì chọn quận có chỉ số nhỏ trước. Lộ trình không né cướp (đi đường ngắn nhất); mức rủi ro
+ * tính cả người giữ đường khi có `roads` (v0.6 S6, `roadRisk`).
+ */
+export function previewTravel(logic: RegionLogic, from: number, to: number, roads: readonly number[] | null = null): TravelPreview | null {
   const n = logic.counties.length;
   if (!Number.isSafeInteger(to) || to < 0 || to >= n || from < 0 || from >= n || from === to) return null;
   const distance = Array<number>(n).fill(Number.MAX_SAFE_INTEGER);
@@ -36,7 +40,7 @@ export function previewTravel(logic: RegionLogic, from: number, to: number): Tra
     const edge = logic.adjacency.findIndex(([x, y]) => x === Math.min(a, b) && y === Math.max(a, b));
     days += Math.max(1, ceilDiv(logic.seatKm[a]![b]! * logic.terrainPct[edge]!, WALK_KM_PER_DAY * 100));
   }
-  const factor = routeTerrainPct(logic, route);
+  const factor = routeRiskPct(logic, route, roads);
   return { county: to, route, days, slots: Math.max(1, ceilDiv(days, DAYS_PER_TICK)), risk: factor >= 200 ? 'risk.high' : factor > 100 ? 'risk.medium' : 'risk.low' };
 }
 

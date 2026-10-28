@@ -1,6 +1,6 @@
 // Tiền và lương trong hành động: lương làm thuê, học phí, phí thầy thuốc, tiền đường, hái lượm, săn, buôn bán nhỏ,
 // thuế đinh, mua bán lương thực (ADR 0012). Mọi đồng tiền đi giữa túi người chơi và quỹ một quận: tổng tiền vùng không đổi.
-import { ageYearsAt, calendarOf, GRAIN_PER_DOU, type ContentId, type Season, type Tick } from '@tsvl/shared';
+import { ageYearsAt, calendarOf, GRAIN_PER_DOU, seasonOf, type ContentId, type Season, type Tick } from '@tsvl/shared';
 import { idiv, mulDiv } from '../core/math';
 import type { Rng } from '../core/rng';
 import type { CharacterState } from '../life/character';
@@ -68,11 +68,14 @@ export function healFee(c: CharacterState): number {
   return c.conditions.reduce<number>((fee, x) => Math.max(fee, HEAL_FEE[x.severity]), HEAL_FEE.none);
 }
 
+/** Lương một ô làm thuê của người chưa có tay nghề ở chợ này (văn): trấn có thương hội trả cao hơn (v0.6 S6). */
+export const wageOf = (market: CountyEconomy): number => mulDiv(HIRE_WAGE, market.wagePct, 100);
+
 /** Khóa vì tiền ở chợ đang đứng; null nếu không vướng. Là khóa tạm: hết khi có tiền hoặc quận có việc. */
 export function moneyLock(id: string, c: CharacterState, market: CountyEconomy): ContentId | null {
   const money = c.household.money;
   switch (id) {
-    case 'action.hire': return market.money < HIRE_WAGE ? 'lock.no_work' : null;
+    case 'action.hire': return market.money < wageOf(market) ? 'lock.no_work' : null;
     case 'action.study': return money < TUITION ? 'lock.money' : null;
     case 'action.heal': return money < healFee(c) ? 'lock.money' : null;
     case 'action.trade': return money < TRADE_MIN_CAPITAL ? 'lock.money' : null;
@@ -111,9 +114,13 @@ export function moneyGains(id: string): ContentId[] {
 export function settleAction(id: string, c: CharacterState, tick: Tick, market: CountyEconomy, rng: Rng, physician: { money: number } | null = null): number {
   const h = c.household;
   switch (id) {
-    case 'action.hire':
-      receive(h, market, mulDiv(HIRE_WAGE, skillPct(c.skillXp.crafting), 100));
+    case 'action.hire': {
+      // Trấn có thương hội thuê thêm (v0.6 S6): phần trả thêm quỹ quận ứng trước, ghi lại để thương hội hoàn
+      const base = mulDiv(HIRE_WAGE, skillPct(c.skillXp.crafting), 100);
+      const got = receive(h, market, mulDiv(base, market.wagePct, 100));
+      market.wageBonus += Math.max(0, got - base);
       return 100;
+    }
     case 'action.study':
       pay(h, market, TUITION);
       return 100;
@@ -127,7 +134,7 @@ export function settleAction(id: string, c: CharacterState, tick: Tick, market: 
     case 'action.travel':
       return pay(h, market, LODGING_PER_SLOT) < LODGING_PER_SLOT ? ROUGH_SLEEP_RISK_PCT : 100;
     case 'action.forage':
-      h.grain += mulDiv(FORAGE_BY_SEASON[calendarOf(tick).season], skillPct(c.skillXp.hunting), 100);
+      h.grain += mulDiv(FORAGE_BY_SEASON[seasonOf(tick)], skillPct(c.skillXp.hunting), 100);
       return 100;
     case 'action.hunt': {
       const pct = skillPct(c.skillXp.hunting);
@@ -162,12 +169,17 @@ export function yearlySpending(c: CharacterState, here: CountyEconomy): number {
   return pay(h, here, Math.floor(((h.money - LIVING_SPEND_KEEP) * LIVING_SPEND_PERMILLE) / 1000));
 }
 
+/** Thuế đinh ở một quận theo mức thuế người giữ quận đặt (v0.6 S6): 100–300 văn, lệ cũ 200. */
+export const headTaxOf = (home: CountyEconomy): number => mulDiv(HEAD_TAX, home.taxPct, 100);
+
 /** Đầu năm: người đã ra riêng từ 16 tuổi nộp thuế đinh cho quận nhà; thiếu thì ghi nợ (sự kiện thu thuế ở S5). */
 export function headTax(c: CharacterState, home: CountyEconomy, tick: Tick): number {
   const h = c.household;
   if (!h.independent || ageYearsAt(c.birthTick, tick) < HEAD_TAX_AGE) return 0;
-  const paid = pay(h, home, HEAD_TAX);
-  h.taxDebt += HEAD_TAX - paid;
+  const due = headTaxOf(home);
+  const paid = pay(h, home, due);
+  home.taxMoney += paid;
+  h.taxDebt += due - paid;
   return paid;
 }
 

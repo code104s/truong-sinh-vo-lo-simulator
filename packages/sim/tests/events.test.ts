@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { ageYearsAt, birthplaceId, regionId, vPendingEvent, type WorkerMessage } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { Life, Rng, SimHost, replaySave } from '../src/index';
-import { pastComingOfAge } from './auto';
+import { autoAdvance, lastChoice, pastComingOfAge } from './auto';
 import { EVENTS, WANDERING_PHYSICIAN_FEE } from '../src/events/catalog';
 import { checkCatalog, makeContext, newEventsState, rollEvent, type EventDef } from '../src/events/engine';
 import type { CharacterState } from '../src/life/character';
 import type { LifeSnapshot } from '../src/life/life';
+import type { FactionState } from '../src/factions/state';
 import { kinRole, PLAYER_ID } from '../src/npc/family';
 import type { Bond } from '../src/social/bonds';
 
@@ -49,7 +50,7 @@ describe('tuyển tập sự kiện (ADR 0014)', () => {
         expect(found, `${def.id}/${choice.id}: không có trạng thái mẫu nào mở được`).not.toBeNull();
         const { s } = found!;
         const before = JSON.stringify([s.character, s.active, s.economy, s.events.flags]);
-        const ctx = makeContext(s.character, s.events, s, s.economy, region, s.tick);
+        const ctx = ctxOf(s);
         const rng = Rng.fromSeed(3);
         const rngBefore = JSON.stringify(rng.state());
         choice.apply(ctx, rng);
@@ -69,16 +70,42 @@ function richSnap(personalityId: string, onRoad: boolean): LifeSnapshot {
     c.conditions = [{ id: 'illness.fever', kind: 'illness', severity: 'serious', weeksLeft: 4 }];
     c.skillXp.martial = 2_000; c.skillXp.literacy = 500; c.skillXp.hunting = 500;
     if (onRoad) s.active = { slot: { action: 'action.travel', target: 1 }, total: 2, remaining: 2, preview: { county: 1, route: [0, 1], days: 6, slots: 2, risk: 'risk.low' } };
+    withFactions(s);
   });
 }
-const PERSONALITIES_TRY = ['calm', 'kind', 'hot_tempered', 'ambitious'];
+
+/**
+ * Thế lực mẫu (v0.6 S7): quan tham giữ cả hai quận, có một sai dịch ở quận 1; băng cướp sào huyệt quận 1 giữ đường 0–1;
+ * thương hội ở quận 0; họ Trần đứng đầu quận 0. Người cầm đầu lấy từ cuối danh sách người lớn để người trong chuyện của
+ * các sự kiện cũ (người đầu danh sách) không trùng.
+ */
+function withFactions(s: LifeSnapshot): void {
+  const adults = (county: number) => s.npcs.people.filter((n) => !n.death && n.character.location === county && ageYearsAt(n.character.birthTick, s.tick) >= 20 && kinRole(s.character, n) === null);
+  const fw = s.factions;
+  const gov = fw.list.find((f) => f.kind === 'government')!;
+  const official = adults(1)[0]!;
+  official.occupation = 'official';
+  Object.assign(gov, { counties: [0, 1], members: [official.id], leader: official.id, greed: 80, termEnds: s.tick + 360, money: 50_000, grain: 2_000 });
+  const add = (o: Partial<FactionState> & Pick<FactionState, 'kind' | 'seat'>) => fw.list.push({
+    id: `f${fw.nextId++}`, name: { key: `faction.${o.kind}.name`, params: { place: `Quận ${o.seat}` } }, counties: [], holds: [], roads: [], members: [], leader: null,
+    power: 0, losses: 0, greed: 0, termEnds: 0, relations: [], money: 0, grain: 0, founded: 0, ended: null, ...o,
+  });
+  const robbers = adults(1).slice(1, 4);
+  for (const n of robbers) n.occupation = 'bandit';
+  add({ kind: 'bandits', seat: 1, roads: [0], members: robbers.map((n) => n.id), leader: robbers[0]!.id, money: 1_000, grain: 2_000 });
+  const [head, merchant] = adults(0).slice(-2);
+  add({ kind: 'guild', seat: 0, counties: [0], roads: [0], members: [merchant!.id], leader: merchant!.id, money: 20_000 });
+  add({ kind: 'clan', seat: 0, name: { key: 'faction.clan.name', params: { surname: 'Trần', place: 'Quận 0' } }, counties: [0], members: [head!.id], leader: head!.id });
+}
+const ctxOf = (s: LifeSnapshot) => makeContext(s.character, s.events, s, s.economy, region, s.tick, s.npcs, s.bonds, s.reputation, s.factions);
+const PERSONALITIES_TRY = ['calm', 'kind', 'hot_tempered', 'ambitious', 'cunning'];
 /** Trạng thái mẫu đầu tiên mà lựa chọn đang mở. */
 function openFixture(eventId: string, choiceId: string): { s: LifeSnapshot } | null {
   const def = EVENTS.find((d) => d.id === eventId)!;
   const choice = def.choices.find((c) => c.id === choiceId)!;
   for (const onRoad of [false, true]) for (const p of PERSONALITIES_TRY) {
     const s = richSnap(p, onRoad);
-    if ((choice.available?.(makeContext(s.character, s.events, s, s.economy, region, s.tick)) ?? null) === null) return { s };
+    if ((choice.available?.(ctxOf(s)) ?? null) === null) return { s };
   }
   return null;
 }
@@ -238,18 +265,18 @@ describe('văn bản sự kiện', () => {
       // Lời kể: mọi biến thể có thể ra trên các trạng thái mẫu
       for (const p of PERSONALITIES_TRY) for (const onRoad of [false, true]) {
         const s = richSnap(p, onRoad);
-        const ctx = makeContext(s.character, s.events, s, s.economy, region, s.tick);
+        const ctx = ctxOf(s);
         const v = d.variant?.(ctx) ?? null;
         const body = t(v ? `${d.id}.body.${v}` : `${d.id}.body`, d.params?.(ctx) ?? {});
         expect(body, `${d.id} ${v}`).not.toMatch(MISSING);
       }
       for (const ch of d.choices) {
         const s = richSnap('calm', false);
-        expect(t(`${d.id}.choice.${ch.id}`, d.params?.(makeContext(s.character, s.events, s, s.economy, region, s.tick)) ?? {}), `${d.id}/${ch.id}`).not.toMatch(MISSING);
+        expect(t(`${d.id}.choice.${ch.id}`, d.params?.(ctxOf(s)) ?? {}), `${d.id}/${ch.id}`).not.toMatch(MISSING);
         // Kết quả: chạy trên nhiều seed để gặp đủ nhánh
         for (let i = 0; i < 40; i++) {
           const f = openFixture(d.id, ch.id)!;
-          const ctx = makeContext(f.s.character, f.s.events, f.s, f.s.economy, region, f.s.tick);
+          const ctx = ctxOf(f.s);
           const params = d.params?.(ctx) ?? {};
           const out = ch.apply(ctx, Rng.fromSeed(i));
           const text = t(`${d.id}.result.${out.result}`, { ...params, ...out.params });
@@ -278,6 +305,8 @@ describe('người thật trong sự kiện (v0.4 S6)', () => {
     const alive = (county: number) => s.npcs.people.filter((n) => !n.death && n.character.location === county && ageYearsAt(n.character.birthTick, s.tick) >= 20);
     if (eventId === 'event.beggar') { const h = alive(0)[0]!.character.household; h.independent = true; h.hunger = 2; h.grain = 0; h.money = 0; }
     if (eventId === 'event.market_brawl') s.character.location = 1;
+    // Cướp đường (v0.6 S7): đang đi trên đường băng cướp giữ
+    if (eventId === 'event.highway_robbers') s.active = { slot: { action: 'action.travel', target: 1 }, total: 2, remaining: 2, preview: { county: 1, route: [0, 1], days: 6, slots: 2, risk: 'risk.high' } };
     if (eventId === 'event.village_funeral') { const n = alive(0)[0]!; n.character.alive = false; n.death = { tick: s.tick - 5, cause: 'old_age', detail: 'old_age.natural' }; }
     if (eventId === 'event.wandering_physician') alive(1)[0]!.occupation = 'physician';
     if (eventId === 'event.grain_broker') { const n = alive(1)[0]!; n.occupation = 'merchant'; n.character.household.money = 100_000; }
@@ -312,17 +341,26 @@ describe('người thật trong sự kiện (v0.4 S6)', () => {
     }
     if (eventId === 'event.friend_in_need') { bond({ closeness: 30 }); n.character.household.hunger = 2; }
     if (eventId === 'event.spouse_quarrel') { unwed(); s.character.kin.spouse = n.id; n.character.kin.spouse = PLAYER_ID; }
-    const ctx = makeContext(s.character, s.events, s, s.economy, region, s.tick, s.npcs, s.bonds, s.reputation);
+    if (eventId === 'event.clan_match') {
+      unwed(); s.character.kin.spouse = null;
+      Object.assign(n.character, { gender: s.character.gender === 'male' ? 'female' : 'male', birthTick: s.character.birthTick });
+      n.character.household.independent = true;
+      s.factions.list.find((f) => f.kind === 'clan')!.members.push(n.id);
+    }
+    const ctx = ctxOf(s);
     ctx.npc = def.cast!(ctx, Rng.fromSeed(1));
     return { s, ctx, def };
   }
   const NAMED = [
-    'event.beggar', 'event.child_ill', 'event.debt_called', 'event.enemy_revenge', 'event.estate_dispute', 'event.friend_brings_rice', 'event.friend_in_need',
-    'event.grain_broker', 'event.granary_theft', 'event.kin_funeral', 'event.market_brawl', 'event.matchmaker', 'event.neighbor_harvest', 'event.parent_ill',
-    'event.spouse_quarrel', 'event.village_funeral', 'event.village_wedding', 'event.wandering_physician',
+    'event.bandit_lure', 'event.bandit_raid', 'event.beggar', 'event.child_ill', 'event.clan_match', 'event.corvee_levy', 'event.debt_called', 'event.enemy_revenge',
+    'event.estate_dispute', 'event.friend_brings_rice', 'event.friend_in_need', 'event.grain_broker', 'event.granary_theft', 'event.greedy_levy', 'event.highway_robbers',
+    'event.join_caravan', 'event.kin_funeral', 'event.land_suit', 'event.market_brawl', 'event.matchmaker', 'event.neighbor_harvest', 'event.parent_ill', 'event.rent_hike',
+    'event.report_bandits', 'event.spouse_quarrel', 'event.tax_collector', 'event.village_festival', 'event.village_funeral', 'event.village_wedding', 'event.wandering_physician',
   ];
+  /** Biến thể có tên khác "named" ở trạng thái mẫu: họ Trần đứng đầu làng (S7). */
+  const NAMED_VARIANT: Record<string, string> = { 'event.bandit_raid': 'named_clan', 'event.village_festival': 'clan' };
 
-  it('mười tám sự kiện gọi người thật (v0.5 S5 thêm cha mẹ ốm, tang; S7 thêm chín sự kiện quan hệ, nối trộm kho, gặt giúp): biến thể "named" có tên, thẻ là người ấy, mọi khóa văn bản đủ', async () => {
+  it('ba mươi sự kiện gọi người thật (v0.5 S5 cha mẹ ốm, tang; S7 chín sự kiện quan hệ; v0.6 S7 sự kiện thế lực và sáu sự kiện cũ nối vào thế lực): biến thể có tên, thẻ là người ấy, mọi khóa văn bản đủ', async () => {
     const { t } = await import('@tsvl/content');
     const MISSING = /⟨|\{\w+\}/;
     expect(EVENTS.filter((d) => d.cast).map((d) => d.id)).toEqual(NAMED);
@@ -330,11 +368,12 @@ describe('người thật trong sự kiện (v0.4 S6)', () => {
       const { ctx, def } = namedFixture(id);
       const npc = ctx.npc!;
       expect(npc, id).not.toBeNull();
-      expect(def.variant!(ctx), id).toBe('named');
+      const variant = NAMED_VARIANT[id] ?? 'named';
+      expect(def.variant!(ctx), id).toBe(variant);
       const params = def.params!(ctx);
       expect(params.name, id).toBe(npc.character.name);
-      expect(t(`${id}.body.named`, params), id).not.toMatch(MISSING);
-      expect(t(`${id}.body.named`, params), id).toContain(npc.character.name);
+      expect(t(`${id}.body.${variant}`, params), id).not.toMatch(MISSING);
+      expect(t(`${id}.body.${variant}`, params), id).toContain(npc.character.name);
       expect(def.figure!(ctx, Rng.fromSeed(2))?.npcId, id).toBe(npc.id);
       for (const ch of def.choices) {
         expect(t(`${id}.choice.${ch.id}`, params), `${id}/${ch.id}`).not.toMatch(MISSING);
@@ -393,5 +432,107 @@ describe('người thật trong sự kiện (v0.4 S6)', () => {
     expect(l.choose(p.instance, 'stay_away')).toBeNull();
     expect(l.log.at(-1)).toMatchObject({ key: 'event.village_funeral.result.stay_away' });
     expect(l.log.at(-1)!.params.name).toBe(ctx.npc!.character.name);
+  });
+});
+
+describe('sự kiện thế lực (v0.6 S7, Q10)', () => {
+  const def = (id: string) => EVENTS.find((d) => d.id === id)!;
+  const choice = (id: string, c: string) => def(id).choices.find((x) => x.id === c)!;
+  const factionOf = (s: LifeSnapshot, kind: string) => s.factions.list.find((f) => f.kind === kind)!;
+  /** Sổ cái: quỹ quận + túi người chơi + túi NPC + kho thế lực. */
+  const ledger = (s: LifeSnapshot) => s.character.household.money + s.npcs.people.reduce((a, n) => a + n.character.household.money, 0)
+    + s.economy.counties.reduce((a, c) => a + c.money, 0) + s.factions.list.reduce((a, f) => a + f.money, 0);
+  const FACTION_IDS = ['event.bandit_lure', 'event.bandit_raid', 'event.clan_match', 'event.corvee_levy', 'event.greedy_levy', 'event.join_caravan', 'event.land_suit', 'event.relief_line', 'event.report_bandits'];
+
+  it('chín sự kiện mới; mỗi lựa chọn của chúng và của sáu sự kiện cũ nối thế lực giữ sổ cái (tiền chuyển qua kho thế lực, túi người thật)', () => {
+    expect(EVENTS.filter((d) => FACTION_IDS.includes(d.id)).length).toBe(9);
+    const linked = ['event.grain_broker', 'event.highway_robbers', 'event.rent_hike', 'event.tax_collector', 'event.usurer', 'event.village_festival'];
+    for (const id of [...FACTION_IDS, ...linked]) for (const ch of def(id).choices) for (let i = 0; i < 10; i++) {
+      const f = openFixture(id, ch.id)!;
+      const ctx = ctxOf(f.s);
+      ctx.npc = def(id).cast?.(ctx, Rng.fromSeed(i)) ?? null;
+      const before = ledger(f.s);
+      ch.apply(ctx, Rng.fromSeed(i));
+      expect(ledger(f.s), `${id}/${ch.id}`).toBe(before);
+    }
+  });
+
+  it('điều kiện theo thế lực thật: không có quan phủ, cướp, thương hội, họ lớn thì không xảy ra; quan tham mới sách nhiễu, quan thanh liêm mới phát chẩn', () => {
+    const s = richSnap('calm', false);
+    s.character.gender = 'male';
+    Object.assign(s.character.household, { money: 1_000, grain: 50, landMu: 0, tenure: 'owner', hunger: 2 });
+    s.tick = 20 * 36 + 3 * 11 + 1; // tháng Mười hai: mùa bắt phu
+    s.active = null;
+    const w = (id: string, snap = s) => def(id).weight(ctxOf(snap));
+    expect(w('event.corvee_levy')).toBeGreaterThan(0);
+    expect(w('event.greedy_levy')).toBeGreaterThan(0);
+    expect(w('event.bandit_lure')).toBeGreaterThan(0);
+    expect(w('event.join_caravan')).toBeGreaterThan(0);
+    // Đói kém ở quận đang đứng: quan tham không chẩn, quan thanh liêm chẩn
+    s.economy.counties[0]!.grain = 0;
+    expect(w('event.relief_line')).toBe(0);
+    factionOf(s, 'government').greed = 10;
+    expect(w('event.relief_line')).toBeGreaterThan(0);
+    expect(w('event.greedy_levy')).toBe(0);
+    // Không còn thế lực nào: không sự kiện thế lực nào xảy ra
+    const bare = structuredClone(s);
+    bare.factions.list = [];
+    for (const id of FACTION_IDS) expect(w(id, bare), id).toBe(0);
+    // Quận cát cứ: quan phủ không bắt phu ở đó
+    factionOf(s, 'government').counties = [1];
+    expect(w('event.corvee_levy')).toBe(0);
+  });
+
+  it('tiền đi đúng chỗ: nộp miễn phu vào kho quan phủ; mãi lộ trên đường cướp vào kho băng; nộp nợ thuế ghi vào thuế quận', () => {
+    let f = openFixture('event.corvee_levy', 'pay_off')!;
+    const gov = factionOf(f.s, 'government'), g0 = gov.money;
+    const out = choice('event.corvee_levy', 'pay_off').apply(ctxOf(f.s), Rng.fromSeed(1));
+    expect(gov.money - g0).toBe(out.params!.money);
+    expect(out.params!.money).toBe(2 * 200 * f.s.economy.counties[0]!.taxPct / 100);
+    f = { s: richSnap('calm', true) };
+    const band = factionOf(f.s, 'bandits'), b0 = band.money;
+    const paid = choice('event.highway_robbers', 'pay').apply(ctxOf(f.s), Rng.fromSeed(1)).params!.money as number;
+    expect(paid).toBeGreaterThan(0);
+    expect(band.money - b0).toBe(paid);
+    f = openFixture('event.tax_collector', 'pay')!;
+    const debt = f.s.character.household.taxDebt, tax0 = f.s.economy.counties[0]!.taxMoney;
+    choice('event.tax_collector', 'pay').apply(ctxOf(f.s), Rng.fromSeed(1));
+    expect(f.s.economy.counties[0]!.taxMoney - tax0).toBe(debt);
+  });
+
+  it('tố cáo cướp: bắt được thì người ấy rời băng, về nghề cũ; được thưởng từ kho quan phủ', () => {
+    for (let i = 0; i < 40; i++) {
+      const s = richSnap('calm', false);
+      const ctx = ctxOf(s);
+      ctx.npc = def('event.report_bandits').cast!(ctx, Rng.fromSeed(i));
+      const band = factionOf(s, 'bandits'), gov = factionOf(s, 'government'), g0 = gov.money;
+      const out = choice('event.report_bandits', 'report').apply(ctx, Rng.fromSeed(i));
+      if (out.result !== 'report_caught') continue;
+      expect(band.members).not.toContain(ctx.npc!.id);
+      expect(ctx.npc!.occupation).not.toBe('bandit');
+      expect(g0 - gov.money).toBe(out.params!.reward);
+      return;
+    }
+    throw new Error('40 lần không bắt được ai');
+  });
+
+  it('vay thương hội: tiền từ kho hội, ghi chủ nợ; tới hạn trả về kho hội; tổng tiền không đổi', () => {
+    const s = richSnap('calm', false);
+    Object.assign(s.character.household, { money: 0, grain: 0, hunger: 1, loan: 0 });
+    const guild = factionOf(s, 'guild'), m0 = guild.money;
+    const ctx = ctxOf(s);
+    expect(def('event.usurer').variant!(ctx)).toBe('guild');
+    choice('event.usurer', 'borrow').apply(ctx, Rng.fromSeed(1));
+    expect([m0 - guild.money, s.character.household.money, s.character.household.lender]).toEqual([300, 300, guild.id]);
+    // Tới hạn ngay tuần đầu tháng này (không phải đầu quý): đủ tiền trả thì trả về kho hội, xóa chủ nợ
+    Object.assign(s.character.household, { money: 1_000, loanDue: s.tick });
+    s.events.pending = null;
+    const l = Life.restore(s, [], region);
+    const total = l.totalMoney(), m1 = guild.money;
+    autoAdvance(l, 'week', lastChoice);
+    const after = l.snapshot();
+    expect([after.character.household.loan, after.character.household.lender]).toEqual([0, null]);
+    expect(after.factions.list.find((f) => f.id === guild.id)!.money - m1).toBe(300 * 136 / 100);
+    expect(l.totalMoney()).toBe(total);
   });
 });

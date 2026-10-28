@@ -3,7 +3,7 @@ import type { RegionLogic } from '@tsvl/worldgen';
 import { idiv, mulDiv } from '../core/math';
 import type { CharacterState } from '../life/character';
 import type { HouseholdState } from '../life/household';
-import type { EconomyState } from './market';
+import type { CountyEconomy, EconomyState } from './market';
 
 /** Một tuần công ở độ phì 100%, thời tiết 100%, chưa có kỹ năng: 5 đấu. */
 export const FARM_YIELD_PER_WEEK = 50;
@@ -13,6 +13,12 @@ export const FARM_SKILL_MAX_PCT = 60;
 export const WEEKS_PER_MU = 3;
 export const LAND_TAX_PCT = 10;
 export const RENT_PCT = 50;
+
+/**
+ * Thuế điền trên `gross` thăng ở quận có ruộng (v0.6 S6, Q7): lệ 10% nhân nửa phần lệch của mức thuế người giữ quận —
+ * quan thanh liêm nhất 7,5%, tham nhất 12,5%.
+ */
+export const landTax = (gross: number, field: CountyEconomy): number => mulDiv(gross, LAND_TAX_PCT * (100 + field.taxPct), 20_000);
 
 export interface HarvestResult {
   /** Tổng thu trên ruộng đã làm, trước thuế, tô. */
@@ -61,9 +67,10 @@ export function harvestPlayer(c: CharacterState, eco: EconomyState, logic: Regio
     const ownGross = perWeek * own;
     const rentedGross = perWeek * (h.farmWeeks - own);
     res.gross = ownGross + rentedGross;
-    res.tax = mulDiv(ownGross, LAND_TAX_PCT, 100);
+    res.tax = landTax(ownGross, field);
     res.rent = mulDiv(rentedGross, RENT_PCT + h.rentHikePct, 100);
     field.grain += res.tax + res.rent;
+    field.taxGrain += res.tax;
     res.net = res.gross - res.tax - res.rent;
   }
   if (h.tenure === 'landlord') {
@@ -73,7 +80,7 @@ export function harvestPlayer(c: CharacterState, eco: EconomyState, logic: Regio
     const rentedMu = Math.max(0, h.landMu - workedMu);
     const yieldOut = mulDiv(mulDiv(rentedMu * WEEKS_PER_MU * FARM_YIELD_PER_WEEK, logic.fertilityPct[c.home]!, 100), home.weatherPct, 100);
     const rent = mulDiv(yieldOut, RENT_PCT, 100);
-    const income = Math.min(home.grain, rent - mulDiv(rent, LAND_TAX_PCT, 100));
+    const income = Math.min(home.grain, rent - landTax(rent, home));
     home.grain -= income;
     res.landlordIncome = income;
     res.net += income;

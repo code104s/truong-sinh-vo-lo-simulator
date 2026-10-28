@@ -7,7 +7,7 @@ import { giveGrainTo, heal, loseGrain, moveGrain, payTo, refresh, spendStamina, 
 import type { EventContext, EventDef } from '../engine';
 import { kinRole } from '../../npc/family';
 import { npcFigure, type NpcState } from '../../npc/state';
-import { byReputation, castOr, figure, inTown, inVillage, man, month, nearestTown, npcAge, npcName, peopleHere, personality, pickOne, doingNow } from './common';
+import { byReputation, castOr, clanSurname, figure, inTown, inVillage, leadClan, leaderOf, man, month, nearestTown, npcAge, npcName, peopleHere, personality, pickOne, doingNow } from './common';
 
 /**
  * Lập thân (G2): viết ở S6, bật ở S7 cùng chiến lược batch có kinh tế (giữ một năm ăn, bán phần thừa, giữ tiền thuế).
@@ -95,9 +95,11 @@ export const villageFestival: EventDef = {
   cooldownTicks: 100,
   // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
   reputation: { pay_dues: 2, labor: 2, stay_home: -2 },
-  variant: (ctx) => (month(ctx) === 8 ? 'autumn' : null),
-  figure: () => man('old', 'common'),
-  params: () => ({ dues: FESTIVAL_DUES }),
+  // Họ đứng đầu làng đứng ra mở hội (v0.6 S7): trưởng họ thay ông trùm; tiền hội vẫn vào quỹ làng
+  cast: (ctx) => leaderOf(ctx, leadClan(ctx, ctx.c.location)),
+  variant: (ctx) => (ctx.npc ? (month(ctx) === 8 ? 'clan_autumn' : 'clan') : month(ctx) === 8 ? 'autumn' : null),
+  figure: castOr(() => man('old', 'common')),
+  params: (ctx) => ({ dues: FESTIVAL_DUES, ...npcName(ctx), clan: clanSurname(leadClan(ctx, ctx.c.location)) }),
   choices: [
     {
       id: 'pay_dues', costs: ['money'],

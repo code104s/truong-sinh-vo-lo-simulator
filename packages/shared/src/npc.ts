@@ -5,6 +5,7 @@ import { vContentId, vNpcId, type ContentId, type NpcId } from './contentId';
 import { FIGURE_AGES, FIGURE_CLASSES, type EventFigure } from './events';
 import { arr, nat, nonEmpty, nullable, obj, oneOf, opt, type Validator } from './schema';
 import { vActionId, type ActionId } from './actions';
+import { vFactionId, type FactionId } from './factions';
 
 export { NPC_ID_RE, vNpcId, type NpcId } from './contentId';
 
@@ -54,6 +55,8 @@ export interface NpcView {
    * thân, không đủ tiền quà…). Chỉ có ở `STATE.people`; sim xét lại khóa khi ô chạy.
    */
   social?: SocialOption[];
+  /** Thế lực người ấy thuộc về (v0.6): gia tộc theo dòng họ, thương hội, băng cướp, quan phủ. */
+  faction?: FactionId;
 }
 
 export interface SocialOption {
@@ -72,4 +75,5 @@ export const vNpcView: Validator<NpcView> = obj<NpcView>({
   kin: opt(oneOf(KIN_ROLES)),
   bond: opt(vBondView),
   social: opt(arr(obj<SocialOption>({ action: vActionId, locked: nullable(vContentId) }))),
+  faction: opt(vFactionId),
 });

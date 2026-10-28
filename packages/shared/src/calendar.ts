@@ -49,6 +49,10 @@ export function calendarOf(tick: Tick): CalendarDate {
   };
 }
 
+/** Tháng 1–12 và mùa của một tick, không dựng CalendarDate (đường nóng của sim, v0.6 Bước 0). Tick không âm. */
+export const monthOf = (tick: Tick): number => Math.floor((tick % TICKS_PER_YEAR) / TICKS_PER_MONTH) + 1;
+export const seasonOf = (tick: Tick): Season => seasonOfMonth(monthOf(tick));
+
 /** Tick đầu tháng / đầu năm: nơi các pha có nhịp tháng, năm chạy (ADR 0002). */
 export const isMonthStart = (tick: Tick) => tick % TICKS_PER_MONTH === 0;
 export const isQuarterStart = (tick: Tick) => tick % (TICKS_PER_MONTH * 3) === 0;

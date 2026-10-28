@@ -9,8 +9,11 @@ import type { PlayerState } from '../life/player';
 import { COMING_OF_AGE } from '../life/household';
 import type { Background } from '../life/params';
 
-/** Nghề (ADR 0016, Q5): bốn nghề thường, hai nghề đặc biệt nảy từ mô phỏng; trẻ dưới 16 chưa có nghề. */
-export const OCCUPATIONS = ['child', 'farmer', 'laborer', 'hunter', 'teacher', 'physician', 'merchant'] as const;
+/**
+ * Nghề (ADR 0016, Q5): bốn nghề thường, hai nghề đặc biệt nảy từ mô phỏng; trẻ dưới 16 chưa có nghề. `bandit`: theo băng
+ * cướp (v0.6 S4, Q9); `official`: sai dịch của quan phủ (S5) — chỉ pha Thế lực đặt và gỡ.
+ */
+export const OCCUPATIONS = ['child', 'farmer', 'laborer', 'hunter', 'teacher', 'physician', 'merchant', 'bandit', 'official'] as const;
 export type Occupation = (typeof OCCUPATIONS)[number];
 
 /** L0: quận người chơi đang đứng, chạy mỗi tuần đúng luật người chơi. L1: quận khác, gộp ba tuần ở đầu tháng (ADR 0015, Q3). */

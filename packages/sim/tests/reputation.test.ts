@@ -122,7 +122,7 @@ describe('việc làm có tiếng, ảnh hưởng (v0.5 S6)', () => {
     Object.assign(s.character.household, { money: 0, grain: 600 });
     s.reputation = [20, 0, 0, 0];
     // Không vướng tang người thân (lo tang cũng có tiếng)
-    s.character.kin = { father: null, mother: null, spouse: null };
+    s.character.kin = { father: null, mother: null, spouse: null, lineage: null };
     const l = Life.restore(s, [], chain);
     expect(l.view().reputation).toBe('respected');
     autoAdvance(l, 'week', lastChoice);

@@ -23,6 +23,8 @@ export interface HouseholdState {
   /** Nợ vay nặng lãi còn phải trả (văn, đã gồm lãi) và tick tới hạn (−1 = không nợ) (S6). */
   loan: number;
   loanDue: number;
+  /** Thế lực cho vay (v0.6 S7: thương hội); null là chủ nợ trong làng, trả về quỹ quận nhà. */
+  lender: string | null;
   /** Mùa này: phần thiệt do tai họa đã cứu được (%), và tô bị tăng thêm (%) (S6). Đặt lại sau mùa gặt. */
   reliefPct: number;
   rentHikePct: number;
@@ -65,7 +67,7 @@ type Log = (e: Omit<LogEntry, 'tick'>) => void;
 
 export function newHousehold(): HouseholdState {
   return { independent: false, money: 0, grain: 0, landMu: 0, tenure: 'none', hunger: 0, farmWeeks: 0, farmCounty: -1, taxDebt: 0,
-    loan: 0, loanDue: -1, reliefPct: 0, rentHikePct: 0, shieldUntil: -1, stayUntil: 0, hungerYears: 0, lastHungerYear: -1 };
+    loan: 0, loanDue: -1, lender: null, reliefPct: 0, rentHikePct: 0, shieldUntil: -1, stayUntil: 0, hungerYears: 0, lastHungerYear: -1 };
 }
 
 export function hungerBand(hunger: number): HungerBand {

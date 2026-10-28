@@ -8,9 +8,11 @@ export interface PolicyContext {
   settlements: readonly SettlementKind[]; seed: number; active: boolean;
   /** Chợ quận đang đứng (S7); không có thì chiến lược không mua bán. */
   market?: MarketView | null;
-  /** Người trong quận và khóa của ô xã giao nhắm vào họ (v0.5 S8, chiến lược `family`); không có thì không xã giao. */
-  people?: readonly NpcView[];
-  socialLock?: (slot: PlanSlot) => string | null;
+  /**
+   * Người trong quận, mỗi người kèm khóa của từng việc xã giao (`NpcView.social`, v0.5 F2) — cho chiến lược `family`;
+   * không có thì không xã giao. Hàm, để chỉ dựng khi cần (v0.6 Bước 0: người đã có vợ/chồng mà không túng thì không hỏi).
+   */
+  people?: () => readonly NpcView[];
 }
 
 /**
@@ -91,14 +93,24 @@ const CLOSENESS_RANK: Record<string, number> = { stranger: 0, acquaintance: 1, f
 
 /** Ô xã giao của người chơi máy `family`, hoặc null. Chỉ đọc view và khóa sim công bố (không đoán ai đã có gia đình). */
 function familySlot(c: PolicyContext): PlanSlot | null {
-  const lock = c.socialLock, people = c.people ?? [];
-  if (!lock || !people.length || !household(c).independent) return null;
+  if (!c.people || !household(c).independent) return null;
+  const hungry = household(c).foodWeeks < FAMILY_ASK_WEEKS, married = c.character.spouse !== undefined;
+  // Đã có vợ/chồng còn sống mà không túng: không còn việc xã giao nào để xếp (cưới hỏi bị khóa với mọi người)
+  if (married && !hungry) return null;
+  const people = c.people();
+  if (!people.length) return null;
+  // Khóa sim gửi kèm người ấy; null là làm được (không dùng ?? vì null là giá trị thật), không có thì coi như khóa
+  const lock = ({ action, person }: PlanSlot): string | null => {
+    const o = people.find((p) => p.id === person)?.social?.find((x) => x.action === action);
+    return o ? o.locked : 'lock.action';
+  };
   const open = (action: string) => people.filter((p) => lock({ action, person: p.id }) === null);
-  if (household(c).foodWeeks < FAMILY_ASK_WEEKS) {
+  if (hungry) {
     // Người thân trước, rồi người thân thiết hơn
     const helpers = open('action.ask_help').sort((a, b) => Number(!a.kin) - Number(!b.kin) || (CLOSENESS_RANK[b.bond?.closeness ?? 'stranger']! - CLOSENESS_RANK[a.bond?.closeness ?? 'stranger']!));
     if (helpers.length) return { action: 'action.ask_help', person: helpers[0]!.id };
   }
+  if (married) return null;
   // Khóa cưới hỏi của từng người, tính một lần cho cả hai bước dưới
   const propose = people.map((p) => lock({ action: 'action.propose', person: p.id }));
   const wed = people.find((_, i) => propose[i] === null);

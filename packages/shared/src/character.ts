@@ -2,6 +2,7 @@
 import type { Tick } from './calendar';
 import { STAMINA_BANDS, vSkillView, type CountyIndex, type SkillView, type StaminaBand } from './actions';
 import { vContentId, vNpcId, type ContentId, type NpcId } from './contentId';
+import { FACTION_FATES, FACTION_KINDS, vFactionName, type FactionFate, type FactionKind, type FactionName } from './factions';
 import { TENURES, vHouseholdView, type Coin, type Grain, type HouseholdView, type Tenure } from './economy';
 import { arr, bool, int, intRange, nat, nonEmpty, nullable, obj, oneOf, opt, record, str, union } from './schema';
 import { vBirthplaceId, vNewLifeConfig, type BirthplaceId, type NewLifeConfig } from './world';
@@ -110,6 +111,8 @@ export interface Legacy {
   friends: number;
   enemies: number;
   reputation: ReputationBand;
+  /** Thế lực đã thấy thịnh, suy, mất trong đời (v0.6, F4). */
+  factions: { name: FactionName; kind: FactionKind; fate: FactionFate }[];
 }
 
 export const vCharacterView = obj<CharacterView>({
@@ -160,6 +163,7 @@ export const vLifeSummary = obj<LifeSummary>({
     spouse: nullable(obj<{ name: string; alive: boolean }>({ name: nonEmpty, alive: bool })),
     children: arr(obj<{ name: string; alive: boolean }>({ name: nonEmpty, alive: bool })),
     friends: nat, enemies: nat, reputation: oneOf(REPUTATION_BANDS),
+    factions: arr(obj<{ name: FactionName; kind: FactionKind; fate: FactionFate }>({ name: vFactionName, kind: oneOf(FACTION_KINDS), fate: oneOf(FACTION_FATES) })),
   }),
   digest: nonEmpty,
 });

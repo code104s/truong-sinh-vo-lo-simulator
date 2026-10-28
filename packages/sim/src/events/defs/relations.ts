@@ -25,7 +25,7 @@ const pickFirst = (xs: readonly NpcState[]): NpcState | null => xs[0] ?? null;
 // —— Mai mối ——
 /** Bà mối lấy lễ gấp đôi quà thăm hỏi; gặp mặt thì hai bên thành người quen (thân thiết 30). */
 const MATCH_FEE_X = 2;
-const matchCandidates = (ctx: EventContext): NpcState[] => {
+export const matchCandidates = (ctx: EventContext): NpcState[] => {
   // Điều kiện rẻ trước (hàm trọng số chạy mỗi tuần): ngoài tuổi cưới, chưa ra riêng, đã có vợ/chồng thì thôi
   if (ctx.age < MARRY_AGE[0] || ctx.age > MARRY_AGE[1] || !ctx.c.household.independent || !single(playerStandIn(ctx.c), lookup(ctx.npcs))) return [];
   return peopleHere(ctx).filter((n) => { const lock = marryLock(ctx.c, n, ctx); return lock === null || lock === 'lock.not_close'; });

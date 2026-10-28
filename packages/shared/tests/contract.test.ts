@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   HIDDEN_CHARACTER_KEYS, TICKS_PER_YEAR,
   ageYearsAt, base64ToBytes, HARVEST_MONTH, weeksToHarvest, bytesToBase64, calendarOf, decodeSave, encodeSave, isMonthStart, isYearStart,
-  parseCommand, parseWorkerMessage, vCharacterView, vHouseholdView, vLifeSummary, vMarketView, vMonthPlan, vNpcView, vPendingEvent, PROTOCOL_VERSION, SAVE_VERSION,
+  parseCommand, parseWorkerMessage, vCharacterView, vHouseholdView, vLifeSummary, vMarketView, vMonthPlan, vNpcView, vPendingEvent, vFactionView, vTravelOption, PROTOCOL_VERSION, SAVE_VERSION,
 } from '../src/index';
 import {
   sampleBirthplace, sampleCharacter, sampleHousehold, sampleLife, sampleLog, sampleMap, sampleMarket, sampleNpc, sampleOption, samplePending, samplePlan, sampleSave, sampleSummary,
@@ -87,7 +87,7 @@ describe('tin worker → UI', () => {
       { type: 'READY', protocolVersion: 1, simVersion: '0.1.0' },
       { type: 'PROGRESS', reqId: 1, stage: 'worldgen.terrain', pct: 40 },
       { type: 'WORLD', reqId: 1, worldSeed: 'tsvl-01', region: sampleSummary, map: sampleMap(), birthplaces: [sampleBirthplace] },
-      { type: 'STATE', reqId: 2, date: calendarOf(37), character: sampleCharacter, running: false, plan: samplePlan, active: null, slotIndex: 1, actions: [sampleOption], travel: [], market: sampleMarket, pending: null, people: [sampleNpc], circle: [{ ...sampleNpc, kin: 'mother' }] },
+      { type: 'STATE', reqId: 2, date: calendarOf(37), character: sampleCharacter, running: false, plan: samplePlan, active: null, slotIndex: 1, actions: [sampleOption], travel: [], market: sampleMarket, pending: null, people: [sampleNpc], circle: [{ ...sampleNpc, kin: 'mother' }], factions: [], control: [null] },
       { type: 'LOG', reqId: 2, entries: [sampleLog] },
       { type: 'INTERRUPT', reqId: 2, entry: { ...sampleLog, importance: 'major' } },
       { type: 'DIED', reqId: 3, summary: sampleLife },
@@ -162,7 +162,8 @@ describe('save', () => {
     expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 2 })).ok).toBe(false);
     expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 3 })).ok).toBe(false);
     expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 4 })).ok).toBe(false);
-    expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 6 })).ok).toBe(false);
+    expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 5 })).ok).toBe(false);
+    expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 7 })).ok).toBe(false);
     expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), format: 'other' })).ok).toBe(false);
   });
 });
@@ -184,7 +185,7 @@ describe('v0.2: kế hoạch tháng, di chuyển, nhật ký lệnh (ADR 0008–
   });
 
   it('STATE mang kế hoạch, hành động khả dụng, đích đi được', () => {
-    const base = { type: 'STATE', reqId: 2, date: calendarOf(37), character: sampleCharacter, running: false, active: null, market: null, pending: null, people: [], circle: [] };
+    const base = { type: 'STATE', reqId: 2, date: calendarOf(37), character: sampleCharacter, running: false, active: null, market: null, pending: null, people: [], circle: [], factions: [], control: [] };
     expect(parseWorkerMessage({ ...base, plan: samplePlan, slotIndex: 1, actions: [sampleOption, { ...sampleOption, id: 'action.hunt', locked: 'lock.winter' }], travel: [{ county: 2, slots: 1, risk: 'risk.low' }] })).toMatchObject({ ok: true });
     expect(parseWorkerMessage({ ...base, plan: null, slotIndex: 0, actions: [], travel: [] })).toMatchObject({ ok: true });
     expect(parseWorkerMessage({ ...base, plan: null, slotIndex: 3, actions: [], travel: [] }).ok).toBe(false);
@@ -215,7 +216,7 @@ describe('v0.2: kế hoạch tháng, di chuyển, nhật ký lệnh (ADR 0008–
 });
 
 describe('v0.3: hộ, chợ, mua bán, sự kiện (ADR 0012–0014)', () => {
-  const state = { type: 'STATE', reqId: 2, date: calendarOf(41), character: sampleCharacter, running: false, plan: null, active: null, slotIndex: 2, actions: [], travel: [], people: [], circle: [] };
+  const state = { type: 'STATE', reqId: 2, date: calendarOf(41), character: sampleCharacter, running: false, plan: null, active: null, slotIndex: 2, actions: [], travel: [], people: [], circle: [], factions: [], control: [] };
 
   it('nhận TRADE và CHOOSE hợp lệ', () => {
     expect(parseCommand({ type: 'TRADE', reqId: 1, grain: 30 })).toMatchObject({ ok: true });
@@ -285,7 +286,7 @@ describe('v0.3: hộ, chợ, mua bán, sự kiện (ADR 0012–0014)', () => {
 });
 
 describe('v0.4: NPC (ADR 0015, 0016)', () => {
-  const state = { type: 'STATE', reqId: 2, date: calendarOf(41), character: sampleCharacter, running: false, plan: null, active: null, slotIndex: 2, actions: [], travel: [], market: null, pending: null, circle: [] };
+  const state = { type: 'STATE', reqId: 2, date: calendarOf(41), character: sampleCharacter, running: false, plan: null, active: null, slotIndex: 2, actions: [], travel: [], market: null, pending: null, circle: [], factions: [], control: [] };
 
   it('STATE mang người trong quận; STATE kiểu v0.3 (thiếu people) bị từ chối', () => {
     expect(parseWorkerMessage({ ...state, people: [sampleNpc, { ...sampleNpc, id: 'n2', gender: 'male' }] })).toMatchObject({ ok: true });
@@ -321,11 +322,11 @@ describe('v0.4: NPC (ADR 0015, 0016)', () => {
 });
 
 describe('v0.5: quan hệ, gia đình, tiếng tăm (ADR 0017, 0018)', () => {
-  const state = { type: 'STATE', reqId: 2, date: calendarOf(41), character: sampleCharacter, running: false, plan: null, active: null, slotIndex: 2, actions: [], travel: [], market: null, pending: null, people: [] };
+  const state = { type: 'STATE', reqId: 2, date: calendarOf(41), character: sampleCharacter, running: false, plan: null, active: null, slotIndex: 2, actions: [], travel: [], market: null, pending: null, people: [], factions: [], control: [] };
   const bond = { closeness: 'friend', trust: 'trusted', hostility: 'none', owed: 'they_owe' };
 
-  it('phiên bản giao thức 5, save 5', () => {
-    expect([PROTOCOL_VERSION, SAVE_VERSION]).toEqual([5, 5]);
+  it('phiên bản giao thức 6, save 6 (v0.6; v0.5 là 5, 5)', () => {
+    expect([PROTOCOL_VERSION, SAVE_VERSION]).toEqual([6, 6]);
   });
 
   it('STATE mang người thân, người quen ở mọi quận; STATE kiểu v0.4 (thiếu circle) bị từ chối', () => {
@@ -359,5 +360,37 @@ describe('v0.5: quan hệ, gia đình, tiếng tăm (ADR 0017, 0018)', () => {
     const { legacy: _l, ...v04 } = sampleLife;
     expect(vLifeSummary.check(v04, '$')).not.toBeNull();
     expect(vLifeSummary.check({ ...sampleLife, legacy: { ...sampleLife.legacy, friends: -1 } }, '$')).not.toBeNull();
+  });
+});
+
+describe('hợp đồng v6: thế lực (v0.6, ADR 0019)', () => {
+  const faction = { id: 'f2', kind: 'clan', name: { key: 'faction.clan.name', params: { surname: 'Lương', place: 'Vị Kinh' } }, seat: 3, counties: [3], strength: 'strong', members: 7, leader: 'n12' };
+  const state = { type: 'STATE', reqId: 2, date: calendarOf(41), character: sampleCharacter, running: false, plan: null, active: null, slotIndex: 2, actions: [], travel: [], market: null, pending: null, people: [], circle: [] };
+
+  it('STATE mang thế lực và người giữ từng quận; STATE kiểu v0.5 (thiếu factions, control) bị từ chối', () => {
+    expect(parseWorkerMessage({ ...state, factions: [faction], control: ['f1', null, 'f2'] })).toMatchObject({ ok: true });
+    expect(parseWorkerMessage(state).ok).toBe(false);
+    expect(parseWorkerMessage({ ...state, factions: [], control: ['f0'] }).ok).toBe(false);
+  });
+
+  it('FactionView: loại, dải thế đúng danh mục; id dạng "f3"; không lộ số thô', () => {
+    expect(vFactionView.check(faction, '$')).toBeNull();
+    expect(vFactionView.check({ ...faction, kind: 'sect' }, '$')).not.toBeNull();
+    expect(vFactionView.check({ ...faction, strength: 73 }, '$')).not.toBeNull();
+    expect(vFactionView.check({ ...faction, id: 'n2' }, '$')).not.toBeNull();
+    // Đường giữ (F1): cặp quận [nhỏ, lớn]
+    expect(vFactionView.check({ ...faction, roads: [[0, 2], [1, 3]] }, '$')).toBeNull();
+    expect(vFactionView.check({ ...faction, roads: [[2, 0]] }, '$')).not.toBeNull();
+    expect(vFactionView.check({ ...faction, roads: [[1]] }, '$')).not.toBeNull();
+  });
+
+  it('NpcView mang thế lực; đường đi mang băng cướp giữ đường; di sản có thế sự một đời', () => {
+    expect(vNpcView.check({ ...sampleNpc, faction: 'f2' }, '$')).toBeNull();
+    expect(vNpcView.check({ ...sampleNpc, faction: 'Họ Lương' }, '$')).not.toBeNull();
+    expect(vTravelOption.check({ county: 1, slots: 1, risk: 'risk.low', danger: 'f4' }, '$')).toBeNull();
+    expect(vTravelOption.check({ county: 1, slots: 1, risk: 'risk.low', danger: 4 }, '$')).not.toBeNull();
+    expect(vLifeSummary.check({ ...sampleLife, legacy: { ...sampleLife.legacy, factions: [{ name: { key: 'faction.bandits.name', params: { place: 'núi Hổ' } }, kind: 'bandits', fate: 'gone' }] } }, '$')).toBeNull();
+    expect(vLifeSummary.check({ ...sampleLife, legacy: { ...sampleLife.legacy, factions: [{ name: { key: 'faction.bandits.name', params: {} }, kind: 'bandits', fate: 'exploded' }] } }, '$')).not.toBeNull();
+    expect(vFactionView.check({ ...faction, name: 'Họ Lương ở Vị Kinh' }, '$')).not.toBeNull();
   });
 });

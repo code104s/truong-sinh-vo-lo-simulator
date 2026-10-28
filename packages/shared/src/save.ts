@@ -7,7 +7,7 @@ import { vBirthplace, vRegionMapData, vRegionSummary, vWorldSeed, type Birthplac
 
 export const SAVE_FORMAT = 'tsvl-save';
 /** 5: v0.5 — quan hệ, gia đình, tiếng tăm (ADR 0017, 0018). 4: v0.4 — snapshot có NPC (ADR 0015). Save cũ hơn bị từ chối (ADR 0004, v0.5 Q11). */
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 export interface SaveRegion {
   summary: RegionSummary;

@@ -2,9 +2,9 @@
 import { GRAIN_PER_DOU } from '@tsvl/shared';
 import { idiv, mulDiv } from '../../core/math';
 import { gainSkill } from '../../life/skills';
-import { catchIllness, loseGrain, payTo, produceGrain, receiveFrom, spendStamina, wound } from '../effects';
+import { catchIllness, loseGrain, moveGrainFaction, payFaction, produceGrain, receiveFrom, spendStamina, wound } from '../effects';
 import type { EventDef } from '../engine';
-import { doingNow, inVillage, man, percentOf, roughRoad, traveling } from './common';
+import { bandOnRoad, castOr, doingNow, inVillage, man, membersOf, npcName, percentOf, pickOne, roadHolderPct, roughRoad, traveling } from './common';
 
 /** Võ từ mức Thạo (ADR 0010: 1000 điểm) mới dám liều với cướp. */
 export const FIGHT_MARTIAL_XP = 1_000;
@@ -14,18 +14,23 @@ export const BEAST_HIDE = 60;
 export const highwayRobbers: EventDef = {
   id: 'event.highway_robbers',
   category: 'road',
-  // Đang trên đường; đường qua núi vắng thì dễ gặp hơn
-  weight: (ctx) => (traveling(ctx) ? (roughRoad(ctx) ? 60_000 : 20_000) : 0),
+  // Đang trên đường; đường qua núi vắng thì dễ gặp hơn; đường băng cướp giữ gấp đôi, đường thương hội giữ bớt (v0.6 S6)
+  weight: (ctx) => (traveling(ctx) ? mulDiv(roughRoad(ctx) ? 60_000 : 20_000, roadHolderPct(ctx), 100) : 0),
   cooldownTicks: 36,
   // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
   reputation: { fight_won: 5 },
-  figure: () => man('adult', 'poor'),
+  // Đường băng cướp giữ (v0.6 S7): kẻ chặn đường là người của băng ấy; tiền, lương mất vào kho băng
+  bonds: { fight_won: { hostility: 40 }, fight_lost: { hostility: 10 } },
+  cast: (ctx, rng) => pickOne(membersOf(ctx, bandOnRoad(ctx)), rng),
+  variant: (ctx) => (ctx.npc ? 'named' : null),
+  params: (ctx) => npcName(ctx),
+  figure: castOr(() => man('adult', 'poor')),
   choices: [
     {
       id: 'pay', costs: ['money'],
       available: (ctx) => (ctx.c.household.money >= 10 ? null : 'lock.money'),
       apply: (ctx) => {
-        const n = payTo(ctx, ctx.c.location, idiv(ctx.c.household.money, 2));
+        const n = payFaction(ctx, bandOnRoad(ctx), ctx.c.location, idiv(ctx.c.household.money, 2));
         return { result: 'pay', params: { money: n } };
       },
     },
@@ -37,15 +42,19 @@ export const highwayRobbers: EventDef = {
         const ppm = 400_000 + mulDiv(ctx.c.skillXp.martial, 400_000, 10_000) + ctx.c.luck * 20_000;
         if (rng.chance(ppm)) return { result: 'fight_won' };
         wound(ctx, 4);
-        // Tiền vào tay cướp đi về quỹ quận đang qua (v0.6 mới có băng cướp thật); sổ cái không thủng
-        payTo(ctx, ctx.c.location, ctx.c.household.money);
+        // Tiền vào kho băng giữ đường; đường không băng nào giữ thì về quỹ quận đang qua; sổ cái không thủng
+        payFaction(ctx, bandOnRoad(ctx), ctx.c.location, ctx.c.household.money);
         return { result: 'fight_lost' };
       },
     },
     {
       id: 'run', costs: ['grain', 'risk'],
       apply: (ctx, rng) => {
-        if (rng.chance(700_000)) return { result: 'run_away', params: { lost: idiv(loseGrain(ctx, percentOf(ctx.c.household.grain, 10)), GRAIN_PER_DOU) } };
+        if (rng.chance(700_000)) {
+          // Tay nải bỏ lại: băng giữ đường nhặt về kho; cướp vô danh thì lương mất hẳn
+          const band = bandOnRoad(ctx), g = percentOf(ctx.c.household.grain, 10);
+          return { result: 'run_away', params: { lost: idiv(band ? moveGrainFaction(ctx, band, ctx.c.location, -g) : loseGrain(ctx, g), GRAIN_PER_DOU) } };
+        }
         wound(ctx, 2);
         return { result: 'run_fell' };
       },

@@ -10,6 +10,7 @@ import { newNpcWorld, type NpcState, type NpcWorldState } from '../npc/state';
 import type { Bond } from '../social/bonds';
 import { shiftBond } from '../social/actions';
 import { addReputation, repAt } from '../social/reputation';
+import { newFactionWorld, type FactionWorldState } from '../factions/state';
 
 /** Mọi thứ một sự kiện được đọc và (qua hàm có sổ cái ở effects.ts) được đổi. */
 export interface EventContext {
@@ -29,6 +30,8 @@ export interface EventContext {
   bonds: Bond[];
   /** Tiếng tăm của người chơi theo quận (v0.5 S6): lựa chọn có gắn tiếng cộng vào quận đang đứng. */
   reputation: number[];
+  /** Thế lực của vùng (v0.6 S6): trọng số sự kiện theo cướp giữ đường, cướp gần làng. Chỉ đọc. */
+  factions: FactionWorldState;
 }
 
 export interface ChoiceOutcome {
@@ -109,8 +112,8 @@ export function sortedCatalog(defs: readonly EventDef[]): EventDef[] {
 }
 
 /** `npcs`: người có tên của đời (Life truyền vào); bỏ trống thì mọi sự kiện dùng người vô danh. */
-export function makeContext(c: CharacterState, events: EventsState, player: PlayerState, eco: EconomyState, logic: RegionLogic, tick: Tick, npcs: NpcWorldState = newNpcWorld(), bonds: Bond[] = [], reputation: number[] = []): EventContext {
-  return { c, events, player, eco, logic, tick, age: ageYearsAt(c.birthTick, tick), npcs, npc: null, bonds, reputation };
+export function makeContext(c: CharacterState, events: EventsState, player: PlayerState, eco: EconomyState, logic: RegionLogic, tick: Tick, npcs: NpcWorldState = newNpcWorld(), bonds: Bond[] = [], reputation: number[] = [], factions: FactionWorldState = newFactionWorld()): EventContext {
+  return { c, events, player, eco, logic, tick, age: ageYearsAt(c.birthTick, tick), npcs, npc: null, bonds, reputation, factions };
 }
 
 /** Ngữ cảnh kèm người thật của sự kiện đang chờ (đọc lại theo id, kể cả người đã mất). */

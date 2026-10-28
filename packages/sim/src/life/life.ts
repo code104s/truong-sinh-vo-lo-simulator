@@ -1,7 +1,7 @@
 // Một đời người: vòng tick theo pha có nhịp (ADR 0002), tua, nhật ký, snapshot (ADR 0004).
 import {
-  GRAIN_PER_DOU, TICKS_PER_MONTH, TICKS_PER_YEAR, ageYearsAt, calendarOf, isMonthStart, isYearStart,
-  type AdvanceMode, type Birthplace, type PlanSlot, type CharacterView, type LifeSummary, type LogEntry, type MarketView, type NpcView, type NewLifeConfig, type PendingEvent, type Tick, type MonthPlan, type SupplyBand,
+  GRAIN_PER_DOU, TICKS_PER_MONTH, TICKS_PER_YEAR, ageYearsAt, calendarOf, isMonthStart, isQuarterStart, isYearStart,
+  type AdvanceMode, type Birthplace, type FactionView, type PlanSlot, type CharacterView, type LifeSummary, type LogEntry, type MarketView, type NpcView, type NewLifeConfig, type PendingEvent, type Tick, type MonthPlan, type SupplyBand,
 } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { digestOf } from '../core/digest';
@@ -14,7 +14,7 @@ import { feedPhase, rationOf, stayAtHomeYear } from './household';
 import { harvestPlayer } from '../economy/farming';
 import { EVENTS } from '../events/catalog';
 import { choose as chooseEvent, makeContext, newEventsState, pendingView, rollEvent, type EventsState } from '../events/engine';
-import { headTax, HEAD_TAX, tradeGrain, yearlySpending } from '../economy/income';
+import { headTax, tradeGrain, yearlySpending } from '../economy/income';
 import {
   buyPrice, countyMoney, createEconomy, economyMonth, epidemicAt, HARVEST_MONTH, marketView, supplyOf, worldYearStart, type EconomyState,
 } from '../economy/market';
@@ -32,6 +32,11 @@ import { newNpcWorld, npcMoney, npcView, peopleAt, type NpcState, type NpcWorldS
 import { assignPlayerParents, childrenOf, giversOf, kinHelp, kinRole, lookup, PLAYER_ID, seedFamilies } from '../npc/family';
 import { bondOf, bondView, ensureBond, PARENT_CLOSENESS, PARENT_TRUST, type Bond } from '../social/bonds';
 import { addReputation, fadeReputation, newReputation, repAt, reputationBand, spreadReputation } from '../social/reputation';
+import { foundGovernment } from '../factions/government';
+import { factionMark, factionNews, factionRumors } from '../factions/news';
+import { legacyFactions, trackSeen, type FactionSeen } from '../factions/seen';
+import { roadRisk, routeDanger } from '../factions/impact';
+import { controlOf, membershipOf, factionMoney, factionPhase, factionViews, newFactionWorld, type FactionWorldState } from '../factions/state';
 
 /** Việc xấu ngoài sự kiện, gắn tiếng ở quận nhà (v0.5 S6, Q9): thiếu thuế đinh, khất nợ vay. */
 export const REP_TAX_SHORT = -5;
@@ -49,13 +54,15 @@ const KIN_ORDER = ['father', 'mother', 'spouse', 'son', 'daughter', 'sibling'] a
 /**
  * Đổi khi hình snapshot đổi, để save cũ bị từ chối rõ ràng (lỗi VERSION) thay vì lỗi schema. 0.3.1: hộ thêm nợ vay,
  * tai họa, lập thân (S6–S7) và bộ đếm năm đói (F5). 0.4.0: NPC trong snapshot, luồng `npc-world` (v0.4 Bước 0).
+ * 0.6.1: đóng v0.6 — snapshot đổi hình nhiều lần sau 0.6.0 (thế lực S1–S8, chủ nợ, thế lực đã thấy F4); save dev cũ bị
+ * từ chối bằng lỗi VERSION.
  */
-export const SIM_VERSION = '0.5.0';
+export const SIM_VERSION = '0.6.1';
 /**
  * `npc-world`: tạo dân số ban đầu và trẻ sinh mới (ADR 0016); mỗi NPC còn có luồng riêng trong NpcState.
- * `social`: hành động xã giao của người chơi (v0.5 S4, ADR 0017).
+ * `social`: hành động xã giao của người chơi (v0.5 S4, ADR 0017). `factions`: pha Thế lực (v0.6, ADR 0019).
  */
-export const STREAMS = ['accident', 'actions', 'character', 'economy', 'events', 'health', 'illness', 'names', 'npc-world', 'social', 'travel', 'weather'] as const;
+export const STREAMS = ['accident', 'actions', 'character', 'economy', 'events', 'factions', 'health', 'illness', 'names', 'npc-world', 'social', 'travel', 'weather'] as const;
 
 export interface LifeSnapshot extends PlayerState {
   simVersion: string;
@@ -77,6 +84,10 @@ export interface LifeSnapshot extends PlayerState {
   reputation: number[];
   /** Tin đồn từ quận kề, chờ tới tuần nghe được (trễ một tháng, v0.5 S6). */
   rumors: LogEntry[];
+  /** Thế lực trong vùng (v0.6, ADR 0019). */
+  factions: FactionWorldState;
+  /** Thế lực người chơi đã thấy và thước đo thịnh suy (v0.6 F4: "Thế sự một đời"). */
+  factionsSeen: FactionSeen[];
   rng: RngStreamsSnapshot;
   death: Death | null;
 }
@@ -119,10 +130,13 @@ export class Life {
     seedFamilies(npcs, logic, streams.get('npc-world'), birthTick);
     // Cha mẹ thật (v0.5 Q2): một cặp ở quận sinh, cùng xuất thân; thân thiết, tin cậy sẵn
     const parents = assignPlayerParents(npcs, economy, logic, streams.get('npc-world'), birthTick, character);
+    // Quan phủ (v0.6 S1): lập cùng thế giới, giữ mọi quận
+    const factions = newFactionWorld();
+    foundGovernment(factions, logic, birthTick);
     const bonds: Bond[] = [];
     for (const p of [parents.father, parents.mother]) Object.assign(ensureBond(bonds, p.id), { closeness: PARENT_CLOSENESS, trust: PARENT_TRUST });
     // Tuần sinh coi như đã qua: tick kế tiếp là tuần sau khi sinh
-    const life = new Life({ simVersion: SIM_VERSION, config, tick: birthTick + 1, character, economy, events: newEventsState(), npcs, bonds, bequests: [], reputation: newReputation(logic.counties.length), rumors: [], rng: streams.snapshot(), death: null, plan: null, active: null, planWarned: false }, streams, [], logic);
+    const life = new Life({ simVersion: SIM_VERSION, config, tick: birthTick + 1, character, economy, events: newEventsState(), npcs, bonds, bequests: [], reputation: newReputation(logic.counties.length), rumors: [], factions, factionsSeen: [], rng: streams.snapshot(), death: null, plan: null, active: null, planWarned: false }, streams, [], logic);
     life.push({ tick: birthTick, key: 'log.birth', params: { birthplace: birthplace.name, background: `background.${character.background}` }, importance: 'major' });
     return life;
   }
@@ -135,8 +149,21 @@ export class Life {
   get plan(): MonthPlan | null { return this.s.plan ? { slots: this.s.plan.slots.map((p) => ({ ...p })) as MonthPlan['slots'] } : null; }
   get active(): PlayerState['active'] { return this.s.active ? JSON.parse(JSON.stringify(this.s.active)) as PlayerState['active'] : null; }
   actions() { return actionOptions(this.s.character, this.displayTick, this.logic, this.s.economy); }
-  travel() { return this.logic.counties.flatMap((_, county) => { const p = previewTravel(this.logic, this.s.character.location, county); return p ? [{ county, slots: p.slots, risk: p.risk }] : []; }); }
-  previewTravel(county: number) { return previewTravel(this.logic, this.s.character.location, county); }
+  /** Nơi đi được; mức rủi ro tính cả người giữ đường, đường băng cướp giữ ghi `danger` (v0.6 S6). */
+  travel() {
+    const roads = this.roads();
+    return this.logic.counties.flatMap((_, county) => {
+      const p = previewTravel(this.logic, this.s.character.location, county, roads);
+      if (!p) return [];
+      const danger = routeDanger(this.s.factions, this.logic, p.route);
+      return [{ county, slots: p.slots, risk: p.risk, ...(danger ? { danger } : {}) }];
+    });
+  }
+  previewTravel(county: number) { return previewTravel(this.logic, this.s.character.location, county, this.roads()); }
+  /** Ô tuần này là đi đường (đang dở chuyến hay kế hoạch xếp đi): chỉ khi ấy mới cần rủi ro đường (S8, hiệu năng). */
+  private travelling(t: Tick): boolean { return (this.s.active?.slot ?? this.s.plan?.slots[t % TICKS_PER_MONTH])?.action === 'action.travel'; }
+  /** Hệ số rủi ro mỗi đường theo người giữ (v0.6 S6). */
+  private roads(): number[] { return roadRisk(this.s.factions, this.logic.adjacency.length); }
   setPlan(plan: MonthPlan): boolean {
     if (!this.alive || ageYearsAt(this.s.character.birthTick, this.s.tick) < ACTION_MIN_AGE || !validatePlan(plan, this.logic)) return false;
     this.s.plan = { slots: plan.slots.map((p) => ({ ...p })) as MonthPlan['slots'] };
@@ -202,6 +229,15 @@ export class Life {
     if (isMonthStart(t)) spreadReputation(this.s.reputation, this.logic);
     // 1 Thế giới: thời tiết (năm), chợ quận (tháng). 2 Thế lực: chưa có (v0.6). 3 NPC (ADR 0015): chưa có NPC tới S1
     this.worldPhase(t, log);
+    // 2 Thế lực (v0.6, ADR 0019): đầu quý; chuyện thế lực ở quận kề thành tin đồn (S6)
+    const before = isQuarterStart(t) ? factionMark(this.s.factions, this.logic.counties.length) : null;
+    const report = factionPhase(this.s.factions, this.s.economy, this.s.npcs, this.logic, t, this.streams.get('factions'));
+    if (before) {
+      this.s.rumors.push(...factionRumors(this.s.factions, this.logic, before, c.location, t));
+      // Tin thế sự ở chính quận đang đứng (F3); thế lực đã thấy, thịnh suy (F4)
+      for (const e of factionNews(this.s.factions, this.logic, before, c.location, report)) log(e);
+      trackSeen(this.s.factionsSeen, this.s.factions, this.logic, c.location);
+    }
     const firstNew = this.s.npcs.nextId;
     // Người chơi trong luật gia đình (S5): nhận con như mọi cặp vợ chồng; là mẹ thì có thể sinh khó
     const family: { c: CharacterState; inherited: Inheritance[]; death: Death | null } = { c, inherited: this.s.bequests, death: null };
@@ -227,7 +263,7 @@ export class Life {
     let death = family.death ?? eventsPhase(c, t, this.streams.get('illness'), this.streams.get('accident'), log, epidemic);
     if (!death) rollEvent(this.s.events, EVENTS, this.context(t), this.streams.get('events'));
     // 5 Người chơi: tuổi thơ hoặc ô kế hoạch tháng (ADR 0008).
-    const action = death ? { death, carePct: 0 } : playerPhase(this.s, c, t, this.logic, this.s.economy, this.streams, log, this.s.npcs, this.socialHooks());
+    const action = death ? { death, carePct: 0 } : playerPhase(this.s, c, t, this.logic, this.s.economy, this.streams, log, this.s.npcs, this.socialHooks(), this.travelling(t) ? this.roads() : null);
     death = action.death;
     // 6 Hậu quả: ăn (tuần), lão hóa (năm), diễn tiến (tuần), tử vong (cuối pha)
     if (!death) {
@@ -306,7 +342,7 @@ export class Life {
         log({ key: 'log.tax.short', params: { paid, owed: c.household.taxDebt }, importance: 'major' });
         addReputation(this.s.reputation, c.home, REP_TAX_SHORT);
       }
-      else if (paid > 0) log({ key: 'log.tax.paid', params: { paid: HEAD_TAX }, importance: 'minor' });
+      else if (paid > 0) log({ key: 'log.tax.paid', params: { paid }, importance: 'minor' });
       const spent = yearlySpending(c, eco.counties[c.location]!);
       if (spent > 0) log({ key: 'log.spend', params: { coin: spent }, importance: 'minor' });
     }
@@ -338,20 +374,24 @@ export class Life {
 
   /**
    * Nợ vay nặng lãi tới hạn (S6): trả bằng tiền, thiếu thì chủ nợ lấy lương theo giá mua ở quận nhà; còn thiếu nữa thì
-   * khất sang năm, lãi thêm ba phân (36%). Tiền và lương đều về quỹ, kho quận nhà (sổ cái).
+   * khất sang năm, lãi thêm ba phân (36%). Tiền và lương đều về quỹ, kho quận nhà (sổ cái); vay thương hội (v0.6 S7) thì về
+   * kho thương hội ấy nếu nó còn, tan rồi thì về quận nhà.
    */
   private settleLoan(t: Tick, log: (e: Omit<LogEntry, 'tick'>) => void): void {
     const h = this.s.character.household;
     if (h.loan <= 0 || t < h.loanDue) return;
     const home = this.s.economy.counties[this.s.character.home]!;
+    const lender = this.s.factions.list.find((f) => f.id === h.lender && f.ended === null);
+    const to = lender ?? home;
     const paid = Math.min(h.money, h.loan);
-    h.money -= paid; home.money += paid; h.loan -= paid;
+    h.money -= paid; to.money += paid; h.loan -= paid;
     const price = Math.max(1, buyPrice(home));
     const grainTaken = Math.min(h.grain, idiv(h.loan * GRAIN_PER_DOU + price - 1, price));
-    h.grain -= grainTaken; home.grain += grainTaken;
+    h.grain -= grainTaken; to.grain += grainTaken;
     h.loan = Math.max(0, h.loan - idiv(grainTaken * price, GRAIN_PER_DOU));
     if (h.loan === 0) {
       h.loanDue = -1;
+      h.lender = null;
       log({ key: 'log.loan.paid', params: { paid, grain: idiv(grainTaken, GRAIN_PER_DOU) }, importance: 'minor' });
     } else {
       h.loan = mulDiv(h.loan, 136, 100);
@@ -413,7 +453,8 @@ export class Life {
       return role !== null || bondOf(this.s.bonds, n.id) ? [{ n, rank: role === null ? KIN_ORDER.length : KIN_ORDER.indexOf(role) }] : [];
     });
     rows.sort((a, b) => a.rank - b.rank || Number(a.n.id.slice(1)) - Number(b.n.id.slice(1)));
-    return rows.map((r) => this.viewOf(r.n));
+    const members = membershipOf(this.s.factions);
+    return rows.map((r) => this.viewOf(r.n, members));
   }
 
   /**
@@ -421,8 +462,9 @@ export class Life {
    * hành động xã giao nhắm vào người ấy (F2: bảng chọn người).
    */
   people(): NpcView[] {
+    const members = membershipOf(this.s.factions);
     return peopleAt(this.s.npcs, this.s.character.location).map((n) => ({
-      ...this.viewOf(n), social: SOCIAL_ACTIONS.map((action) => ({ action, locked: this.socialLock({ action, person: n.id }) })),
+      ...this.viewOf(n, members), social: SOCIAL_ACTIONS.map((action) => ({ action, locked: this.socialLock({ action, person: n.id }) })),
     }));
   }
 
@@ -442,10 +484,11 @@ export class Life {
     return { lock: (slot, c) => socialLock(slot, c, w), act: (slot, c, log) => socialAct(slot, c, w, log) };
   }
 
-  private viewOf(n: NpcState): NpcView {
+  private viewOf(n: NpcState, members: ReadonlyMap<string, string>): NpcView {
     const v = npcView(n, this.s.tick);
     const role = kinRole(this.s.character, n), bond = bondOf(this.s.bonds, n.id);
-    return { ...v, ...(role ? { kin: role } : {}), ...(bond ? { bond: bondView(bond) } : {}) };
+    const faction = members.get(n.id);
+    return { ...v, ...(role ? { kin: role } : {}), ...(bond ? { bond: bondView(bond) } : {}), ...(faction ? { faction } : {}) };
   }
 
   private isKin(id: string): boolean {
@@ -463,6 +506,16 @@ export class Life {
     return { spouse: sp ? { name: sp.character.name, alive: sp.death === null } : null, children: kids.map((n) => ({ name: n.character.name, alive: n.death === null })) };
   }
 
+  /** Thế lực còn sống trong vùng (v0.6, ADR 0019). */
+  factions(): FactionView[] {
+    return factionViews(this.s.factions, this.logic);
+  }
+
+  /** Thế lực giữ mỗi quận, theo chỉ số quận (v0.6). */
+  control(): (string | null)[] {
+    return controlOf(this.s.factions, this.logic.counties.length);
+  }
+
   /** Người có tên đã mất còn trong danh sách (giữ một năm rồi dọn, S4), mọi quận: id, tuổi lúc mất, nguyên nhân. Cho đo đạc. */
   npcDeaths(): { id: string; tick: Tick; ageYears: number; cause: string }[] {
     return this.s.npcs.people.filter((n) => n.death).map((n) => ({ id: n.id, tick: n.death!.tick, ageYears: ageYearsAt(n.character.birthTick, n.death!.tick), cause: n.death!.cause }));
@@ -470,7 +523,7 @@ export class Life {
 
   /** Sổ cái: tổng tiền của vùng (quỹ quận + túi người chơi), không đổi qua mọi tick (ADR 0012). */
   totalMoney(): number {
-    return countyMoney(this.s.economy) + this.s.character.household.money + npcMoney(this.s.npcs);
+    return countyMoney(this.s.economy) + this.s.character.household.money + npcMoney(this.s.npcs) + factionMoney(this.s.factions);
   }
 
   /** Tick đích của một chế độ tua: dừng ở ranh giới lịch (ADR 0002). */
@@ -522,7 +575,7 @@ export class Life {
   }
 
   private context(t: Tick) {
-    return makeContext(this.s.character, this.s.events, this.s, this.s.economy, this.logic, t, this.s.npcs, this.s.bonds, this.s.reputation);
+    return makeContext(this.s.character, this.s.events, this.s, this.s.economy, this.logic, t, this.s.npcs, this.s.bonds, this.s.reputation, this.s.factions);
   }
 
   /** Sự kiện đang chờ chọn như người chơi thấy; null nếu không có. */
@@ -559,6 +612,8 @@ export class Life {
         friends: this.s.bonds.filter((b) => b.closeness >= FRIEND_CLOSENESS && !this.isKin(b.id)).length,
         enemies: this.s.bonds.filter((b) => b.hostility >= ENEMY_HOSTILITY).length,
         reputation: reputationBand(repAt(this.s.reputation, c.home)),
+        // Thế sự một đời (v0.6 F4): thế lực đã thấy thịnh, suy, mất
+        factions: legacyFactions(this.s.factionsSeen),
       },
       digest: this.digest(),
     };

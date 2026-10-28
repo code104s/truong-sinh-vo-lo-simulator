@@ -1,7 +1,7 @@
 // Validate snapshot sim khi tải save (ADR 0004): save hỏng hoặc bị sửa tay thì từ chối trước khi chạy.
 import {
   arr, bool, intRange, lit, nat, nonEmpty, nullable, obj, oneOf, opt, record, str, vNpcId, vRegionId, type EventFigure,
-  DEATH_CAUSES, FIGURE_AGES, FIGURE_CLASSES, GENDERS, SETTLEMENT_KINDS, TENURES, int, union, vBirthplaceId, vNewLifeConfig, vMonthPlan, vPlanSlot, vTravelPreview, vLogEntry, type Validator,
+  DEATH_CAUSES, FIGURE_AGES, FIGURE_CLASSES, GENDERS, SETTLEMENT_KINDS, TENURES, int, union, vBirthplaceId, vNewLifeConfig, vMonthPlan, vPlanSlot, vTravelPreview, vLogEntry, vFactionId, vFactionName, FACTION_KINDS, type Validator,
 } from '@tsvl/shared';
 import type { RngState, RngStreamsSnapshot } from '../core/rng';
 import type { CharacterState, Condition, KinLinks, SpiritRoot } from './character';
@@ -17,6 +17,8 @@ import { DISASTERS, type CountyEconomy, type EconomyState } from '../economy/mar
 import type { EventsState, PendingState } from '../events/engine';
 import { NPC_TIERS, OCCUPATIONS, type NpcState, type NpcWorldState } from '../npc/state';
 import { PLAYER_ID } from '../npc/family';
+import type { FactionState, FactionWorldState } from '../factions/state';
+import type { FactionSeen } from '../factions/seen';
 
 /** Liên kết ruột thịt: id NPC, hoặc "n0" là người chơi (vợ/chồng, cha mẹ của con người chơi; v0.5 S5). */
 const vKinId: Validator<string> = { check: (u, p) => (u === PLAYER_ID ? null : vNpcId.check(u, p)) };
@@ -56,14 +58,19 @@ const vCharacter = obj<CharacterState>({
   conditions: arr(obj<Condition>({ id: nonEmpty, kind: oneOf(['illness', 'injury'] as const), severity, weeksLeft: nat })),
   household: obj<HouseholdState>({ independent: bool, money: nat, grain: nat, landMu: nat, tenure: oneOf(TENURES), hunger: intRange(0, HUNGER_MAX),
     farmWeeks: intRange(0, 36), farmCounty: intRange(-1, 10_000), taxDebt: nat,
-    loan: nat, loanDue: int, reliefPct: intRange(0, 100), rentHikePct: intRange(0, 50), shieldUntil: int, stayUntil: intRange(0, 200),
+    loan: nat, loanDue: int, lender: nullable(nonEmpty), reliefPct: intRange(0, 100), rentHikePct: intRange(0, 50), shieldUntil: int, stayUntil: intRange(0, 200),
     hungerYears: intRange(0, 200), lastHungerYear: intRange(-1, 200) }),
   alive: bool,
-  kin: obj<KinLinks>({ father: nullable(vKinId), mother: nullable(vKinId), spouse: nullable(vKinId) }),
+  kin: obj<KinLinks>({ father: nullable(vKinId), mother: nullable(vKinId), spouse: nullable(vKinId), lineage: nullable(vKinId) }),
 });
 
 const vDeath = obj<Death>({ tick: nat, cause: oneOf(DEATH_CAUSES), detail: str });
 const vActive = obj<ActiveAction>({ slot: vPlanSlot, remaining: intRange(1, 1000), total: intRange(1, 1000), preview: nullable(vTravelPreview) });
+
+/** Cặp số tự nhiên [a, b] (lời buôn theo hai chiều một đường, v0.6 S3). */
+const tupleNat2: Validator<[number, number]> = {
+  check: (u, p) => (Array.isArray(u) && u.length === 2 && u.every((x) => Number.isInteger(x) && x >= 0) ? null : `${p}: cần cặp số tự nhiên`),
+};
 
 export const vLifeSnapshot = obj<LifeSnapshot>({
   simVersion: lit(SIM_VERSION) as Validator<string>,
@@ -72,9 +79,10 @@ export const vLifeSnapshot = obj<LifeSnapshot>({
   character: vCharacter,
   economy: obj<EconomyState>({
     regionWeatherPct: intRange(0, 200),
+    tradeMargin: arr(tupleNat2),
     counties: arr(obj<CountyEconomy>({
       mouths: intRange(1, Number.MAX_SAFE_INTEGER), grain: nat, money: nat, weatherPct: intRange(0, 200), price: nat, prevPrice: nat,
-      disaster: nullable(oneOf(DISASTERS)), disasterMonth: intRange(0, 12), epidemicFrom: int, epidemicUntil: int,
+      disaster: nullable(oneOf(DISASTERS)), disasterMonth: intRange(0, 12), epidemicFrom: int, epidemicUntil: int, taxMoney: nat, taxGrain: nat, taxPct: intRange(50, 150), wagePct: intRange(100, 200), wageBonus: nat,
     })),
   }),
   events: obj<EventsState>({
@@ -97,6 +105,15 @@ export const vLifeSnapshot = obj<LifeSnapshot>({
   bequests: arr(obj<Inheritance>({ from: vNpcId, name: nonEmpty, tick: int, money: nat, grain: nat, landMu: nat })),
   reputation: arr(intRange(-100, 100)),
   rumors: arr(vLogEntry),
+  factions: obj<FactionWorldState>({
+    nextId: intRange(1, Number.MAX_SAFE_INTEGER),
+    list: arr(obj<FactionState>({
+      id: vFactionId, kind: oneOf(FACTION_KINDS), name: vFactionName, seat: nat, counties: arr(nat), holds: arr(nat), members: arr(vNpcId), leader: nullable(vNpcId), power: nat, roads: arr(nat), losses: nat, greed: intRange(0, 100), termEnds: int,
+      relations: arr(obj<{ other: string; attitude: number }>({ other: vFactionId, attitude: intRange(-100, 100) })),
+      money: nat, grain: nat, founded: int, ended: nullable(int),
+    })),
+  }),
+  factionsSeen: arr(obj<FactionSeen>({ id: vFactionId, kind: oneOf(FACTION_KINDS), name: vFactionName, first: nat, last: nat, ended: bool })),
   rng: obj<RngStreamsSnapshot>({ root: u32, streams: record(vRngState) }),
   death: nullable(vDeath),
   plan: nullable(vMonthPlan),

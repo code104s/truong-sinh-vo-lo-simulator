@@ -1,4 +1,4 @@
-import { ageYearsAt, calendarOf, type ActionGroup, type ActionOption, type MonthPlan, type PlanSlot, type SettlementKind, type Tick } from '@tsvl/shared';
+import { ageYearsAt, calendarOf, seasonOf, type ActionGroup, type ActionOption, type MonthPlan, type PlanSlot, type SettlementKind, type Tick } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { hasSeverity, type CharacterState } from './character';
 import { isStarving } from './household';
@@ -50,7 +50,7 @@ export const restPlan = (): MonthPlan => ({ slots: [{ action: 'action.rest' }, {
 export function actionLock(def: ActionDef, c: CharacterState, tick: Tick, kind: SettlementKind, market?: CountyEconomy): string | null {
   if (ageYearsAt(c.birthTick, tick) < ACTION_MIN_AGE) return 'lock.child';
   if (def.places && !def.places.includes(kind)) return 'lock.place';
-  if (def.id === 'action.farm' && calendarOf(tick).season === 'winter') return 'lock.winter';
+  if (def.id === 'action.farm' && seasonOf(tick) === 'winter') return 'lock.winter';
   if (def.group !== 'rest' && def.group !== 'heal' && (c.health < 200 || hasSeverity(c, 'grave'))) return 'lock.health';
   if (c.stamina < (def.minStamina ?? 0)) return 'lock.stamina';
   // Đói lả không làm nổi việc nặng (ADR 0013)

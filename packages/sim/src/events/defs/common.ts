@@ -5,6 +5,8 @@ import type { Rng } from '../../core/rng';
 import { sellPrice, type CountyEconomy } from '../../economy/market';
 import { FARM_YIELD_PER_WEEK, farmSkillPct } from '../../economy/farming';
 import { nearestTownFrom, routeTerrainPct } from '../../life/travel';
+import { banditsNear, roadRisk, routeDanger, routeRoadPct } from '../../factions/impact';
+import type { FactionState } from '../../factions/state';
 import type { EventContext } from '../engine';
 import { npcFigure, type NpcState } from '../../npc/state';
 import { REP_KNOWN } from '../../social/reputation';
@@ -26,6 +28,49 @@ export const doingNow = (ctx: EventContext): string | null => (ctx.player.active
 export const traveling = (ctx: EventContext) => ctx.player.active?.slot.action === 'action.travel';
 /** Chuyến đi đang dở có qua núi (hệ số địa hình ≥ 200%). */
 export const roughRoad = (ctx: EventContext) => !!ctx.player.active?.preview && routeTerrainPct(ctx.logic, ctx.player.active.preview.route) >= 200;
+/**
+ * Người giữ đường của chuyến đi đang dở (v0.6 S6, %): có chặng băng cướp giữ thì 200, mọi chặng thương hội giữ thì 75,
+ * còn lại 100. Không đi đường thì 100.
+ */
+export const roadHolderPct = (ctx: EventContext): number => (ctx.player.active?.preview ? routeRoadPct(ctx.logic, ctx.player.active.preview.route, roadRisk(ctx.factions, ctx.logic.adjacency.length)) : 100);
+/** Quận đang đứng là sào huyệt hay kề sào huyệt một băng cướp (S6). */
+export const banditsAround = (ctx: EventContext): boolean => banditsNear(ctx.factions, ctx.logic, ctx.c.location);
+
+// —— Thế lực thật trong sự kiện (v0.6 S7, Q10): chỉ đọc; duyệt theo id ——
+// Hàm trọng số chạy mỗi tuần: tìm thẳng, không dựng mảng (S8, hiệu năng)
+const firstAlive = (ctx: EventContext, kind: FactionState['kind'], ok: (f: FactionState) => boolean = () => true): FactionState | null =>
+  ctx.factions.list.find((f) => f.ended === null && f.kind === kind && ok(f)) ?? null;
+/** Quan phủ của vùng; null nếu không có. */
+export const government = (ctx: EventContext): FactionState | null => firstAlive(ctx, 'government');
+/** Quan phủ nếu nó đang giữ quận ấy (quận cát cứ thì không). */
+export const govRules = (ctx: EventContext, county: number): FactionState | null => { const g = government(ctx); return g && g.counties.includes(county) ? g : null; };
+/** Gia tộc đứng đầu quận ấy (họ lớn nhất). */
+export const leadClan = (ctx: EventContext, county: number): FactionState | null => firstAlive(ctx, 'clan', (f) => f.counties.includes(county));
+/** Thương hội có hội quán ở quận ấy. */
+export const guildAt = (ctx: EventContext, county: number): FactionState | null => firstAlive(ctx, 'guild', (f) => f.seat === county);
+/** Băng cướp với tới quận đang đứng (sào huyệt hay quận kề sào huyệt), băng lập trước trước. */
+export const bandNear = (ctx: EventContext): FactionState | null =>
+  firstAlive(ctx, 'bandits', (f) => f.seat === ctx.c.location || f.roads.some((k) => ctx.logic.adjacency[k]!.includes(ctx.c.location)));
+/** Băng cướp giữ một chặng trên chuyến đi đang dở. */
+export const bandOnRoad = (ctx: EventContext): FactionState | null => {
+  const route = ctx.player.active?.preview?.route;
+  const id = route ? routeDanger(ctx.factions, ctx.logic, route) : null;
+  return id ? ctx.factions.list.find((f) => f.id === id) ?? null : null;
+};
+/** Người của thế lực còn sống thỏa điều kiện, theo thứ tự id trong danh sách thế lực. */
+export const membersOf = (ctx: EventContext, f: FactionState | null, ok: (n: NpcState) => boolean = () => true): NpcState[] => {
+  if (!f) return [];
+  const ids = new Set(f.members);
+  return ctx.npcs.people.filter((n) => n.death === null && ids.has(n.id) && ok(n));
+};
+/** Người cầm đầu thế lực nếu còn sống. */
+export const leaderOf = (ctx: EventContext, f: FactionState | null): NpcState | null =>
+  (f?.leader ? ctx.npcs.people.find((n) => n.id === f.leader && n.death === null) ?? null : null);
+/** Họ của gia tộc (tham số lời kể). */
+export const clanSurname = (f: FactionState | null): string => String(f?.name.params.surname ?? '');
+/** Tên nơi đặt trị sở thế lực (tham số lời kể). */
+export const seatName = (ctx: EventContext, f: FactionState | null): string => (f ? ctx.logic.counties[f.seat]?.name ?? 'place.unknown' : 'place.unknown');
+
 /** Có ruộng đang làm mùa này ở quận đang đứng. */
 export const farmingHere = (ctx: EventContext) => ctx.c.household.farmWeeks > 0 && ctx.c.household.farmCounty === ctx.c.location;
 

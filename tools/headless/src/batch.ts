@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { ageYearsAt, calendarOf, type Birthplace, type PlanSlot, type RegionId } from '@tsvl/shared';
+import { ageYearsAt, calendarOf, type Birthplace, type RegionId } from '@tsvl/shared';
 import { BACKGROUNDS, EVENT_IDS, Life } from '@tsvl/sim';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { POLICIES, policyChoose, policyPlan, policyTrade, type PolicyContext, type PolicyName } from './policies';
@@ -42,7 +42,7 @@ export const RARE_EVENTS: readonly string[] = [
 ];
 
 export interface BackgroundReport { count: number; meanAge: number; starvationPct: number }
-export interface PolicyReport { estateMedian: number; inheritedPct: number; inheritedMedian: number; npcDeaths: number; npcMeanAge: number; policy: PolicyName; count: number; stuck: number; overCap: number; meanAge: number; medianAge: number; inRangePct: number; oldAgePct: number; starvationPct: number; causes: Record<string, number>; skills: Record<string, number>; byBackground: Record<string, BackgroundReport>; events: Record<string, number>; eventYears: number; ticks: number; ms: number; starved: (StarvedInfo & { background: string })[]; reached30: number; marriedBy30: number; withChildren: number }
+export interface PolicyReport { estateMedian: number; inheritedPct: number; inheritedMedian: number; npcDeaths: number; npcMeanAge: number; policy: PolicyName; count: number; stuck: number; overCap: number; meanAge: number; medianAge: number; inRangePct: number; oldAgePct: number; starvationPct: number; causes: Record<string, number>; skills: Record<string, number>; byBackground: Record<string, BackgroundReport>; events: Record<string, number>; eventYears: number; ticks: number; ms: number; starved: (StarvedInfo & { background: string })[]; reached30: number; marriedBy30: number; withChildren: number; roadWeeks: [number, number]; robbed: [number, number] }
 
 /** Kết quả một đời trong batch: đủ để gộp thành báo cáo, gửi được qua luồng (structured clone). */
 export interface LifeResult {
@@ -66,6 +66,12 @@ export interface LifeResult {
   /** Gia đình (v0.5 S8): tuổi lúc cưới lần đầu (null: chưa cưới), số con chào đời. */
   marriedAge: number | null;
   children: number;
+  /**
+   * Đường (v0.6 S8, nghiệm thu mục 6): tuần đi đường và số lần gặp cướp đường, tách đường băng cướp giữ [đường khác,
+   * đường cướp giữ] — người chơi máy "lang bạt" phải gặp cướp trên đường cướp giữ nhiều hơn.
+   */
+  roadWeeks: [number, number];
+  robbed: [number, number];
 }
 export interface StarvedInfo {
   age: number; independent: boolean; town: boolean; away: boolean; landMu: number; tenure: string; money: number; hungerYears: number;
@@ -83,6 +89,7 @@ export function runLife(regions: readonly BatchRegion[], policy: PolicyName, i: 
   const end = life.tick + 200 * 36;
   const events: Record<string, number> = {};
   let ticks = 0;
+  const roadWeeks: [number, number] = [0, 0], robbed: [number, number] = [0, 0];
   // NPC mất: đọc trước mỗi đầu năm (người mất được giữ một năm rồi dọn) và lúc hết đời; đếm mỗi người một lần
   const from = life.character.birthTick + NPC_WINDOW_YEARS[0] * 36, to = life.character.birthTick + NPC_WINDOW_YEARS[1] * 36;
   const seen = new Set<string>();
@@ -98,17 +105,22 @@ export function runLife(regions: readonly BatchRegion[], policy: PolicyName, i: 
       character: life.view(), date: calendarOf(life.tick), actions: life.actions(), travel: optionsCache.get(key)!, settlements: logic.settlementKind, seed: i, active: !!life.active, market: life.market(),
       // Xã giao (v0.5 S8): chỉ chiến lược `family`, ở tuần thứ hai, thứ ba của tháng — tuần chạy ô xã giao (kế hoạch xếp
       // lại mỗi tuần)
-      ...(policy === 'family' && life.tick % 3 !== 0 ? { people: life.people(), socialLock: (slot: PlanSlot) => life.socialLock(slot) } : {}),
+      ...(policy === 'family' && life.tick % 3 !== 0 ? { people: () => life.people() } : {}),
     });
     const now = ctx();
     // Đầu tháng: mua bán lương thực (không tốn ô) rồi mới xếp kế hoạch, để kế hoạch thấy kho mới
     if (life.tick % 3 === 0 && now.character.canAct) { const g = policyTrade(policy, now); if (g !== 0 && life.trade(g) === null) Object.assign(now, ctx()); }
     const plan = policyPlan(policy, now);
     if (plan) life.setPlan(plan);
+    // Tuần đi đường: đường đang đi có băng cướp giữ không (đích đi từ quận đang đứng, như lúc xem trước chuyến đi)
+    const trip = now.active ? life.active : null;
+    const road: -1 | 0 | 1 = trip?.slot.action === 'action.travel' ? (life.travel().find((o) => o.county === trip.slot.target)?.danger ? 1 : 0) : -1;
+    if (road !== -1) roadWeeks[road]++;
     life.advance('week'); ticks++;
     const pending = life.pendingEvent();
     if (pending) {
       events[pending.eventId] = (events[pending.eventId] ?? 0) + 1;
+      if (pending.eventId === 'event.highway_robbers' && road !== -1) robbed[road]++;
       const refused = life.choose(pending.instance, policyChoose(policy, pending, ctx()));
       if (refused) throw new Error(`${policy}: ${refused}`);
     }
@@ -123,10 +135,10 @@ export function runLife(regions: readonly BatchRegion[], policy: PolicyName, i: 
   const estate = c.household.money + c.household.grain * GRAIN_BASE_COIN;
   const wed = life.log.find((e) => e.key.startsWith('log.marry.wed'));
   const family = { marriedAge: wed ? ageYearsAt(c.birthTick, wed.tick) : null, children: life.log.filter((e) => e.key === 'log.kin.birth').length };
-  if (life.alive) return { stuck: true, overCap: false, age: 0, cause: '', background: c.background, skills: {}, events, ticks, npcDeaths, npcDeathAgeSum, estate, inherited, ...family };
+  if (life.alive) return { stuck: true, overCap: false, age: 0, cause: '', background: c.background, skills: {}, events, ticks, npcDeaths, npcDeathAgeSum, estate, inherited, ...family, roadWeeks, robbed };
   return {
     stuck: false, overCap: life.death!.tick - c.birthTick > c.lifespanBase + c.lifespanBonus, age: ageYearsAt(c.birthTick, life.death!.tick), cause: life.death!.cause,
-    background: c.background, skills: { ...c.skillXp }, events, ticks, npcDeaths, npcDeathAgeSum, estate, inherited, ...family,
+    background: c.background, skills: { ...c.skillXp }, events, ticks, npcDeaths, npcDeathAgeSum, estate, inherited, ...family, roadWeeks, robbed,
     ...(life.death!.cause === 'starvation' ? { starved: starvedInfo(life, logic, inherited > 0) } : {}),
   };
 }
@@ -187,6 +199,8 @@ export function aggregate(policy: PolicyName, results: readonly LifeResult[], ms
   return { estateMedian: estates[Math.floor(estates.length / 2)] ?? 0, inheritedPct: (100 * heirs.length) / Math.max(1, n), inheritedMedian: heirs[Math.floor(heirs.length / 2)] ?? 0,
     starved: results.flatMap((x) => (x.starved ? [{ ...x.starved, background: x.background }] : [])),
     ...familyStats(results),
+    roadWeeks: [0, 1].map((k) => results.reduce((s, x) => s + x.roadWeeks[k]!, 0)) as [number, number],
+    robbed: [0, 1].map((k) => results.reduce((s, x) => s + x.robbed[k]!, 0)) as [number, number],
     npcDeaths, npcMeanAge: npcAgeSum / Math.max(1, npcDeaths), policy, count: n, stuck, overCap, meanAge: avg(ages), medianAge: ages[Math.floor(ages.length / 2)] ?? 0, inRangePct: 100 * ages.filter((a) => a >= 40 && a <= 80).length / n, oldAgePct: 100 * (causes.old_age ?? 0) / n, starvationPct: 100 * (causes.starvation ?? 0) / n, causes, skills, byBackground, events, eventYears, ticks, ms };
 }
 
@@ -206,6 +220,7 @@ export async function runPolicyBatch(regions: BatchRegion[], n: number, selectio
     console.log(`  Của cải lúc chết (trung vị): ${report.estateMedian} văn · được thừa kế: ${report.inheritedPct.toFixed(1)}% đời, trung vị ${report.inheritedMedian} văn`);
     console.log(`  NPC mất khi người chơi ${NPC_WINDOW_YEARS.join('–')} tuổi: ${report.npcDeaths} người · tuổi trung bình lúc mất ${report.npcMeanAge.toFixed(2)}`);
     if (report.policy === 'family') console.log(`  Gia đình: cưới trước 30 tuổi ${pct(report.marriedBy30, report.reached30).toFixed(1)}% đời sống tới 30 (mục tiêu ≥ ${FAMILY_MARRIED_BY_30_PCT}) · có con ${pct(report.withChildren, report.marriedBy30).toFixed(1)}% (≥ ${FAMILY_WITH_CHILDREN_PCT})`);
+    if (report.roadWeeks[0] + report.roadWeeks[1] > 0) console.log(`  Đường: ${roadLine(report)}`);
     console.log(`  Sự kiện: ${(Object.values(report.events).reduce((a, b) => a + b, 0) / Math.max(1, report.eventYears)).toFixed(2)}/năm sau 12 tuổi · ${Object.keys(report.events).length} loại`);
   }
   const failed = batchCriteria(reports, selection === 'all');
@@ -218,6 +233,9 @@ export async function runPolicyBatch(regions: BatchRegion[], n: number, selectio
 }
 
 const pct = (k: number, n: number) => (100 * k) / Math.max(1, n);
+/** Gặp cướp mỗi 1.000 tuần đi đường: [đường khác, đường cướp giữ]. */
+const robRate = (r: PolicyReport) => [0, 1].map((k) => (1000 * r.robbed[k]!) / Math.max(1, r.roadWeeks[k]!)) as [number, number];
+const roadLine = (r: PolicyReport) => { const [safe, danger] = robRate(r); return `gặp cướp ${danger.toFixed(1)}‰ tuần trên đường băng cướp giữ (${r.roadWeeks[1]} tuần), ${safe.toFixed(1)}‰ trên đường khác (${r.roadWeeks[0]} tuần)`; };
 
 /** Trả danh sách tiêu chí không đạt (rỗng = PASS). `all`: đủ năm chiến lược, xét được so sánh giữa các chiến lược. */
 export function batchCriteria(reports: PolicyReport[], all: boolean): string[] {
@@ -246,6 +264,10 @@ export function batchCriteria(reports: PolicyReport[], all: boolean): string[] {
   const npcGap = Math.abs(wanderer.npcMeanAge - balanced!.npcMeanAge);
   console.log(`NPC: tuổi lúc mất, lang bạt ${wanderer.npcMeanAge.toFixed(2)} so với điều độ ${balanced!.npcMeanAge.toFixed(2)} (lệch ${npcGap.toFixed(2)} năm)`);
   if (npcGap > NPC_AGE_GAP_MAX_YEARS) failed.push(`NPC: tuổi lúc mất lệch ${npcGap.toFixed(2)} năm giữa lang bạt và điều độ > ${NPC_AGE_GAP_MAX_YEARS}`);
+  // Đường (nghiệm thu v0.6 mục 6): lang bạt gặp cướp trên đường băng cướp giữ nhiều hơn đường khác
+  const [safe, danger] = robRate(wanderer);
+  console.log(`Đường (lang bạt): ${roadLine(wanderer)}`);
+  if (!(danger > safe)) failed.push(`lang bạt gặp cướp trên đường cướp giữ ${danger.toFixed(1)}‰ không hơn đường khác ${safe.toFixed(1)}‰`);
   if (!(overwork!.meanAge < balanced!.meanAge)) failed.push(`lao lực ${overwork!.meanAge.toFixed(1)} không ngắn hơn điều độ ${balanced!.meanAge.toFixed(1)}`);
   // Sự kiện: gộp mọi chiến lược trừ "lười" (đời "lười" quá ngắn); mỗi sự kiện phải xảy ra ít nhất một lần
   const active = reports.filter((r) => r.policy !== 'lazy');

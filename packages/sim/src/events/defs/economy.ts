@@ -1,11 +1,15 @@
 // Sự kiện sinh kế (ADR 0012, 0014; văn phong: docs/van-phong.md).
 import { GRAIN_PER_DOU, TICKS_PER_YEAR } from '@tsvl/shared';
-import { idiv } from '../../core/math';
+import { idiv, mulDiv } from '../../core/math';
+import { BANDIT_NEAR_THEFT_PCT } from '../../factions/impact';
 import { HARVEST_MONTH, sellPrice, supplyOf } from '../../economy/market';
-import { giveGrainTo, heal, loseGrain, moveGrain, occupy, payTo, receiveFrom, spendStamina, wound, sellGrainTo } from '../effects';
+import { giveGrainTo, heal, loseGrain, moveGrain, occupy, payNpc, payTo, receiveFrom, receiveFromFaction, spendStamina, wound, sellGrainTo } from '../effects';
 import type { EventContext, EventDef } from '../engine';
 import { kinRole } from '../../npc/family';
-import { figure, here, inVillage, man, month, nearestTown, percentOf, personality, sellValue, castOr, nearestWith, npcName, npcAge, peopleHere, pickOne } from './common';
+import {
+  banditsAround, figure, here, inVillage, man, month, nearestTown, percentOf, personality, sellValue, castOr, nearestWith, npcName, npcAge, peopleHere, pickOne,
+  government, guildAt, leadClan, leaderOf, membersOf, seatName,
+} from './common';
 
 /** Đấu đổi tay mỗi lần mua bán trong sự kiện (20 đấu = 200 thăng). */
 export const DEAL_GRAIN = 200;
@@ -21,6 +25,10 @@ const stolen = (ctx: EventContext): number => {
   const g = percentOf(ctx.c.household.grain, THEFT_PCT);
   return ctx.npc ? giveGrainTo(ctx, ctx.npc, g) : loseGrain(ctx, g);
 };
+/** Thương hội có hội quán ở quận đang đứng, đủ kho cho vay (v0.6 S7). */
+const lenderGuild = (ctx: EventContext) => { const g = guildAt(ctx, ctx.c.location); return g && g.money >= LOAN_PRINCIPAL ? g : null; };
+/** Thương hội có người ấy là hội viên. */
+const guildOf = (ctx: EventContext, id: string) => ctx.factions.list.find((f) => f.ended === null && f.kind === 'guild' && f.members.includes(id)) ?? null;
 export const RENT_HIKE_PCT = 10;
 export const RENT_GIFT = 60;
 
@@ -60,8 +68,9 @@ export const grainBroker: EventDef = {
   // Người thật (S6): thương nhân NPC gần nhất đủ bạc mua; mua bán đi qua túi, kho người ấy. Bán thì quen mặt, tin nhau hơn
   bonds: { sell: { closeness: 5, trust: 5 } },
   cast: (ctx) => nearestWith(ctx, (n) => n.occupation === 'merchant' && n.character.household.money >= sellValue(here(ctx), DEAL_GRAIN, BROKER_PCT)),
-  variant: (ctx) => (ctx.npc ? 'named' : null),
-  params: (ctx) => ({ offer: percentOf(sellPrice(here(ctx)), BROKER_PCT), ...npcName(ctx) }),
+  // Thương lái là hội viên một thương hội (v0.6 S7): kể người ấy đi thu lúa cho hội
+  variant: (ctx) => (ctx.npc ? (guildOf(ctx, ctx.npc.id) ? 'guild' : 'named') : null),
+  params: (ctx) => ({ offer: percentOf(sellPrice(here(ctx)), BROKER_PCT), ...npcName(ctx), ...(ctx.npc && guildOf(ctx, ctx.npc.id) ? { place: seatName(ctx, guildOf(ctx, ctx.npc.id)) } : {}) }),
   figure: castOr(() => man('adult', 'rich')),
   choices: [
     {
@@ -132,13 +141,17 @@ export const usurer: EventDef = {
     return ctx.age >= 16 && h.loan === 0 && h.money < 30 && (h.grain < 50 || h.hunger > 0) ? 60_000 : 0;
   },
   cooldownTicks: 72,
-  params: () => ({ principal: LOAN_PRINCIPAL, owed: LOAN_PRINCIPAL + percentOf(LOAN_PRINCIPAL, LOAN_INTEREST_PCT) }),
+  // Trấn có thương hội đủ kho thì người cho vay là thương hội (v0.6 S7): tiền từ kho hội, nợ trả về kho hội
+  variant: (ctx) => (lenderGuild(ctx) ? 'guild' : null),
+  params: (ctx) => ({ principal: LOAN_PRINCIPAL, owed: LOAN_PRINCIPAL + percentOf(LOAN_PRINCIPAL, LOAN_INTEREST_PCT), place: seatName(ctx, lenderGuild(ctx)) }),
   figure: () => man('adult', 'rich'),
   choices: [
     {
       id: 'borrow', costs: ['money'],
       apply: (ctx) => {
-        const got = receiveFrom(ctx, ctx.c.home, LOAN_PRINCIPAL);
+        const guild = lenderGuild(ctx);
+        const got = guild ? receiveFromFaction(ctx, guild, ctx.c.home, LOAN_PRINCIPAL) : receiveFrom(ctx, ctx.c.home, LOAN_PRINCIPAL);
+        ctx.c.household.lender = guild?.id ?? null;
         ctx.c.household.loan += got + percentOf(got, LOAN_INTEREST_PCT);
         ctx.c.household.loanDue = ctx.tick + TICKS_PER_YEAR;
         return { result: 'borrow' };
@@ -151,7 +164,8 @@ export const usurer: EventDef = {
 export const granaryTheft: EventDef = {
   id: 'event.granary_theft',
   category: 'economy',
-  weight: (ctx) => (ctx.age >= 12 && ctx.c.household.grain >= 300 ? 8_000 : 0),
+  // Gần sào huyệt băng cướp thì dễ mất trộm hơn (v0.6 S6)
+  weight: (ctx) => (ctx.age >= 12 && ctx.c.household.grain >= 300 ? (banditsAround(ctx) ? mulDiv(8_000, BANDIT_NEAR_THEFT_PCT, 100) : 8_000) : 0),
   cooldownTicks: 108,
   // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
   reputation: { chase_caught: 5 },
@@ -193,14 +207,17 @@ export const rentHike: EventDef = {
     return tenant && h.farmWeeks >= 3 && h.rentHikePct === 0 && month(ctx) >= 2 && month(ctx) <= 5 ? 50_000 : 0;
   },
   cooldownTicks: 108,
-  params: () => ({ hike: RENT_HIKE_PCT, gift: RENT_GIFT }),
-  figure: () => man('adult', 'rich'),
+  // Chủ đất là trưởng họ đứng đầu quận có ruộng (v0.6 S7): quà biếu vào túi người ấy
+  cast: (ctx) => leaderOf(ctx, leadClan(ctx, ctx.c.household.farmCounty)),
+  variant: (ctx) => (ctx.npc ? 'named' : null),
+  params: (ctx) => ({ hike: RENT_HIKE_PCT, gift: RENT_GIFT, ...npcName(ctx) }),
+  figure: castOr(() => man('adult', 'rich')),
   choices: [
     { id: 'accept', costs: ['grain'], apply: (ctx) => { ctx.c.household.rentHikePct = RENT_HIKE_PCT; return { result: 'accept' }; } },
     {
       id: 'gift', costs: ['money'],
       available: (ctx) => (ctx.c.household.money >= RENT_GIFT ? null : 'lock.money'),
-      apply: (ctx) => { payTo(ctx, ctx.c.location, RENT_GIFT); return { result: 'gift' }; },
+      apply: (ctx) => { if (ctx.npc) payNpc(ctx, ctx.npc, RENT_GIFT); else payTo(ctx, ctx.c.location, RENT_GIFT); return { result: 'gift' }; },
     },
     { id: 'quit', costs: ['opportunity'], apply: (ctx) => { ctx.c.household.farmWeeks = 0; return { result: 'quit' }; } },
   ],
@@ -214,13 +231,16 @@ export const taxCollector: EventDef = {
   cooldownTicks: 12,
   // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
   reputation: { flee_caught: -10, flee_escaped: -10 },
-  params: (ctx) => ({ amount: ctx.c.household.taxDebt }),
-  figure: () => man('adult', 'official'),
+  // Người thật (v0.6 S7): một sai dịch của quan phủ
+  cast: (ctx, rng) => pickOne(membersOf(ctx, government(ctx)), rng),
+  variant: (ctx) => (ctx.npc ? 'named' : null),
+  params: (ctx) => ({ amount: ctx.c.household.taxDebt, ...npcName(ctx) }),
+  figure: castOr(() => man('adult', 'official')),
   choices: [
     {
       id: 'pay', costs: ['money'],
       available: (ctx) => (ctx.c.household.money >= ctx.c.household.taxDebt ? null : 'lock.money'),
-      apply: (ctx) => { payTo(ctx, ctx.c.home, ctx.c.household.taxDebt); ctx.c.household.taxDebt = 0; return { result: 'pay' }; },
+      apply: (ctx) => { ctx.eco.counties[ctx.c.home]!.taxMoney += payTo(ctx, ctx.c.home, ctx.c.household.taxDebt); ctx.c.household.taxDebt = 0; return { result: 'pay' }; },
     },
     {
       id: 'corvee', costs: ['time', 'stamina'],

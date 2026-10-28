@@ -2,7 +2,7 @@
 // S2 v0.4: tầng L0 chạy mỗi tuần đúng luật người chơi — cùng hàm bệnh, tai nạn, hành động, ăn, hậu quả, lão hóa, thuế
 // đinh, mùa gặt; chỉ khác chỗ kế hoạch tháng do bộ não nhu cầu xếp. Tầng L1 (gộp ba tuần ở đầu tháng) có từ S3; tới đó
 // NPC ở L1 đứng yên. NPC không nhận sự kiện có lựa chọn (đó là của người chơi).
-import { ageYearsAt, calendarOf, HARVEST_MONTH, isMonthStart, isYearStart, TICKS_PER_MONTH, type Tick } from '@tsvl/shared';
+import { ageYearsAt, HARVEST_MONTH, monthOf, isMonthStart, isYearStart, TICKS_PER_MONTH, type Tick } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { idiv, mulDiv } from '../core/math';
 import { Rng } from '../core/rng';
@@ -23,9 +23,14 @@ import { baseOccupation, comeOfAge, die, npcYearStart, type DeathContext, type I
 export { die } from './lifecycle';
 import type { NpcState, NpcWorldState, Occupation } from './state';
 
-/** Việc của nghề: thầy đồ, thầy thuốc chưa có hành động nghề riêng (v0.7), tạm làm thuê như người ở trấn. */
+/**
+ * Việc của nghề: thầy đồ, thầy thuốc chưa có hành động nghề riêng (v0.7), tạm làm thuê như người ở trấn. Người theo cướp
+ * không làm ruộng (Q9): sống bằng đồ cướp chia mỗi quý, ngày thường hái lượm. Sai dịch ăn lương quan phủ, ngày thường
+ * làm việc quan (nghỉ ở nhà theo luật hành động).
+ */
 export const OCCUPATION_ACTION: Record<Occupation, string | undefined> = {
   child: undefined, farmer: 'action.farm', hunter: 'action.hunt', laborer: 'action.hire', teacher: 'action.hire', physician: 'action.hire', merchant: 'action.trade',
+  bandit: 'action.forage', official: 'action.rest',
 };
 
 /**
@@ -129,7 +134,7 @@ export function npcBrainInput(n: NpcState, eco: EconomyState, logic: RegionLogic
   const kind = logic.settlementKind[c.location]!;
   return {
     ageYears: ageYearsAt(c.birthTick, tick), healthPct: idiv(c.health * 100, HEALTH_FULL), sick: c.conditions.length > 0,
-    independent: c.household.independent, money: c.household.money, grain: c.household.grain, month: calendarOf(tick).month,
+    independent: c.household.independent, money: c.household.money, grain: c.household.grain, month: monthOf(tick),
     // Mỗi lần xếp kế hoạch hỏi lại vài hành động nhiều lần: nhớ kết quả trong lần gọi này (khóa không đổi trong lúc xếp)
     usable: memo((id) => { const d = actionDef(id); return !!d && actionLock(d, c, tick, kind, market) === null; }),
     market: marketView(eco, c.location),
@@ -174,7 +179,7 @@ function stepL0(n: NpcState, world: NpcWorldState, eco: EconomyState, logic: Reg
   const one = new SingleStream(rng);
   if (isYearStart(t)) npcNewYear(n, eco, logic, t);
   if (isMonthStart(t)) {
-    if (calendarOf(t).month === HARVEST_MONTH) harvestPlayer(c, eco, logic);
+    if (monthOf(t) === HARVEST_MONTH) harvestPlayer(c, eco, logic);
     planMonth(n, eco, logic, t, rng, needs);
   }
   const market = eco.counties[c.location]!;
@@ -203,7 +208,7 @@ function stepL1(n: NpcState, world: NpcWorldState, eco: EconomyState, logic: Reg
   const rng = Rng.fromState(n.rng);
   const one = new SingleStream(rng);
   if (isYearStart(t)) npcNewYear(n, eco, logic, t);
-  if (calendarOf(t).month === HARVEST_MONTH) harvestPlayer(c, eco, logic);
+  if (monthOf(t) === HARVEST_MONTH) harvestPlayer(c, eco, logic);
   planMonth(n, eco, logic, t, rng, needs);
   const market = eco.counties[c.location]!;
   const kind = logic.settlementKind[c.location]!;

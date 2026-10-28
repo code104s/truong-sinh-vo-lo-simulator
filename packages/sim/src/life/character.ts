@@ -33,6 +33,11 @@ export interface KinLinks {
   father: string | null;
   mother: string | null;
   spouse: string | null;
+  /**
+   * Tổ dòng cha (v0.6 S2): id người đầu dòng, truyền từ cha sang con lúc nhận cha; null là chính mình đầu dòng. Không
+   * suy được từ liên kết cha vì người mất bị dọn khỏi danh sách sau một năm. Gia tộc (Q4) gom theo dòng này.
+   */
+  lineage: string | null;
 }
 
 /** Trạng thái đầy đủ của nhân vật trong sim. Chỉ số nguyên, chuỗi, boolean, null. */
@@ -153,7 +158,7 @@ export function createCharacter(
     home: input.county, location: input.county, stamina: 0, skillXp: emptySkills(), skillLastUsed: emptySkills(input.birthTick),
     background, personality, constitution, aptitude, luck, traits, spiritRoot,
     lifespanBase, lifespanBonus: 0, health: 0, healthMax: 0, scars: 0, conditions: [], household: newHousehold(), alive: true,
-    kin: { father: null, mother: null, spouse: null },
+    kin: { father: null, mother: null, spouse: null, lineage: null },
   };
   return c;
 }

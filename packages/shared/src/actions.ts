@@ -11,6 +11,11 @@ export type ActionId = string;
 /** Chỉ số quận trong RegionMapData.counties. */
 export type CountyIndex = number;
 
+/** Id thế lực (định nghĩa đầy đủ ở `factions.ts`; lặp lại ở đây để không vòng import). */
+const vFactionRef: Validator<string> = {
+  check: (u, p) => (typeof u === 'string' && /^f[1-9][0-9]*$/.test(u) ? null : `${p}: cần id thế lực dạng "f3"`),
+};
+
 export const vActionId: Validator<ActionId> = {
   check: (u, p) => (typeof u === 'string' && /^action\.[a-z0-9_]+$/.test(u) ? null : `${p}: cần id hành động dạng "action.ten"`),
 };
@@ -49,6 +54,8 @@ export interface TravelOption {
   county: CountyIndex;
   slots: number;
   risk: ContentId;
+  /** Băng cướp giữ đường đi qua (v0.6), nếu có. Id thế lực dạng "f3"; kiểm ở `factions.ts`. */
+  danger?: string;
 }
 
 export interface TravelPreview {
@@ -120,7 +127,7 @@ export const vActionOption = obj<ActionOption>({
   locked: nullable(vContentId),
 });
 
-export const vTravelOption = obj<TravelOption>({ county: nat, slots: nat, risk: vContentId });
+export const vTravelOption = obj<TravelOption>({ county: nat, slots: nat, risk: vContentId, danger: opt(vFactionRef) });
 
 export const vTravelPreview = obj<TravelPreview>({
   county: nat,

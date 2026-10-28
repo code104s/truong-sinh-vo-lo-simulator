@@ -24,7 +24,7 @@ function adult(seed = 'hunger', patch: (c: CharacterState) => void = () => {}) {
   s.character.birthTick = 0; s.tick = 20 * 36 + 2;
   s.character.health = s.character.healthMax = 1000; s.character.stamina = 900; s.character.conditions = [];
   // Luật đói của riêng một người: không có người thân cho gạo (người thân giúp kiểm ở family.test.ts, v0.5)
-  s.character.kin = { father: null, mother: null, spouse: null };
+  s.character.kin = { father: null, mother: null, spouse: null, lineage: null };
   patch(s.character);
   return Life.restore(s, [], region);
 }

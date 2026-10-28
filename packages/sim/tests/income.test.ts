@@ -139,8 +139,11 @@ describe('thuế đinh', () => {
     const l = adult((c) => { c.household.independent = true; c.household.money = 500; c.household.grain = 10_000; });
     const total = l.totalMoney();
     toYearStart(l);
-    expect(l.character.household.money).toBe(500 - HEAD_TAX);
-    expect(l.log.some((e) => e.key === 'log.tax.paid')).toBe(true);
+    // Mức thuế theo quan đương nhiệm (v0.6 S6): 100–300 văn quanh lệ 200
+    const paid = l.log.find((e) => e.key === 'log.tax.paid')!.params.paid as number;
+    expect(paid).toBeGreaterThanOrEqual(HEAD_TAX / 2);
+    expect(paid).toBeLessThanOrEqual(HEAD_TAX * 3 / 2);
+    expect(l.character.household.money).toBe(500 - paid);
     expect(l.totalMoney()).toBe(total);
   });
 
@@ -155,7 +158,9 @@ describe('thuế đinh', () => {
     // Tin thiếu thuế là tin lớn (ngắt tua); cùng tuần mà có sự kiện thì tua dừng vì sự kiện, tin vẫn ở đó
     while (l.tick % 36 !== 1) autoAdvance(l, 'week', lastChoice);
     expect(l.log.some((e) => e.key === 'log.tax.short' && e.importance === 'major')).toBe(true);
-    expect(l.character.household).toMatchObject({ money: 0, taxDebt: HEAD_TAX - 50 });
+    const owed = l.log.find((e) => e.key === 'log.tax.short')!.params.owed as number;
+    expect(owed).toBeGreaterThanOrEqual(HEAD_TAX / 2 - 50);
+    expect(l.character.household).toMatchObject({ money: 0, taxDebt: owed });
   });
 });
 

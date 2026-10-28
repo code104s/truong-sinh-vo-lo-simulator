@@ -1,12 +1,13 @@
 // Gia đình (v0.5, ADR 0018): vợ chồng, cha mẹ con cái giữa người có tên; cha mẹ thật của người chơi; vai ruột thịt
 // nhìn từ người chơi. Hôn nhân chỉ ghép một nam với một nữ (Q3). Thuần, tất định.
-import { ageYearsAt, type Gender, type KinRole, type Tick } from '@tsvl/shared';
+import { ageYearsAt, TICKS_PER_YEAR, type Gender, type KinRole, type Tick } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import type { Rng } from '../core/rng';
 import type { EconomyState } from '../economy/market';
 import type { CharacterState } from '../life/character';
 import { COMING_OF_AGE } from '../life/household';
 import { spawnNpc } from './population';
+import { CLAN_MIN_ADULTS } from '../factions/clans';
 import type { NpcState, NpcWorldState } from './state';
 
 /** Tuổi cha mẹ lúc sinh con: người mẹ 18–42 (Q4), người cha 20–55. */
@@ -127,6 +128,7 @@ export function pickCouple(world: NpcWorldState, couples: readonly [NpcState, Np
 export function adopt(child: CharacterState, father: NpcState, mother: NpcState): void {
   child.kin.father = father.id;
   child.kin.mother = mother.id;
+  child.kin.lineage = father.character.kin.lineage ?? father.id;
   child.name = `${father.character.name.split(' ')[0]} ${child.name.split(' ').slice(1).join(' ')}`;
 }
 
@@ -157,8 +159,51 @@ export function seedFamilies(world: NpcWorldState, logic: RegionLogic, rng: Rng,
       const pair = pickCouple(world, couples, rng);
       if (pair) adopt(c, pair[1], pair[0]);
     }
+    seedLineage(world, byId, here, rng, tick);
   });
 }
+
+/**
+ * Dòng họ có từ trước (v0.6 S8, chủ dự án chọn): gia tộc suy từ dòng cha (ADR 0019 Q4) mà dân số ban đầu chưa có dòng
+ * nào nhiều đời, nên gần hai mươi năm đầu không vùng nào có gia tộc. Lúc dựng vùng, mỗi quận (với xác suất
+ * `SEED_LINEAGE_PERMILLE`) người nam đã ra riêng nhiều ruộng nhất trong tuổi `SEED_PATRIARCH_AGE` nhận làm con những
+ * người lớn chưa có cha, hợp tuổi (cha 20–55 tuổi lúc sinh): con trai mang họ cha, cháu theo họ con, con gái giữ dòng
+ * cha. Chỉ dựng khi dòng đủ người lớn để lập gia tộc (`CLAN_MIN_ADULTS`). Không thêm người, không đổi tuổi, hôn nhân hay của cải: chỉ
+ * nối những người đã có thành một dòng.
+ */
+export const SEED_LINEAGE_PERMILLE = 1000;
+export const SEED_LINEAGE_ADULTS = CLAN_MIN_ADULTS;
+export const SEED_LINEAGE_SONS = 3;
+export const SEED_LINEAGE_DAUGHTERS = 2;
+export const SEED_PATRIARCH_AGE: readonly [number, number] = [45, 75];
+function seedLineage(world: NpcWorldState, byId: ReadonlyMap<string, NpcState>, here: readonly NpcState[], rng: Rng, tick: Tick): void {
+  if (rng.int(0, 999) >= SEED_LINEAGE_PERMILLE) return;
+  const fatherless = (n: NpcState) => n.character.household.independent && n.character.kin.father === null && ageOf(n, tick) >= COMING_OF_AGE;
+  const head = here.filter((n) => fatherless(n) && n.character.gender === 'male' && ageOf(n, tick) >= SEED_PATRIARCH_AGE[0] && ageOf(n, tick) <= SEED_PATRIARCH_AGE[1])
+    .reduce<NpcState | null>((best, n) => (best === null || n.character.household.landMu > best.character.household.landMu ? n : best), null);
+  if (!head) return;
+  const fits = (n: NpcState) => n !== head && fatherless(n) && n.character.birthTick - head.character.birthTick >= FATHER_AGE[0] * TICKS_PER_YEAR
+    && n.character.birthTick - head.character.birthTick <= FATHER_AGE[1] * TICKS_PER_YEAR && n.id !== head.character.kin.spouse;
+  const pick = (xs: NpcState[], k: number) => { const out: NpcState[] = []; while (out.length < k && xs.length) out.push(xs.splice(rng.int(0, xs.length - 1), 1)[0]!); return out; };
+  const sons = pick(here.filter((n) => fits(n) && n.character.gender === 'male'), SEED_LINEAGE_SONS);
+  const daughters = pick(here.filter((n) => fits(n) && n.character.gender === 'female'), SEED_LINEAGE_DAUGHTERS);
+  if (1 + sons.length + daughters.length < SEED_LINEAGE_ADULTS) return;
+  const wife = head.character.kin.spouse ? byId.get(head.character.kin.spouse) ?? null : null;
+  const surname = surnameOf(head);
+  head.character.kin.lineage = head.id;
+  for (const child of [...sons, ...daughters]) {
+    const c = child.character;
+    c.kin.father = head.id;
+    c.kin.lineage = head.id;
+    // Mẹ: vợ ông nếu hợp tuổi người mẹ lúc sinh
+    if (wife && c.birthTick - wife.character.birthTick >= MOTHER_AGE[0] * TICKS_PER_YEAR && c.birthTick - wife.character.birthTick <= MOTHER_AGE[1] * TICKS_PER_YEAR) c.kin.mother = wife.id;
+    rename(child, surname);
+  }
+  // Cháu nội (đã gán cho con trai ở trên): theo họ cha, cùng dòng
+  for (const son of sons) for (const kid of world.people) if (kid.character.kin.father === son.id) { rename(kid, surname); kid.character.kin.lineage = head.id; }
+}
+const surnameOf = (n: NpcState) => n.character.name.split(' ')[0]!;
+const rename = (n: NpcState, surname: string) => { n.character.name = [surname, ...n.character.name.split(' ').slice(1)].join(' '); };
 
 /**
  * Cha mẹ của người chơi (Q2): ưu tiên một cặp vợ chồng ở quận sinh, cùng xuất thân, người mẹ 18–42 tuổi; không có thì

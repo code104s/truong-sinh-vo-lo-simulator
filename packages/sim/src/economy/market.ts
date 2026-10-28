@@ -24,6 +24,20 @@ export interface CountyEconomy {
   /** Dịch trong quận: [từ tick, tới tick); −1 = không có. */
   epidemicFrom: number;
   epidemicUntil: number;
+  /** Thuế đinh (tiền), thuế điền (lương) quận thu được từ đầu quý; pha Thế lực chia cho người giữ quận rồi về 0 (v0.6 S1). */
+  taxMoney: number;
+  taxGrain: number;
+  /**
+   * Mức thuế của người giữ quận (%; v0.6 S6, Q7): thuế đinh nhân thẳng, thuế điền nhân nửa phần lệch. Quan phủ đặt theo độ
+   * tham (50 thanh liêm nhất … 150 tham nhất); quận cát cứ giữ lệ cũ 100. Pha Thế lực đặt mỗi quý.
+   */
+  taxPct: number;
+  /**
+   * Lương làm thuê (%; S6, Q10): trấn có thương hội đủ kho thì thương hội thuê thêm, trả cao hơn. Phần trả thêm quỹ quận
+   * ứng trước, ghi ở `wageBonus`; đầu quý thương hội hoàn lại rồi về 0.
+   */
+  wagePct: number;
+  wageBonus: number;
 }
 
 export const DISASTERS = ['drought', 'flood', 'locust'] as const;
@@ -40,6 +54,11 @@ export interface EconomyState {
   /** Mức thời tiết chung của vùng năm nay (%). */
   regionWeatherPct: number;
   counties: CountyEconomy[];
+  /**
+   * Lời của lái buôn trên mỗi đường (theo `adjacency`) từ đầu quý (v0.6 S3): chênh giá trừ phí chở trên số lương đã chở,
+   * [quận a mua, quận b mua]. Pha Thế lực cho thương hội giữ đường lấy một phần từ quận mua rồi về 0.
+   */
+  tradeMargin: [number, number][];
 }
 
 /** Dân nền mỗi ô đất theo loại trị sở, nhân độ phì: đất tốt nuôi được nhiều người hơn. */
@@ -107,12 +126,12 @@ export function createEconomy(logic: RegionLogic, tick: Tick): EconomyState {
     const mouths = Math.max(1, mulDiv(county.area * MOUTHS_PER_CELL[logic.settlementKind[i]!], logic.fertilityPct[i]!, 100));
     const ce: CountyEconomy = {
       mouths, grain: mouths * MONTHLY_NEED_PER_MOUTH * (INITIAL_RESERVE_MONTHS + untilHarvest), money: mouths * MONEY_PER_MOUTH, weatherPct: 100, price: 0, prevPrice: 0,
-      disaster: null, disasterMonth: 0, epidemicFrom: -1, epidemicUntil: -1,
+      disaster: null, disasterMonth: 0, epidemicFrom: -1, epidemicUntil: -1, taxMoney: 0, taxGrain: 0, taxPct: 100, wagePct: 100, wageBonus: 0,
     };
     ce.price = ce.prevPrice = priceOf(ce);
     return ce;
   });
-  return { regionWeatherPct: 100, counties };
+  return { regionWeatherPct: 100, counties, tradeMargin: logic.adjacency.map((): [number, number] => [0, 0]) };
 }
 
 /** Đầu năm: rút thời tiết vùng, cộng nhiễu theo quận (luồng weather). */
@@ -176,6 +195,7 @@ export function economyMonth(eco: EconomyState, logic: RegionLogic, tick: Tick):
     const pay = idiv(amount * pc, GRAIN_PER_DOU);
     cheap.grain -= amount; dear.grain += amount;
     dear.money -= pay; cheap.money += pay;
+    eco.tradeMargin[k]![dear === A ? 0 : 1] += idiv(amount * (pd - pc - transport), GRAIN_PER_DOU);
   });
   logic.adjacency.forEach(([a, b]) => {
     const A = eco.counties[a]!, B = eco.counties[b]!;

@@ -3,6 +3,7 @@ import { actionDef } from '../life/actions';
 import { staminaMax } from '../life/stamina';
 import type { EventContext } from './engine';
 import type { NpcState } from '../npc/state';
+import type { FactionState } from '../factions/state';
 
 /** Trả tiền vào quỹ một quận; trả về số đã trả (không vượt túi). */
 export function payTo(ctx: EventContext, county: number, amount: number): number {
@@ -119,6 +120,46 @@ export function takeGrainFrom(ctx: EventContext, n: NpcState, amount: number): n
   const g = Math.max(0, Math.min(amount, n.character.household.grain));
   n.character.household.grain -= g; ctx.c.household.grain += g;
   return g;
+}
+
+// —— Kho thế lực (v0.6 S7): tiền, lương chuyển giữa người chơi và kho một thế lực; không có thế lực (dựng thử) thì quỹ,
+// kho quận `county` như người vô danh. Sổ cái gồm kho thế lực nên tổng không đổi ——
+
+/** Người chơi nộp tiền vào kho thế lực; trả số đã nộp. */
+export function payFaction(ctx: EventContext, f: FactionState | null, county: number, amount: number): number {
+  if (!f) return payTo(ctx, county, amount);
+  const n = Math.max(0, Math.min(amount, ctx.c.household.money));
+  ctx.c.household.money -= n; f.money += n;
+  return n;
+}
+
+/** Kho thế lực trả tiền cho người chơi (thưởng, công), trong giới hạn kho; trả số nhận. */
+export function receiveFromFaction(ctx: EventContext, f: FactionState | null, county: number, amount: number): number {
+  if (!f) return receiveFrom(ctx, county, amount);
+  const n = Math.max(0, Math.min(amount, f.money));
+  f.money -= n; ctx.c.household.money += n;
+  return n;
+}
+
+/** Lương đổi chủ giữa người chơi và kho thế lực. n > 0: thế lực → người chơi; n < 0: người chơi → thế lực. Trả số thăng. */
+export function moveGrainFaction(ctx: EventContext, f: FactionState | null, county: number, n: number): number {
+  if (!f) return moveGrain(ctx, county, n);
+  const h = ctx.c.household;
+  const amount = n >= 0 ? Math.min(n, f.grain) : -Math.min(-n, h.grain);
+  f.grain -= amount; h.grain += amount;
+  return Math.abs(amount);
+}
+
+/** Ruộng (mẫu) từ người chơi sang một NPC (thua kiện, nhường ruộng); trả số mẫu đã sang. Còn ít nhất một mẫu. */
+export function giveLandTo(ctx: EventContext, n: NpcState | null, mu: number): number {
+  const h = ctx.c.household;
+  const k = Math.max(0, Math.min(mu, h.landMu - 1));
+  h.landMu -= k;
+  if (n) {
+    n.character.household.landMu += k;
+    if (n.character.household.tenure === 'none' || n.character.household.tenure === 'tenant') n.character.household.tenure = 'owner';
+  }
+  return k;
 }
 
 /** NPC bị thương nhẹ (không chồng thương). */

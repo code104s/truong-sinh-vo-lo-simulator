@@ -114,15 +114,15 @@ export const sampleLife: LifeSummary = {
   milestones: [{ ...sampleLog, importance: 'major' }],
   estate: { money: 1200, grain: 340, landMu: 6, tenure: 'owner' },
   hungerYears: 3,
-  legacy: { spouse: { name: 'Lý Thị Hoa', alive: false }, children: [{ name: 'Trần Văn Bình', alive: true }], friends: 2, enemies: 1, reputation: 'respected' },
+  legacy: { spouse: { name: 'Lý Thị Hoa', alive: false }, children: [{ name: 'Trần Văn Bình', alive: true }], friends: 2, enemies: 1, reputation: 'respected', factions: [{ name: { key: 'faction.clan.name', params: { surname: 'Lương', place: 'Vị Kinh' } }, kind: 'clan', fate: 'rose' }] },
   digest: '0123456789abcdef',
 };
 
 export function sampleSave(): SaveFile {
   return {
     format: 'tsvl-save',
-    version: 5,
-    protocolVersion: 5,
+    version: 6,
+    protocolVersion: 6,
     simVersion: '0.1.0',
     worldSeed: 'tsvl-01',
     region: { summary: sampleSummary, map: sampleMap(), birthplaces: [sampleBirthplace], logic: { adjacency: [[0, 1]] } },

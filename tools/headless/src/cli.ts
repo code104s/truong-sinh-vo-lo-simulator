@@ -13,7 +13,7 @@ import { parseArgs } from 'node:util';
 import { isMainThread, parentPort, Worker } from 'node:worker_threads';
 import { t } from '@tsvl/content';
 import { calendarOf, decodeSave, encodeSave, type Birthplace, type Command, type LogEntry, type RegionId, type SettlementKind, type Tick, type WorkerMessage } from '@tsvl/shared';
-import { digestOf, replaySave, SimHost, simulateEconomy, simulateWorld } from '@tsvl/sim';
+import { digestOf, replaySave, SimHost, simulateEconomy, simulateWorld, type WorldRunStats } from '@tsvl/sim';
 import { buildRegion, regionIdentity, type RegionLogic } from '@tsvl/worldgen';
 import { runLife, runPolicyBatch, sequentialRunner, type BatchRegion, type LifeResult, type LifeRunner, type TravelCache } from './batch';
 import type { PolicyName } from './policies';
@@ -348,6 +348,76 @@ const WORLD_BIRTHS_WITH_PARENTS_PCT = 60;
 const WORLD_MARRIED_PCT = [50, 85] as const;
 const WORLD_CHILDREN_PER_WOMAN = [2, 5] as const;
 
+/**
+ * Bản đồ thế lực (nghiệm thu v0.6 mục 6, Q12; S8). Đo trên 50 năm đầu của lượt, trừ ba mục chủ dự án chọn đo trên cả lượt
+ * (S8): "họ đứng đầu đổi", "gia tộc lập và tàn" (dòng họ đổi theo thế hệ, khoảng 30 năm), "có nguyên nhân" (50 năm chỉ có
+ * 0,1–0,3 người theo cướp mỗi năm mỗi vùng, tỉ lệ dao động theo nhiễu):
+ * - sống: mỗi vùng luôn có quan phủ; số thế lực mỗi loại trong khoảng mọi năm (sau năm đầu dòng họ, hội buôn mới thành);
+ * - đổi: mỗi vùng có quận đổi người giữ, có gia tộc lập và tàn; họ đứng đầu đổi ở đủ phần quận;
+ * - không hỗn loạn: mỗi quận đổi người giữ không quá 3 lần mỗi 10 năm; không thế lực ngoài quan phủ giữ quá nửa vùng quá 10 năm liền;
+ * - có nguyên nhân: cướp sau đói kém gấp 1,5 lần năm thường; quan tham nhiều cướp hơn quan thanh liêm; thương hội giữ
+ *   nhiều đường hơn ở nửa số vùng nhiều cạnh kề.
+ * Trả danh sách tiêu chí trượt.
+ */
+const FACTION_RANGES = { clans: [2, 10], guilds: [1, 4], bands: [0, 4] } as const;
+/**
+ * Phần vùng-năm tối thiểu trong khoảng (%), theo loại. Thương hội (S8, chủ dự án chọn): ≥ 95% — hội tan thì quận ấy chờ một
+ * năm mới lập lại, vùng chỉ có một trấn hụt vài năm. Gia tộc, băng cướp: mọi năm.
+ */
+const FACTION_IN_RANGE_PCT = { clans: 100, guilds: 95, bands: 100 } as const;
+const FACTION_WARMUP_YEARS = 10;
+const FACTION_LEADER_CHANGED_PCT = 30;
+const FACTION_CHANGES_PER_DECADE = 3;
+const FACTION_MAJORITY_YEARS = 10;
+const FACTION_FAMINE_RATIO = 1.5;
+type FactionMap = { seed: string; edges: number; counties: number; yearly: WorldRunStats['yearly']; at50: WorldRunStats['at50']; all: WorldRunStats['at50'] };
+function factionMapReport(maps: readonly FactionMap[]): string[] {
+  const failed: string[] = [];
+  const window = (m: FactionMap) => m.yearly.slice(FACTION_WARMUP_YEARS - 1, 50);
+  console.log(`Bản đồ thế lực (nghiệm thu v0.6 mục 6, 50 năm đầu; "sống" từ năm ${FACTION_WARMUP_YEARS}):`);
+  for (const kind of ['clans', 'guilds', 'bands'] as const) {
+    const [lo, hi] = FACTION_RANGES[kind];
+    let inside = 0, all = 0, min = Number.MAX_SAFE_INTEGER, max = 0;
+    const off: string[] = [];
+    for (const m of maps) {
+      const ys = window(m);
+      const ok = ys.filter((y) => y[kind] >= lo && y[kind] <= hi).length;
+      inside += ok; all += ys.length;
+      for (const y of ys) { min = Math.min(min, y[kind]); max = Math.max(max, y[kind]); }
+      if (ok < ys.length) off.push(`${m.seed.slice(-2)} ${(100 * ok / Math.max(1, ys.length)).toFixed(0)}%`);
+    }
+    const share = (100 * inside) / Math.max(1, all), need = FACTION_IN_RANGE_PCT[kind];
+    console.log(`  sống · ${kind}: ${min}–${max} mỗi vùng (mục tiêu ${lo}–${hi}) · vùng-năm trong khoảng ${share.toFixed(1)}% (≥ ${need})${off.length ? ` · vùng lệch: ${off.join(', ')}` : ''}`);
+    if (share < need) failed.push(`${kind} trong ${lo}–${hi} ở ${share.toFixed(1)}% vùng-năm < ${need}%`);
+  }
+  const noGov = maps.filter((m) => m.yearly.slice(0, 50).some((y) => y.gov === 0)).length;
+  if (noGov) failed.push(`${noGov} vùng có năm không có quan phủ`);
+  const unchanged = maps.filter((m) => m.at50.controlChanges === 0).length;
+  const noTurn = maps.filter((m) => m.all.clansFounded === 0 || m.all.clansEnded === 0).length;
+  const counties = maps.reduce((s, m) => s + m.counties, 0), leaders = maps.reduce((s, m) => s + m.all.leaderChangedCounties, 0);
+  const leaderPct = (100 * leaders) / Math.max(1, counties);
+  console.log(`  sống, đổi · vùng luôn có quan phủ ${maps.length - noGov}/${maps.length} · vùng có quận đổi người giữ ${maps.length - unchanged}/${maps.length} · vùng có gia tộc lập và tàn ${maps.length - noTurn}/${maps.length} (cả lượt) · quận đổi họ đứng đầu ${leaderPct.toFixed(0)}% (cả lượt; ≥ ${FACTION_LEADER_CHANGED_PCT})`);
+  if (unchanged) failed.push(`${unchanged} vùng không có quận nào đổi người giữ`);
+  if (noTurn) failed.push(`${noTurn} vùng thiếu gia tộc lập hay tàn`);
+  if (leaderPct < FACTION_LEADER_CHANGED_PCT) failed.push(`họ đứng đầu đổi ở ${leaderPct.toFixed(0)}% quận < ${FACTION_LEADER_CHANGED_PCT}%`);
+  const perDecade = Math.max(...maps.map((m) => m.at50.maxChangesPerDecade)), majority = Math.max(...maps.map((m) => m.at50.longestNonGovMajorityYears));
+  console.log(`  không hỗn loạn · một quận đổi người giữ nhiều nhất ${perDecade} lần/10 năm (≤ ${FACTION_CHANGES_PER_DECADE}) · ngoài quan phủ giữ quá nửa vùng dài nhất ${majority} năm (≤ ${FACTION_MAJORITY_YEARS})`);
+  if (perDecade > FACTION_CHANGES_PER_DECADE) failed.push(`quận đổi người giữ ${perDecade} lần/10 năm`);
+  if (majority > FACTION_MAJORITY_YEARS) failed.push(`thế lực ngoài quan phủ giữ quá nửa vùng ${majority} năm liền`);
+  const sum = (k: keyof WorldRunStats['at50']) => maps.reduce((s, m) => s + m.all[k], 0);
+  const after = sum('banditMembersAfterFamine') / Math.max(1, sum('yearsAfterFamine')), normal = sum('banditMembersNormal') / Math.max(1, sum('yearsNormal'));
+  const greedy = sum('banditMembersGreedy') / Math.max(1, sum('yearsGreedy')), honest = sum('banditMembersHonest') / Math.max(1, sum('yearsHonest'));
+  const sorted = [...maps].sort((a, b) => a.edges - b.edges || (a.seed < b.seed ? -1 : 1));
+  const half = Math.floor(sorted.length / 2);
+  const roads = (ms: readonly FactionMap[]) => ms.reduce((s, m) => { const ys = m.yearly; return s + ys.reduce((a, y) => a + y.guildRoads, 0) / Math.max(1, ys.length); }, 0) / Math.max(1, ms.length);
+  const few = roads(sorted.slice(0, half)), many = roads(sorted.slice(sorted.length - half));
+  console.log(`  có nguyên nhân (cả lượt) · người theo cướp sau đói kém ${after.toFixed(2)}/năm, năm thường ${normal.toFixed(2)} (gấp ${(after / Math.max(0.01, normal)).toFixed(1)}; ≥ ${FACTION_FAMINE_RATIO}) · quan tham ${greedy.toFixed(2)}, thanh liêm ${honest.toFixed(2)} · thương hội giữ đường: vùng nhiều cạnh kề ${many.toFixed(1)}, ít cạnh kề ${few.toFixed(1)}/năm`);
+  if (after < FACTION_FAMINE_RATIO * normal) failed.push(`cướp sau đói kém chỉ gấp ${(after / Math.max(0.01, normal)).toFixed(1)} lần năm thường`);
+  if (!(greedy > honest)) failed.push('quan tham không đi cùng nhiều cướp hơn quan thanh liêm');
+  if (!(many > few)) failed.push('thương hội không lớn hơn ở vùng nhiều cạnh kề');
+  return failed;
+}
+
 async function worldCmd(n: number, years: number, threads: number, allL0: boolean) {
   if (!Number.isInteger(n) || n <= 0 || !Number.isInteger(years) || years <= 0) throw new Error('seeds/years phải là số nguyên dương');
   const seeds = Array.from({ length: n }, (_, i) => `tsvl-${String(i + 1).padStart(2, '0')}`);
@@ -357,7 +427,20 @@ async function worldCmd(n: number, years: number, threads: number, allL0: boolea
   let famines = 0, countyYears = 0, lowMoney = 0, minPrice = Number.MAX_SAFE_INTEGER, maxPrice = 0, negative = 0;
   // Phần tiền NPC nắm (‰): năm cuối thấp/cao nhất giữa các vùng, và cao nhất mọi năm (v0.5 S8: chi dùng chặn tiền dồn)
   let npcEndMin = Number.MAX_SAFE_INTEGER, npcEndMax = 0, npcPeak = 0;
+  // Kho thế lực (v0.6 S1): tiền (văn), lương (thăng) năm cuối thấp/cao nhất giữa các vùng; tiền so với tổng tiền vùng (‱)
+  // Gia tộc (v0.6 S2): theo từng vùng, rồi gộp
+  const clanRows: string[] = [], guildRows: string[] = [];
+  let guildMin = Number.MAX_SAFE_INTEGER, guildMax = 0, guildFounded = 0, guildEnded = 0;
+  // Băng cướp (v0.6 S4)
+  let banditFounded = 0, banditEnded = 0, banditPeak = 0, bAfter = 0, yAfter = 0, bNormal = 0, yNormal = 0;
+  const banditRows: string[] = [], govRows: string[] = [];
+  // Quan phủ (v0.6 S5)
+  let bGreedy = 0, yGreedy = 0, bHonest = 0, yHonest = 0, campaigns = 0, wins = 0, maxPerDecade = 0, longestMajority = 0, changesAll = 0;
+  let clanMin = Number.MAX_SAFE_INTEGER, clanMax = 0, clanFounded = 0, clanEnded = 0, clanSplit = 0, leaderChanged = 0, countiesAll = 0, regionsFoundEnd = 0;
+  let facEndMin = Number.MAX_SAFE_INTEGER, facEndMax = 0, facPeak = 0, facGrainMin = Number.MAX_SAFE_INTEGER, facGrainMax = 0, facShareMax = 0;
   const deaths: Record<string, number> = {};
+  // Bản đồ thế lực (v0.6 S8): chuỗi theo năm, số lần đổi người giữ của từng vùng
+  const maps: FactionMap[] = [];
   for (const r of regions) {
     if (!r.ok) throw new Error(`${r.seed}: ${r.error}`);
     const t0 = performance.now();
@@ -370,9 +453,24 @@ async function worldCmd(n: number, years: number, threads: number, allL0: boolea
     for (const [k, v] of Object.entries(s.deaths)) deaths[k] = (deaths[k] ?? 0) + v;
     deathAges += s.deathAgeSum; starvedNormal += s.starvationNormalYears;
     minQ = Math.min(minQ, s.minQuotaPct); maxQ = Math.max(maxQ, s.maxQuotaPct); kids += s.childrenPermille; physYears += s.yearsWithPhysician; merchYears += s.yearsWithMerchant;
+    clanMin = Math.min(clanMin, s.clansMin); clanMax = Math.max(clanMax, s.clansMax); clanFounded += s.clansFounded; clanEnded += s.clansEnded; clanSplit += s.clansSplit;
+    leaderChanged += s.leaderChangedCounties; countiesAll += s.counties; if (s.clansFounded > 0 && s.clansEnded > 0) regionsFoundEnd++;
+    guildMin = Math.min(guildMin, s.guildsMin); guildMax = Math.max(guildMax, s.guildsMax); guildFounded += s.guildsFounded; guildEnded += s.guildsEnded;
+    banditFounded += s.banditsFounded; banditEnded += s.banditsEnded; banditPeak = Math.max(banditPeak, s.banditMembersMax);
+    bAfter += s.banditMembersAfterFamine; yAfter += s.yearsAfterFamine; bNormal += s.banditMembersNormal; yNormal += s.yearsNormal;
+    bGreedy += s.banditMembersGreedy; yGreedy += s.yearsGreedy; bHonest += s.banditMembersHonest; yHonest += s.yearsHonest; campaigns += s.campaigns; wins += s.campaignWins;
+    maxPerDecade = Math.max(maxPerDecade, s.maxChangesPerDecade); longestMajority = Math.max(longestMajority, s.longestNonGovMajorityYears); changesAll += s.controlChanges;
+    govRows.push(`${r.seed.slice(-2)}: kho ${s.govMoneyEnd} văn, ${s.officialsEnd} sai dịch · tiễu ${s.campaigns} trận thắng ${s.campaignWins} · chẩn ${s.reliefGrain} thăng · đổi người giữ ${s.controlChanges} lần (nhiều nhất ${s.maxChangesPerDecade}/10 năm) · ngoài quan phủ giữ ${s.nonGovCountyYearsPermille / 10}% quận-năm`);
+    banditRows.push(`${r.seed.slice(-2)}: lập ${s.banditsFounded}, tan ${s.banditsEnded}, đông nhất ${s.banditMembersMax} người · sau đói kém ${(s.banditMembersAfterFamine / Math.max(1, s.yearsAfterFamine)).toFixed(1)} người/năm (${s.yearsAfterFamine} năm), năm thường ${(s.banditMembersNormal / Math.max(1, s.yearsNormal)).toFixed(1)} (${s.yearsNormal} năm)`);
+    guildRows.push(`${r.seed.slice(-2)}: ${s.edges} cạnh kề · ${s.guildsMin}–${s.guildsMax} (cuối ${s.guildsEnd}), lập ${s.guildsFounded}, tan ${s.guildsEnded} · năm cuối giữ ${s.guildRoadsEnd} đường, ${s.guildMembersEnd} hội viên, kho ${s.guildMoneyEnd} văn`);
+    clanRows.push(`${r.seed.slice(-2)}: ${s.clansMin}–${s.clansMax} (cuối ${s.clansEnd}), lập ${s.clansFounded}, tàn ${s.clansEnded}, tách ${s.clansSplit}, đổi họ đầu ${s.leaderChangedCounties}/${s.counties} quận`);
+    facEndMin = Math.min(facEndMin, s.factionMoneyEnd); facEndMax = Math.max(facEndMax, s.factionMoneyEnd); facPeak = Math.max(facPeak, s.factionMoneyMax);
+    facGrainMin = Math.min(facGrainMin, s.factionGrainEnd); facGrainMax = Math.max(facGrainMax, s.factionGrainEnd);
+    facShareMax = Math.max(facShareMax, Math.floor((10_000 * s.factionMoneyMax) / Math.max(1, s.moneyEnd)));
     npcEndMin = Math.min(npcEndMin, s.npcMoneyPermilleEnd); npcEndMax = Math.max(npcEndMax, s.npcMoneyPermilleEnd); npcPeak = Math.max(npcPeak, s.npcMoneyPermilleMax);
+    maps.push({ seed: r.seed, edges: s.edges, counties: s.counties, yearly: s.yearly, at50: s.at50, all: s });
     births += s.births; withParents += s.birthsWithParents; married += s.marriedPermille; mothers += s.mothersOver45; motherKids += s.childrenOfMothersOver45; wives += s.wivesOver45; wifeKids += s.childrenOfWivesOver45;
-    console.log(`  ${r.seed}: ${s.counties} quận · NPC ${s.npcStart} → ${s.npcEnd} · ${(took * 1000 / s.ticks).toFixed(1)} µs/tick · tiền ${s.moneyStart === s.moneyEnd ? 'bảo toàn' : `LỆCH ${s.moneyEnd - s.moneyStart}`}`);
+    console.log(`  ${r.seed}: ${s.counties} quận · NPC ${s.npcStart} → ${s.npcEnd} · dân số ${s.minQuotaPct}–${s.maxQuotaPct}% hạn mức · ${(took * 1000 / s.ticks).toFixed(1)} µs/tick · tiền ${s.moneyStart === s.moneyEnd ? 'bảo toàn' : `LỆCH ${s.moneyEnd - s.moneyStart}`}`);
   }
   const died = Object.values(deaths).reduce((x, y) => x + y, 0);
   console.log(`NPC mất: ${died} · tuổi trung bình lúc mất ${(deathAges / Math.max(1, died)).toFixed(1)} · nguyên nhân ${JSON.stringify(deaths)} · chết đói ${(100 * (deaths.starvation ?? 0) / Math.max(1, died)).toFixed(1)}% (năm thường ${(100 * starvedNormal / Math.max(1, died)).toFixed(1)}%)`);
@@ -382,6 +480,17 @@ async function worldCmd(n: number, years: number, threads: number, allL0: boolea
   const lowMoneyPct = lowMoney / (countyYears / years) / 10;
   console.log(`Kinh tế có NPC: đói kém mỗi quận 1 lần / ${every.toFixed(1)} năm (mục tiêu 8–15) · giá ${minPrice}–${maxPrice}% (70–500) · tháng-quận quỹ cạn ${lowMoneyPct.toFixed(1)}% (≤ 5) · kho âm ${negative} vùng`);
   console.log(`Sổ cái lệch (kiểm từng tick): ${ledgerBad} vùng · NPC nắm ${npcEndMin / 10}–${npcEndMax / 10}% tổng tiền năm cuối (cao nhất mọi năm ${npcPeak / 10}%)`);
+  console.log(`Gia tộc: còn sống ${clanMin}–${clanMax} mỗi vùng (mục tiêu 2–10) · lập sau năm đầu ${clanFounded}, tàn ${clanEnded} (gồm nhập), chi tách ${clanSplit} · vùng có cả lập lẫn tàn ${regionsFoundEnd}/${regions.length} · quận đổi họ đứng đầu ${(100 * leaderChanged / Math.max(1, countiesAll)).toFixed(0)}% (≥ 30)`);
+  for (const row of clanRows) console.log(`  ${row}`);
+  console.log(`Thương hội: còn sống ${guildMin}–${guildMax} mỗi vùng (mục tiêu 1–4) · lập ${guildFounded}, tan ${guildEnded}`);
+  for (const row of guildRows) console.log(`  ${row}`);
+  const perAfter = bAfter / Math.max(1, yAfter), perNormal = bNormal / Math.max(1, yNormal);
+  console.log(`Băng cướp: lập ${banditFounded}, tan ${banditEnded}, đông nhất ${banditPeak} người một vùng · người theo cướp sau đói kém ${perAfter.toFixed(1)}/năm, năm thường ${perNormal.toFixed(1)}/năm (gấp ${(perAfter / Math.max(0.01, perNormal)).toFixed(1)} lần; mục tiêu ≥ 1,5)`);
+  for (const row of banditRows) console.log(`  ${row}`);
+  const perGreedy = bGreedy / Math.max(1, yGreedy), perHonest = bHonest / Math.max(1, yHonest);
+  console.log(`Quan phủ: người theo cướp dưới quan tham ${perGreedy.toFixed(1)}/năm (${yGreedy} năm), quan thanh liêm ${perHonest.toFixed(1)}/năm (${yHonest} năm) · tiễu phỉ ${campaigns} trận, thắng ${wins} · quận đổi người giữ ${changesAll} lần, nhiều nhất ${maxPerDecade}/10 năm (≤ 3) · ngoài quan phủ giữ quá nửa vùng dài nhất ${longestMajority} năm (≤ 10)`);
+  for (const row of govRows) console.log(`  ${row}`);
+  console.log(`Kho thế lực năm cuối: ${facEndMin}–${facEndMax} văn, ${facGrainMin}–${facGrainMax} thăng lương · cao nhất mọi năm ${facPeak} văn (${facShareMax / 100}% tổng tiền vùng)`);
   // Tiêu chí nghiệm thu v0.4 mục 6 (docs/v0.4-giai-doan-a.md): dân số NPC, sổ cái, kinh tế v0.3
   const meanDeathAge = deathAges / Math.max(1, died), under16Pct = kids / regions.length / 10;
   const yearsPct = (k: number) => (100 * k) / (regions.length * (years - 1));
@@ -401,9 +510,11 @@ async function worldCmd(n: number, years: number, threads: number, allL0: boolea
   if (perWoman < WORLD_CHILDREN_PER_WOMAN[0] || perWoman > WORLD_CHILDREN_PER_WOMAN[1]) failed.push(`số con mỗi phụ nữ có chồng ${perWoman.toFixed(2)} ngoài ${WORLD_CHILDREN_PER_WOMAN.join('–')}`);
   if (ledgerBad) failed.push(`sổ cái lệch ở ${ledgerBad} vùng`);
   if (negative || minPrice < 70 || maxPrice > 500 || every < 8 || every > 15 || lowMoneyPct > 5) failed.push('kinh tế ngoài tiêu chí v0.3');
+  // Bản đồ thế lực (v0.6 S8): cần lượt từ 50 năm
+  if (years >= 50) failed.push(...factionMapReport(maps));
   for (const f of failed) console.log(`  ✗ ${f}`);
   const pass = failed.length === 0;
-  console.log(pass ? 'KẾT QUẢ: PASS (dân số NPC, gia đình, sổ cái, kinh tế v0.3)' : 'KẾT QUẢ: FAIL');
+  console.log(pass ? `KẾT QUẢ: PASS (dân số NPC, gia đình, sổ cái, kinh tế v0.3${years >= 50 ? ', bản đồ thế lực v0.6' : ''})` : 'KẾT QUẢ: FAIL');
   if (!pass) process.exitCode = 1;
 }
 

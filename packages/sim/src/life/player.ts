@@ -11,7 +11,8 @@ import { type Death } from './health';
 import { ACCIDENT_FATAL_PPM } from './params';
 import { gainSkill, skillRiskPct } from './skills';
 import { fatiguePct, recoverStamina, spendStamina } from './stamina';
-import { previewTravel, routeTerrainPct } from './travel';
+import { previewTravel } from './travel';
+import { routeRiskPct } from '../factions/impact';
 import { recordFarmWeek } from '../economy/farming';
 import { settleAction } from '../economy/income';
 import { physicianIn, type NpcWorldState } from '../npc/state';
@@ -40,7 +41,7 @@ export interface SocialHooks {
   act(slot: PlanSlot, c: CharacterState, log: Log): void;
 }
 
-export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic: RegionLogic, eco: EconomyState, rng: RngSource, log: Log, people: NpcWorldState | null = null, social: SocialHooks | null = null): { death: Death | null; carePct: number } {
+export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic: RegionLogic, eco: EconomyState, rng: RngSource, log: Log, people: NpcWorldState | null = null, social: SocialHooks | null = null, roads: readonly number[] | null = null): { death: Death | null; carePct: number } {
   const age = ageYearsAt(c.birthTick, tick);
   if (age < ACTION_MIN_AGE) {
     if (age >= 5 && isYearStart(tick)) {
@@ -64,16 +65,16 @@ export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic
     s.active = null;
   }
   // Khóa tạm thời mà đang đi dở: nghỉ ô này, chuyến đi chờ ô sau.
-  if (lock) return perform(actionDef(REST.action)!, null, c, tick, logic, market, rng, log, age, people);
+  if (lock) return perform(actionDef(REST.action)!, null, c, tick, logic, market, rng, log, age, people, roads);
 
   const d = actionDef(planned.action)!;
   if (!s.active) {
-    const preview = d.group === 'travel' ? previewTravel(logic, c.location, planned.target!) : null;
+    const preview = d.group === 'travel' ? previewTravel(logic, c.location, planned.target!, roads) : null;
     const total = preview?.slots ?? d.slots;
     s.active = { slot: { ...planned }, total, remaining: total, preview };
   }
   const active = s.active;
-  const result = perform(d, active.preview, c, tick, logic, market, rng, log, age, people);
+  const result = perform(d, active.preview, c, tick, logic, market, rng, log, age, people, roads);
   if (result.death) return result;
   if (d.group === 'social' && social) social.act(active.slot, c, log);
   active.remaining--;
@@ -95,8 +96,8 @@ function arrive(s: PlayerState, c: CharacterState, county: number, logic: Region
 }
 
 /** Trừ giá, cho kết quả và tính rủi ro của một ô. Việc thường ngày không ghi nhật ký. */
-function perform(d: ActionDef, route: TravelPreview | null, c: CharacterState, tick: Tick, logic: RegionLogic, market: CountyEconomy, rng: RngSource, log: Log, age: number, people: NpcWorldState | null): { death: Death | null; carePct: number } {
-  const { ppm, carePct } = slotEffects(d, route, c, tick, logic, market, rng, log, people);
+function perform(d: ActionDef, route: TravelPreview | null, c: CharacterState, tick: Tick, logic: RegionLogic, market: CountyEconomy, rng: RngSource, log: Log, age: number, people: NpcWorldState | null, roads: readonly number[] | null): { death: Death | null; carePct: number } {
+  const { ppm, carePct } = slotEffects(d, route, c, tick, logic, market, rng, log, people, roads);
   // Mỗi hệ thống dùng luồng riêng; nguy hiểm đường tính trên dữ liệu nguyên đã lưu.
   const death = d.riskPpm > 0 ? slotMishap(c, tick, ppm, d.group === 'travel' ? 'accident.travel' : 'accident.action', rng.get(d.group === 'travel' ? 'travel' : 'actions'), log, age) : null;
   if (death) return { death, carePct };
@@ -106,9 +107,10 @@ function perform(d: ActionDef, route: TravelPreview | null, c: CharacterState, t
 
 /**
  * Phần tất định và kinh tế của một ô (trừ thể lực, kỹ năng, tuần công, tiền, nghỉ, chữa), trả về rủi ro (ppm) của ô.
- * Tầng NPC L1 (ADR 0015) gọi ba lần rồi rút rủi ro một lần cho cả tháng.
+ * Tầng NPC L1 (ADR 0015) gọi ba lần rồi rút rủi ro một lần cho cả tháng. `roads`: hệ số rủi ro mỗi đường theo người giữ
+ * (v0.6 S6, `roadRisk`); null thì đường chỉ theo địa hình.
  */
-export function slotEffects(d: ActionDef, route: TravelPreview | null, c: CharacterState, tick: Tick, logic: RegionLogic, market: CountyEconomy, rng: RngSource, log: Log, people: NpcWorldState | null = null): { ppm: number; carePct: number } {
+export function slotEffects(d: ActionDef, route: TravelPreview | null, c: CharacterState, tick: Tick, logic: RegionLogic, market: CountyEconomy, rng: RngSource, log: Log, people: NpcWorldState | null = null, roads: readonly number[] | null = null): { ppm: number; carePct: number } {
   const tired = fatiguePct(c, tick);
   if (spendStamina(c, d.stamina)) log({ key: 'log.exhaustion', params: {}, importance: 'minor' });
   if (d.skill) gainSkill(c, d.skill, tick);
@@ -124,7 +126,7 @@ export function slotEffects(d: ActionDef, route: TravelPreview | null, c: Charac
     c.health = Math.min(c.healthMax, c.health + 100); carePct = 50;
     for (const condition of c.conditions) condition.weeksLeft = Math.max(1, condition.weeksLeft - 1);
   }
-  const terrain = route ? routeTerrainPct(logic, route.route) : 100;
+  const terrain = route ? routeRiskPct(logic, route.route, roads) : 100;
   let ppm = mulDiv(mulDiv(mulDiv(d.riskPpm, terrain, 100), tired, 100), moneyRiskPct, 100);
   if (d.skill) ppm = mulDiv(ppm, skillRiskPct(c, d.skill), 100);
   return { ppm, carePct };
