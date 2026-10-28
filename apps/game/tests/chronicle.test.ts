@@ -2,6 +2,7 @@ import type { LogEntry } from '@tsvl/shared';
 import { describe, expect, it } from 'vitest';
 import { groupByYear, isPeopleNews, visibleItems } from '../src/app/chronicle';
 import { planDirty } from '../src/app/plan';
+import { logSeal } from '../src/ui/icons';
 
 const e = (tick: number, importance: LogEntry['importance'] = 'minor', key = 'log.child.help'): LogEntry => ({ tick, key, params: {}, importance });
 
@@ -68,5 +69,20 @@ describe('bản nháp kế hoạch', () => {
     expect(planDirty({ slots: [plan.slots[0], plan.slots[1], { action: 'action.travel', target: 3 }] } as never, plan as never)).toBe(true);
     expect(planDirty({ slots: [{ action: 'action.rest' }, { action: 'action.rest' }, { action: 'action.rest' }] }, null)).toBe(false);
     expect(planDirty({ slots: [{ action: 'action.farm' }, { action: 'action.rest' }, { action: 'action.rest' }] }, null)).toBe(true);
+  });
+});
+
+describe('tin quan hệ, gia đình, lời đồn trong biên niên (v0.5 F3)', () => {
+  const keys = ['log.kin.death', 'log.kin.birth', 'log.kin.help', 'log.kin.inherit', 'log.social.visit', 'log.social.helped_grain', 'log.social.helped_money',
+    'log.social.refused', 'log.social.cannot_help', 'log.marry.wed_groom', 'log.marry.wed_bride_moved', 'log.marry.refused', 'log.rumor.death'];
+
+  it('lọc "Người quanh mình" gồm tin gia đình, xã giao, cưới hỏi, tin đồn người quen mất; tin đồn đói kém, tai họa thì không', () => {
+    for (const key of keys) expect(isPeopleNews(e(1, 'minor', key)), key).toBe(true);
+    for (const key of ['log.rumor.famine', 'log.rumor.flood', 'log.rumor.epidemic', 'log.spend', 'log.tax.short']) expect(isPeopleNews(e(1, 'minor', key)), key).toBe(false);
+  });
+
+  it('mỗi tin quan hệ, gia đình, lời đồn có ấn triện', () => {
+    for (const key of [...keys, 'log.rumor.famine', 'log.rumor.drought', 'log.rumor.flood', 'log.rumor.locust', 'log.rumor.epidemic']) expect(logSeal(e(1, 'minor', key)), key).not.toBeNull();
+    expect(logSeal(e(1, 'minor', 'log.rumor.flood'))!.char).toBe('聞');
   });
 });

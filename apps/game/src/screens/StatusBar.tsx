@@ -2,6 +2,7 @@ import { t } from '@tsvl/content';
 import { GRAIN_PER_DOU, type CalendarDate, type CharacterView, type FoodWeeksBand, type HungerBand, type StaminaBand } from '@tsvl/shared';
 import type { ComponentChildren } from 'preact';
 import { dateText } from '../app/format';
+import { reputationTone } from '../app/people';
 import type { WorldInfo } from '../app/state';
 import { KIND_CHAR, SEASON_CHAR } from '../ui/icons';
 import { Enso, Portrait, Seal } from '../ui/ink';
@@ -43,6 +44,9 @@ export function StatusBar({ c, date, saved, world }: { c: CharacterView; date: C
   const foodDetail = h.independent
     ? `${t('ui.hud.dou', { dou: dou(h.grain) })} · ${t(`food.${h.foodWeeksBand}`)}`
     : h.grain > 0 ? `${t('ui.hud.parents')} · ${t('ui.hud.pocket', { dou: dou(h.grain) })}` : t('ui.hud.parents');
+  // Tiếng tăm ở quận đang đứng (v0.5 F3): đổi theo nơi mình đứng, nên đặt cạnh tên nơi ở
+  const here = world?.map.counties[c.location]?.name ?? '';
+  const rep = t(`reputation.${c.reputation}`);
   const land = h.landMu > 0 ? `${t('ui.hud.mu', { mu: h.landMu })} · ${t(`tenure.${h.tenure}`)}` : h.tenure === 'tenant' ? t('tenure.tenant') : t('ui.hud.no_land');
   return (
     <header class="status-bar">
@@ -52,7 +56,8 @@ export function StatusBar({ c, date, saved, world }: { c: CharacterView; date: C
           <h2 class="char-name">{c.name}</h2>
           <p class="muted">{t(`gender.${c.gender}`)} · {t('ui.life.age', { age: c.ageYears })}</p>
           <p class="small">
-            {place && <Seal char={KIND_CHAR[place.kind]} tone="ink" />} {t('ui.life.here', { place: world?.map.counties[c.location]?.name ?? '' })}
+            {place && <Seal char={KIND_CHAR[place.kind]} tone="ink" />} {t('ui.life.here', { place: here })}
+            {' · '}<span class={`reputation tone-${reputationTone(c.reputation)}`} title={t('ui.hud.reputation', { place: here, band: rep })}>{rep}</span>
           </p>
         </div>
       </div>

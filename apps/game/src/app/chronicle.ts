@@ -36,8 +36,13 @@ export function groupByYear(log: readonly LogEntry[], birthTick: Tick): YearGrou
 export type ChronicleFilter = 'all' | 'major' | 'people';
 export const CHRONICLE_FILTERS: readonly ChronicleFilter[] = ['all', 'major', 'people'];
 
-/** Tin về người có tên (v0.4 F2): sinh, mất của người quanh mình, và sự kiện có người thật (kết quả mang tên người ấy). */
-export const isPeopleNews = (e: LogEntry): boolean => e.key.startsWith('log.npc.') || (e.key.startsWith('event.') && e.params.name !== undefined);
+/**
+ * Tin về người có tên (v0.4 F2): sinh, mất của người quanh mình, và sự kiện có người thật (kết quả mang tên người ấy).
+ * v0.5 F3 thêm tin gia đình (người thân sinh, mất, giúp, chia của), xã giao, cưới hỏi, và tin đồn người quen mất.
+ */
+const PEOPLE_PREFIXES = ['log.npc.', 'log.kin.', 'log.social.', 'log.marry.'] as const;
+export const isPeopleNews = (e: LogEntry): boolean =>
+  PEOPLE_PREFIXES.some((p) => e.key.startsWith(p)) || e.key === 'log.rumor.death' || (e.key.startsWith('event.') && e.params.name !== undefined);
 /** Tin sinh, mất của người chưa quen: việc thường ngày, gập cả ở năm mới nhất. Người đã gặp mất là việc lớn, không gập. */
 const isNeighbourNews = (e: LogEntry): boolean => e.importance === 'minor' && e.key.startsWith('log.npc.');
 

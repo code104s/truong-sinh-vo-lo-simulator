@@ -2,7 +2,7 @@ import { t } from '@tsvl/content';
 import { birthplaceId, regionId, type Birthplace, type LogEntry } from '@tsvl/shared';
 import { firstOpenChoice, Life } from '@tsvl/sim';
 import { describe, expect, it } from 'vitest';
-import { departedPeople, eventOf, turningPoints } from '../src/app/summary';
+import { departedPeople, eventOf, legacyRows, turningPoints } from '../src/app/summary';
 
 const MISSING = /⟨|\{\w+\}/;
 
@@ -68,5 +68,46 @@ describe('những người đã đi trước (v0.4 F4)', () => {
       found += d.length;
     }
     expect(found).toBeGreaterThan(0);
+  });
+});
+
+describe('di sản (v0.5 F4)', () => {
+  const base = { spouse: null, children: [], friends: 0, enemies: 0, reputation: 'unknown' as const };
+  const text = (r: ReturnType<typeof legacyRows>[number]) => t(r.value, r.params);
+
+  it('vợ/chồng gọi theo giới người chơi; đã mất thì ghi; chưa cưới thì "Không lập gia đình"', () => {
+    expect(legacyRows({ ...base, spouse: { name: 'Lý Thị Hoa', alive: true } }, 'male')[0]).toMatchObject({ label: 'ui.summary.wife' });
+    expect(text(legacyRows({ ...base, spouse: { name: 'Lý Thị Hoa', alive: false } }, 'male')[0]!)).toBe('Lý Thị Hoa (đã mất)');
+    expect(legacyRows({ ...base, spouse: { name: 'Trần An', alive: true } }, 'female')[0]).toMatchObject({ label: 'ui.summary.husband' });
+    expect(text(legacyRows(base, null)[0]!)).toBe('Không lập gia đình');
+  });
+
+  it('con cái: còn sống trên tổng số, tên người còn sống; bạn, kẻ thù, tiếng tăm có sắc', () => {
+    const rows = legacyRows({ ...base, children: [{ name: 'An', alive: true }, { name: 'Bình', alive: false }, { name: 'Chi', alive: true }], friends: 3, enemies: 1, reputation: 'respected' }, 'male');
+    expect(text(rows[1]!)).toBe('2 còn sống / 3 người');
+    expect(rows[1]!.note).toBe('An, Chi');
+    expect(rows.slice(2).map((r) => [text(r), r.tone ?? null])).toEqual([['3 người', null], ['1 người', 'bad'], [t('reputation.respected'), 'good']]);
+    expect(text(legacyRows(base, 'male')[1]!)).toBe('Không có con');
+  });
+
+  it('người thân mất cũng là người đã đi trước', () => {
+    const ms: LogEntry[] = [{ tick: 700, key: 'log.kin.death', params: { role: 'kin.mother', name: 'La Thị Thục', age: 58, cause: 'death.illness' }, importance: 'major' }];
+    expect(departedPeople(ms, 0)).toMatchObject([{ name: 'La Thị Thục', age: 58, playerAge: 19 }]);
+    expect(t(ms[0]!.key, ms[0]!.params)).not.toMatch(MISSING);
+  });
+
+  it('đời thật: mọi dòng di sản dịch được', () => {
+    const bp: Birthplace = { id: birthplaceId('r0/c0'), name: 'Phố Kỳ', nameHan: '浦岐', kind: 'village', cell: { x: 0, y: 0 }, county: 0 };
+    const life = Life.create({ worldSeed: 'legacy', regionId: regionId('r0'), birthplaceId: bp.id, lifeSeed: 1 }, bp);
+    while (life.alive) {
+      if (life.view().canAct && !life.active) life.setPlan({ slots: [{ action: 'action.farm' }, { action: 'action.forage' }, { action: 'action.rest' }] });
+      const r = life.advance('month');
+      if (r.status === 'event') life.choose(r.pending.instance, firstOpenChoice(r.pending));
+    }
+    const s = life.summary();
+    for (const r of legacyRows(s.legacy, life.view().gender)) {
+      expect(t(r.label), r.label).not.toMatch(MISSING);
+      expect(text(r), r.value).not.toMatch(MISSING);
+    }
   });
 });

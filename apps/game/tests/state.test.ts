@@ -10,7 +10,7 @@ const map = { W: 1, H: 1, origin: { x: 0, y: 0 }, kmPerCell: 6, elevation: new F
 const region = { id: regionId('r0'), name: 'Vị Kinh Châu', nameHan: '渭京州', realmName: 'Lương', kmPerCell: 6, landKm2: 1 };
 const world: WorkerMessage = { type: 'WORLD', reqId: 1, worldSeed: 's', region, map, birthplaces: [] };
 const character = { name: 'A', alive: true } as CharacterView;
-const state: WorkerMessage = { type: 'STATE', reqId: 2, date: { tick: 1, year: 1, month: 1, tenDay: 1, season: 'spring' }, character, running: false, plan: null, active: null, slotIndex: 1, actions: [], travel: [], market: null, pending: null, people: [] };
+const state: WorkerMessage = { type: 'STATE', reqId: 2, date: { tick: 1, year: 1, month: 1, tenDay: 1, season: 'spring' }, character, running: false, plan: null, active: null, slotIndex: 1, actions: [], travel: [], market: null, pending: null, people: [], circle: [] };
 const entry = { tick: 1, key: 'log.birth', params: {}, importance: 'major' as const };
 
 describe('máy trạng thái màn', () => {
@@ -20,6 +20,14 @@ describe('máy trạng thái màn', () => {
     expect(s.people).toEqual([npc]);
     s = run([{ type: 'newLifeStart' }], s);
     expect(s.people).toEqual([]);
+  });
+
+  it('v0.5: STATE mang người thân, người quen ở mọi quận; đời mới thì xóa', () => {
+    const mother = { id: 'n4', name: 'Lý Thị Hoa', gender: 'female' as const, ageYears: 40, occupation: 'occupation.farmer', healthBand: 'healthy' as const, portrait: { ageBand: 'adult' as const, class: 'common' as const, key: 'n4' }, kin: 'mother' as const };
+    let s = run([msg({ ...(state as Extract<WorkerMessage, { type: 'STATE' }>), circle: [mother] })]);
+    expect(s.circle).toEqual([mother]);
+    s = run([{ type: 'newLifeStart' }], s);
+    expect(s.circle).toEqual([]);
   });
 
     it('tải save của bản sim khác: báo như save bản cũ, về màn chính', () => {
@@ -79,7 +87,7 @@ describe('máy trạng thái màn', () => {
     expect(s.interrupt).toBeNull();
     s = run([msg({ type: 'INTERRUPT', reqId: 5, entry }), { type: 'advanceStart' }], s);
     expect(s.interrupt).toBeNull();
-    const summary = { config: { worldSeed: 's', regionId: regionId('r0'), birthplaceId: birthplaceId('r0/c1') }, name: 'A', birthTick: 0, deathTick: 9, ageYears: 0, cause: 'illness' as const, causeDetail: 'illness.cold', birthplaceId: birthplaceId('r0/c1'), milestones: [], estate: { money: 0, grain: 0, landMu: 0, tenure: 'none' as const }, hungerYears: 0, digest: 'x' };
+    const summary = { config: { worldSeed: 's', regionId: regionId('r0'), birthplaceId: birthplaceId('r0/c1') }, name: 'A', birthTick: 0, deathTick: 9, ageYears: 0, cause: 'illness' as const, causeDetail: 'illness.cold', birthplaceId: birthplaceId('r0/c1'), milestones: [], estate: { money: 0, grain: 0, landMu: 0, tenure: 'none' as const }, hungerYears: 0, legacy: { spouse: null, children: [], friends: 0, enemies: 0, reputation: 'unknown' as const }, digest: 'x' };
     s = run([{ type: 'hasSave', value: true }, msg({ type: 'DIED', reqId: 4, summary })], s);
     expect(s.screen).toBe('summary');
     expect(s.running).toBe(false);

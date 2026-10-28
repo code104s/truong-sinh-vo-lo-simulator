@@ -12,7 +12,7 @@ import { ActionPlanner } from './ActionPlanner';
 import { Chronicle } from './Chronicle';
 import { EventCard } from './EventCard';
 import { MarketDialog, MarketPanel } from './Market';
-import { PeoplePanel } from './People';
+import { CirclePanel, PeoplePanel } from './People';
 import { StatusBar } from './StatusBar';
 import { TravelDialog } from './TravelDialog';
 
@@ -38,6 +38,8 @@ interface Props {
   market: MarketView | null; onTrade: (grain: number) => void;
   /** Người có tên ở quận đang đứng (v0.4 F1). */
   people: NpcView[];
+  /** Người thân, người quen ở mọi quận (v0.5 F1). */
+  circle: NpcView[];
 }
 
 const copyPlan = (p: MonthPlan | null): MonthPlan => (p ? { slots: p.slots.map((s) => ({ ...s })) as MonthPlan['slots'] } : defaultPlan());
@@ -85,7 +87,7 @@ function Dossier({ c, world, children }: { c: CharacterView; world: WorldInfo | 
   );
 }
 
-export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview, pending, onChoose, market, onTrade, people }: Props) {
+export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview, pending, onChoose, market, onTrade, people, circle }: Props) {
   const [travelOpen, setTravelOpen] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);
   const place = world?.map.counties[c.location]?.name ?? '';
@@ -110,7 +112,7 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
             <main class="chronicle">
               {c.canAct
                 ? <ActionPlanner plan={plan} draft={draft} active={active} slotIndex={date.tenDay} actions={actions} travel={travel} world={world} locked={lock}
-                    household={c.household} tick={date.tick}
+                    household={c.household} tick={date.tick} people={people} circle={circle}
                     onDraft={setDraft} onApply={() => onPlan(draft)} onUndo={() => setDraft(copyPlan(plan))} />
                 : <p class="hint childhood-hint">{t('ui.plan.childhood')}</p>}
               {interrupt && (
@@ -131,6 +133,7 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
             </main>
             <Dossier c={c} world={world}>
               {market && <MarketPanel market={market} place={place} locked={lock} onOpen={() => setMarketOpen(true)} />}
+              <CirclePanel circle={circle} people={people} place={place} />
               <PeoplePanel people={people} place={place} />
             </Dossier>
           </div>

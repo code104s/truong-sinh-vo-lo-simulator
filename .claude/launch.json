@@ -4,8 +4,29 @@
     {
       "name": "game",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev", "--", "--port", "5173", "--strictPort"],
+      "runtimeArgs": [
+        "dev",
+        "--",
+        "--port",
+        "5173",
+        "--strictPort"
+      ],
       "port": 5173
+    },
+    {
+      "name": "game-prod",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@tsvl/game",
+        "exec",
+        "vite",
+        "preview",
+        "--port",
+        "4173",
+        "--strictPort"
+      ],
+      "port": 4173
     }
   ]
 }

@@ -1,9 +1,10 @@
 import { t } from '@tsvl/content';
 import { GRAIN_PER_DOU, type CharacterView, type LifeSummary } from '@tsvl/shared';
+import { Fragment } from 'preact';
 import { useState } from 'preact/hooks';
 import { logText, shortDate } from '../app/format';
 import type { WorldInfo } from '../app/state';
-import { departedPeople, turningPoints } from '../app/summary';
+import { departedPeople, legacyRows, turningPoints } from '../app/summary';
 import { BrushLabel, InkLandscape, Portrait, Scroll, Seal } from '../ui/ink';
 import { PORTRAIT_MIN_AGE, portraitOf } from '../ui/portraits';
 import { LogLine } from './LifeScreen';
@@ -22,6 +23,7 @@ export function SummaryScreen({ summary: s, character, world, onBack }: { summar
   const departed = departedPeople(s.milestones, s.birthTick);
   const [tab, setTab] = useState<Tab>(turns.length ? 'turning' : 'milestones');
   const e = s.estate;
+  const legacy = legacyRows(s.legacy, character?.gender ?? null);
   const land = e.landMu > 0 ? `${t('ui.hud.mu', { mu: e.landMu })} · ${t(`tenure.${e.tenure}`)}` : e.tenure === 'tenant' ? t('tenure.tenant') : t('ui.hud.no_land');
   return (
     <div class="screen ink-screen full summary">
@@ -45,6 +47,20 @@ export function SummaryScreen({ summary: s, character, world, onBack }: { summar
                 <dd class={s.hungerYears > 0 ? 'hungry' : ''}>{s.hungerYears > 0 ? t('ui.summary.hunger_years', { count: s.hungerYears }) : t('ui.summary.hunger_none')}</dd>
                 <dt>{t('ui.summary.turning')}</dt><dd>{t('ui.summary.turning_count', { count: turns.length })}</dd>
                 <dt>{t('ui.summary.departed')}</dt><dd>{t('ui.summary.departed_count', { count: departed.length })}</dd>
+              </dl>
+            </div>
+            <div class="estate legacy">
+              <span class="dossier-k">{t('ui.summary.legacy')}</span>
+              <dl class="attrs">
+                {legacy.map((r) => (
+                  <Fragment key={r.label}>
+                    <dt>{t(r.label)}</dt>
+                    <dd class={r.tone ? `tone-${r.tone}` : undefined}>
+                      {t(r.value, r.params)}
+                      {r.note && <span class="legacy-note muted small">{r.note}</span>}
+                    </dd>
+                  </Fragment>
+                ))}
               </dl>
             </div>
             <p class="muted tiny">{t('ui.summary.digest', { digest: s.digest })}</p>

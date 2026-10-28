@@ -12,6 +12,8 @@ export const ACTION_CHAR: Record<string, { char: string; tone: SealTone }> = {
   'action.hunt': { char: '獵', tone: 'ink' }, 'action.trade': { char: '商', tone: 'ink' }, 'action.study': { char: '學', tone: 'ink' },
   'action.train': { char: '武', tone: 'ink' }, 'action.rest': { char: '休', tone: 'jade' }, 'action.heal': { char: '醫', tone: 'jade' },
   'action.travel': { char: '行', tone: 'red' },
+  // Xã giao (v0.5)
+  'action.visit': { char: '訪', tone: 'jade' }, 'action.ask_help': { char: '求', tone: 'ink' }, 'action.propose': { char: '婚', tone: 'red' },
 };
 
 /** Ấn triện cho một mục nhật ký theo khóa nội dung: chữ và màu. */
@@ -30,5 +32,14 @@ export function logSeal(e: LogEntry): { char: string; tone: SealTone } | null {
   if (e.key === 'log.world.famine' || e.key === 'log.world.harvest_bad') return { char: '荒', tone: 'ochre' };
   if (e.key.startsWith('log.tax.')) return { char: '稅', tone: 'ink' };
   if (e.key === 'log.travel.arrived') return { char: '行', tone: 'ink' };
+  // Quan hệ, gia đình, lời đồn (v0.5 F3)
+  if (e.key === 'log.kin.death') return { char: '喪', tone: 'red' };
+  if (e.key === 'log.kin.birth') return { char: '嬰', tone: 'red' };
+  if (e.key.startsWith('log.marry.wed')) return { char: '婚', tone: 'red' };
+  if (e.key === 'log.marry.refused' || e.key === 'log.social.refused' || e.key === 'log.social.cannot_help') return { char: '拒', tone: 'ink' };
+  if (e.key === 'log.kin.help' || e.key.startsWith('log.social.helped')) return { char: '恩', tone: 'jade' };
+  if (e.key === 'log.social.visit') return { char: '訪', tone: 'jade' };
+  if (e.key === 'log.kin.inherit') return { char: '承', tone: 'ochre' };
+  if (e.key.startsWith('log.rumor.')) return { char: '聞', tone: 'ochre' };
   return null;
 }
