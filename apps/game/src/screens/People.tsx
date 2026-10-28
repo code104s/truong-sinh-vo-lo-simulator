@@ -1,15 +1,16 @@
 import { t } from '@tsvl/content';
-import type { NpcView } from '@tsvl/shared';
+import type { FactionView, NpcView } from '@tsvl/shared';
 import { useEffect, useState } from 'preact/hooks';
+import { memberLabel } from '../app/factions';
 import { circleRows, healthTone, kinKey, peopleRows, relationKeys, relationTone } from '../app/people';
 import { Portrait } from '../ui/ink';
 import { personPortraitOf } from '../ui/portraits';
 
 /**
  * Người trong quận (v0.4 F1, ADR 0016): người có tên ở quận đang đứng, chân dung cố định theo người, tên, tuổi, nghề,
- * sức khỏe; v0.5 thêm vai, quan hệ với mình. Bấm một người thì xem nhanh.
+ * sức khỏe; v0.5 thêm vai, quan hệ với mình; v0.6 F2 thêm thế lực người ấy thuộc về. Bấm một người thì xem nhanh.
  */
-export function PeoplePanel({ people, place }: { people: NpcView[]; place: string }) {
+export function PeoplePanel({ people, place, factions = [] }: { people: NpcView[]; place: string; factions?: FactionView[] }) {
   const [expanded, setExpanded] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const { shown, hidden } = peopleRows(people, expanded);
@@ -19,7 +20,7 @@ export function PeoplePanel({ people, place }: { people: NpcView[]; place: strin
       <span class="dossier-k">{t('ui.people.title', { place, count: people.length })}</span>
       {people.length === 0 ? <p class="muted small">{t('ui.people.none')}</p> : (
         <ul class="people-list">
-          {shown.map((p) => <PersonRow key={p.id} p={p} onOpen={() => setOpen(p.id)} />)}
+          {shown.map((p) => <PersonRow key={p.id} p={p} factions={factions} onOpen={() => setOpen(p.id)} />)}
         </ul>
       )}
       {(hidden > 0 || expanded) && (
@@ -27,7 +28,7 @@ export function PeoplePanel({ people, place }: { people: NpcView[]; place: strin
           {expanded ? t('ui.people.less') : t('ui.people.more', { count: people.length })}
         </button>
       )}
-      {selected && <PersonCard p={selected} place={place} onClose={() => setOpen(null)} />}
+      {selected && <PersonCard p={selected} place={place} factions={factions} onClose={() => setOpen(null)} />}
     </div>
   );
 }
@@ -36,7 +37,7 @@ export function PeoplePanel({ people, place }: { people: NpcView[]; place: strin
  * Người thân, người quen (v0.5 F1, ADR 0017, 0018): ở mọi quận, còn sống — cha mẹ, vợ/chồng, con, anh chị em, rồi người
  * đã qua lại. Người không ở quận đang đứng ghi "ở nơi khác" (người chơi không biết họ đang ở đâu).
  */
-export function CirclePanel({ circle, people, place }: { circle: NpcView[]; people: NpcView[]; place: string }) {
+export function CirclePanel({ circle, people, place, factions = [] }: { circle: NpcView[]; people: NpcView[]; place: string; factions?: FactionView[] }) {
   const [expanded, setExpanded] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const { shown, hidden } = circleRows(circle, expanded);
@@ -47,7 +48,7 @@ export function CirclePanel({ circle, people, place }: { circle: NpcView[]; peop
       <span class="dossier-k">{t('ui.circle.title', { count: circle.length })}</span>
       {circle.length === 0 ? <p class="muted small">{t('ui.circle.none')}</p> : (
         <ul class="people-list">
-          {shown.map((p) => <PersonRow key={p.id} p={p} away={!here.has(p.id)} onOpen={() => setOpen(p.id)} />)}
+          {shown.map((p) => <PersonRow key={p.id} p={p} factions={factions} away={!here.has(p.id)} onOpen={() => setOpen(p.id)} />)}
         </ul>
       )}
       {(hidden > 0 || expanded) && (
@@ -55,14 +56,15 @@ export function CirclePanel({ circle, people, place }: { circle: NpcView[]; peop
           {expanded ? t('ui.people.less') : t('ui.people.more', { count: circle.length })}
         </button>
       )}
-      {selected && <PersonCard p={selected} place={here.has(selected.id) ? place : null} onClose={() => setOpen(null)} />}
+      {selected && <PersonCard p={selected} place={here.has(selected.id) ? place : null} factions={factions} onClose={() => setOpen(null)} />}
     </div>
   );
 }
 
-/** Một dòng người: chân dung, tên, vai hay quan hệ, tuổi, nghề, sức khỏe. */
-function PersonRow({ p, away = false, onOpen }: { p: NpcView; away?: boolean; onOpen: () => void }) {
+/** Một dòng người: chân dung, tên, vai hay quan hệ, tuổi, nghề, thế lực (F2), sức khỏe. */
+function PersonRow({ p, factions, away = false, onOpen }: { p: NpcView; factions: FactionView[]; away?: boolean; onOpen: () => void }) {
   const relations = relationKeys(p);
+  const member = memberLabel(p, factions);
   return (
     <li>
       <button type="button" class="person" onClick={onOpen} aria-label={t('ui.people.view', { name: p.name })}>
@@ -74,7 +76,7 @@ function PersonRow({ p, away = false, onOpen }: { p: NpcView; away?: boolean; on
               {relations.map((k, i) => <span key={k} class={relationTone(k) ? `tone-${relationTone(k)}` : undefined}>{i > 0 ? ' · ' : ''}{t(k)}</span>)}
             </span>
           )}
-          <span class="small muted">{t('ui.people.age', { age: p.ageYears })} · {t(p.occupation)}{away ? ` · ${t('ui.circle.away')}` : ''}</span>
+          <span class="small muted">{t('ui.people.age', { age: p.ageYears })} · {t(p.occupation)}{member ? ` · ${t(member.key, member.params)}` : ''}{away ? ` · ${t('ui.circle.away')}` : ''}</span>
           <span class={`small tone-${healthTone(p.healthBand)}`}>{t(`health.${p.healthBand}`)}</span>
         </span>
       </button>
@@ -86,13 +88,14 @@ function PersonRow({ p, away = false, onOpen }: { p: NpcView; away?: boolean; on
  * Xem nhanh một người: chân dung lớn, những gì người ngoài nhìn thấy được, và quan hệ với mình (dải chữ, không có số).
  * `place` null: người ấy không ở quận đang đứng.
  */
-function PersonCard({ p, place, onClose }: { p: NpcView; place: string | null; onClose: () => void }) {
+function PersonCard({ p, place, factions, onClose }: { p: NpcView; place: string | null; factions: FactionView[]; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   const kin = kinKey(p), b = p.bond;
+  const f = p.faction ? factions.find((x) => x.id === p.faction) : undefined;
   return (
     <div class="palette-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div class="palette person-card" role="dialog" aria-modal="true" aria-label={p.name}>
@@ -107,6 +110,7 @@ function PersonCard({ p, place, onClose }: { p: NpcView; place: string | null; o
             <dt>{t('ui.people.gender')}</dt><dd>{t(`gender.${p.gender}`)}</dd>
             <dt>{t('ui.people.age_k')}</dt><dd>{t('ui.people.age', { age: p.ageYears })}</dd>
             <dt>{t('ui.people.occupation')}</dt><dd>{t(p.occupation)}</dd>
+            {f && <><dt>{t('ui.people.faction')}</dt><dd>{t(f.name.key, f.name.params)}</dd></>}
             <dt>{t('ui.people.health')}</dt><dd class={`tone-${healthTone(p.healthBand)}`}>{t(`health.${p.healthBand}`)}</dd>
             <dt>{t('ui.people.place')}</dt><dd>{place ?? t('ui.circle.away')}</dd>
           </dl>

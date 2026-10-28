@@ -1,5 +1,5 @@
 import { t } from '@tsvl/content';
-import type { AdvanceMode, CalendarDate, CharacterView, LogEntry, MarketView, MonthPlan, ActionOption, ActionProgress, NpcView, PendingEvent, TravelOption, TravelPreview } from '@tsvl/shared';
+import type { AdvanceMode, CalendarDate, CharacterView, FactionId, FactionView, LogEntry, MarketView, MonthPlan, ActionOption, ActionProgress, NpcView, PendingEvent, TravelOption, TravelPreview } from '@tsvl/shared';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { logText } from '../app/format';
@@ -11,8 +11,10 @@ import { InkLandscape, Scroll, Seal } from '../ui/ink';
 import { ActionPlanner } from './ActionPlanner';
 import { Chronicle } from './Chronicle';
 import { EventCard } from './EventCard';
+import { FactionMapDialog } from './FactionMap';
 import { MarketDialog, MarketPanel } from './Market';
 import { CirclePanel, PeoplePanel } from './People';
+import { FactionPanel } from './Factions';
 import { StatusBar } from './StatusBar';
 import { TravelDialog } from './TravelDialog';
 
@@ -40,6 +42,9 @@ interface Props {
   people: NpcView[];
   /** Người thân, người quen ở mọi quận (v0.5 F1). */
   circle: NpcView[];
+  /** Thế lực còn sống và người giữ mỗi quận (v0.6 F1: bản đồ thế lực). */
+  factions: FactionView[];
+  control: (FactionId | null)[];
 }
 
 const copyPlan = (p: MonthPlan | null): MonthPlan => (p ? { slots: p.slots.map((s) => ({ ...s })) as MonthPlan['slots'] } : defaultPlan());
@@ -87,8 +92,9 @@ function Dossier({ c, world, children }: { c: CharacterView; world: WorldInfo | 
   );
 }
 
-export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview, pending, onChoose, market, onTrade, people, circle }: Props) {
+export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview, pending, onChoose, market, onTrade, people, circle, factions, control }: Props) {
   const [travelOpen, setTravelOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);
   const place = world?.map.counties[c.location]?.name ?? '';
   const [draft, setDraft] = useState<MonthPlan>(copyPlan(plan));
@@ -128,20 +134,23 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
                 <button class="btn" disabled={lock} onClick={withDraft(() => onAdvance('year'))}>{t('ui.ctrl.year')}</button>
                 <button class="btn primary" disabled={lock} onClick={withDraft(onRun)}>{t('ui.ctrl.until')}</button>
                 <button class="btn ghost" disabled={lock || !c.canAct || !!active || !!actions.find((a) => a.id === 'action.travel')?.locked} onClick={() => setTravelOpen(true)}>{t('ui.travel.open')}</button>
+                <button class="btn ghost" disabled={!world || !!pending} onClick={() => setMapOpen(true)}>{t('ui.map.open')}</button>
                 {running && <span class="muted running">{t('ui.ctrl.running')}</span>}
               </footer>
             </main>
             <Dossier c={c} world={world}>
               {market && <MarketPanel market={market} place={place} locked={lock} onOpen={() => setMarketOpen(true)} />}
-              <CirclePanel circle={circle} people={people} place={place} />
-              <PeoplePanel people={people} place={place} />
+              <FactionPanel factions={factions} control={control} location={c.location} place={place} countyName={(i) => world?.map.counties[i]?.name ?? ''} people={people} circle={circle} />
+              <CirclePanel circle={circle} people={people} place={place} factions={factions} />
+              <PeoplePanel people={people} place={place} factions={factions} />
             </Dossier>
           </div>
         </div>
       </Scroll>
       {pending && <EventCard pending={pending} date={date} busy={busy} onChoose={(choice) => onChoose(pending.instance, choice)} />}
       {marketOpen && market && !pending && <MarketDialog market={market} household={c.household} place={place} canAct={c.canAct} busy={busy || running} onTrade={onTrade} onClose={() => setMarketOpen(false)} />}
-      {travelOpen && world && <TravelDialog world={world} location={c.location} slotIndex={date.tenDay} plan={plan} options={travel} preview={travelPreview} onPreview={onPreview} onPlan={onPlan} onClose={() => setTravelOpen(false)} />}
+      {travelOpen && world && <TravelDialog world={world} location={c.location} slotIndex={date.tenDay} plan={plan} options={travel} preview={travelPreview} onPreview={onPreview} onPlan={onPlan} onClose={() => setTravelOpen(false)} factions={factions} control={control} />}
+      {mapOpen && world && !pending && <FactionMapDialog world={world} location={c.location} factions={factions} control={control} onClose={() => setMapOpen(false)} />}
     </div>
   );
 }

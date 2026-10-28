@@ -1,6 +1,6 @@
 // Màn tổng kết (F5): rút các ngã rẽ từ những mốc lớn. Khóa kết quả sự kiện là `<id sự kiện>.result.<kết quả>`
 // (ADR 0014), nên tách được id sự kiện để ghi tựa. Không có luật game.
-import { ageYearsAt, type ContentId, type Gender, type LifeSummary, type LogEntry, type Tick } from '@tsvl/shared';
+import { ageYearsAt, type ContentId, type FactionFate, type Gender, type LifeSummary, type LogEntry, type Tick } from '@tsvl/shared';
 
 const RESULT = '.result.';
 
@@ -60,3 +60,13 @@ export function legacyRows(legacy: LifeSummary['legacy'], gender: Gender | null)
     },
   ];
 }
+
+/** Thứ tự số phận trong "Thế sự một đời" (v0.6 F4): tan rã, thịnh lên, suy đi, vẫn đứng. */
+const FATE_ORDER: Record<FactionFate, number> = { gone: 0, rose: 1, fell: 2, endured: 3 };
+export type AffairsRow = LifeSummary['legacy']['factions'][number];
+
+/** Thế lực đã thấy trong đời theo số phận; cùng số phận thì theo thứ tự thấy lần đầu (sim gửi). */
+export function affairsRows(factions: LifeSummary['legacy']['factions']): AffairsRow[] {
+  return factions.map((f, i) => ({ f, i })).sort((a, b) => FATE_ORDER[a.f.fate] - FATE_ORDER[b.f.fate] || a.i - b.i).map(({ f }) => f);
+}
+

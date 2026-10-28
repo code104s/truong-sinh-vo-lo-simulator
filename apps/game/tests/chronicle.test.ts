@@ -1,6 +1,6 @@
 import type { LogEntry } from '@tsvl/shared';
 import { describe, expect, it } from 'vitest';
-import { groupByYear, isPeopleNews, visibleItems } from '../src/app/chronicle';
+import { CHRONICLE_FILTERS, groupByYear, isAffairsNews, isPeopleNews, visibleItems } from '../src/app/chronicle';
 import { planDirty } from '../src/app/plan';
 import { logSeal } from '../src/ui/icons';
 
@@ -84,5 +84,28 @@ describe('tin quan hệ, gia đình, lời đồn trong biên niên (v0.5 F3)', 
   it('mỗi tin quan hệ, gia đình, lời đồn có ấn triện', () => {
     for (const key of [...keys, 'log.rumor.famine', 'log.rumor.drought', 'log.rumor.flood', 'log.rumor.locust', 'log.rumor.epidemic']) expect(logSeal(e(1, 'minor', key)), key).not.toBeNull();
     expect(logSeal(e(1, 'minor', 'log.rumor.flood'))!.char).toBe('聞');
+  });
+});
+
+describe('lọc "Thế sự" (v0.6 F3)', () => {
+  const at = (key: string, importance: 'major' | 'minor' = 'minor') => ({ tick: 40, key, params: { place: 'Vị Kinh', surname: 'Lương', county: 'Vị Kinh' }, importance });
+  it('chỉ tin thế lực: tin thế sự, tin đồn thế lực, kết quả sự kiện thế lực; không gập', async () => {
+    const { hasKey } = await import('@tsvl/content');
+    const log = [at('log.faction.bandits_founded', 'major'), at('log.rumor.seized_clan'), at('log.rumor.famine'), at('event.corvee_levy.result.go', 'major'), at('log.harvest.own'), at('log.faction.campaign_won')];
+    expect(log.map(isAffairsNews)).toEqual([true, true, false, true, false, true]);
+    const [g] = groupByYear(log, 0);
+    expect(visibleItems(g!, 'affairs', false, false)).toMatchObject({ folded: 0 });
+    expect(visibleItems(g!, 'affairs', false, false).items.map((it) => it.entry.key)).toEqual(['log.faction.campaign_won', 'event.corvee_levy.result.go', 'log.rumor.seized_clan', 'log.faction.bandits_founded']);
+    expect(CHRONICLE_FILTERS).toContain('affairs');
+    for (const k of ['ui.chron.affairs', 'ui.chron.affairs_empty']) expect(hasKey(k), k).toBe(true);
+    for (const k of ['bandits', 'clan', 'guild'].flatMap((x) => [`log.faction.${x}_founded`, `log.faction.${x}_ended`]).concat(['log.faction.seized_bandits', 'log.faction.seized_clan', 'log.faction.retaken', 'log.faction.campaign_won', 'log.faction.campaign_lost'])) expect(hasKey(k), k).toBe(true);
+  });
+});
+
+describe('biểu tượng tin thế sự (v0.6 F3)', () => {
+  it('cướp triện đỏ, quan phủ triện mực, họ lớn, thương hội triện vàng đất', () => {
+    expect(logSeal(e(1, 'major', 'log.faction.seized_bandits'))).toEqual({ char: '匪', tone: 'red' });
+    expect(logSeal(e(1, 'minor', 'log.faction.campaign_lost'))).toEqual({ char: '官', tone: 'ink' });
+    expect(logSeal(e(1, 'minor', 'log.faction.guild_founded'))).toEqual({ char: '勢', tone: 'ochre' });
   });
 });

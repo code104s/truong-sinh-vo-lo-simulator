@@ -2,7 +2,7 @@ import { t } from '@tsvl/content';
 import { birthplaceId, regionId, type Birthplace, type LogEntry } from '@tsvl/shared';
 import { firstOpenChoice, Life } from '@tsvl/sim';
 import { describe, expect, it } from 'vitest';
-import { departedPeople, eventOf, legacyRows, turningPoints } from '../src/app/summary';
+import { affairsRows, departedPeople, eventOf, legacyRows, turningPoints } from '../src/app/summary';
 
 const MISSING = /⟨|\{\w+\}/;
 
@@ -72,7 +72,7 @@ describe('những người đã đi trước (v0.4 F4)', () => {
 });
 
 describe('di sản (v0.5 F4)', () => {
-  const base = { spouse: null, children: [], friends: 0, enemies: 0, reputation: 'unknown' as const };
+  const base = { spouse: null, children: [], friends: 0, enemies: 0, reputation: 'unknown' as const, factions: [] };
   const text = (r: ReturnType<typeof legacyRows>[number]) => t(r.value, r.params);
 
   it('vợ/chồng gọi theo giới người chơi; đã mất thì ghi; chưa cưới thì "Không lập gia đình"', () => {
@@ -109,5 +109,15 @@ describe('di sản (v0.5 F4)', () => {
       expect(t(r.label), r.label).not.toMatch(MISSING);
       expect(text(r), r.value).not.toMatch(MISSING);
     }
+  });
+});
+
+describe('thế sự một đời (v0.6 F4)', () => {
+  it('xếp theo số phận: tan rã, thịnh lên, suy đi, vẫn đứng; cùng số phận theo thứ tự thấy; đủ chữ', async () => {
+    const { hasKey } = await import('@tsvl/content');
+    const f = (kind: 'government' | 'clan' | 'guild' | 'bandits', fate: 'rose' | 'fell' | 'gone' | 'endured', place: string) => ({ name: { key: `faction.${kind}.name`, params: { place, surname: 'Lương' } }, kind, fate });
+    const rows = affairsRows([f('government', 'endured', 'A'), f('bandits', 'gone', 'B'), f('clan', 'rose', 'C'), f('guild', 'gone', 'D'), f('clan', 'fell', 'E')]);
+    expect(rows.map((r) => r.name.params.place)).toEqual(['B', 'D', 'C', 'E', 'A']);
+    for (const k of ['ui.summary.affairs', 'ui.summary.affairs_count', 'ui.summary.affairs_none', 'faction.fate.rose', 'faction.fate.fell', 'faction.fate.gone', 'faction.fate.endured']) expect(hasKey(k), k).toBe(true);
   });
 });

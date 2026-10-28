@@ -33,8 +33,17 @@ export function groupByYear(log: readonly LogEntry[], birthTick: Tick): YearGrou
   return groups;
 }
 
-export type ChronicleFilter = 'all' | 'major' | 'people';
-export const CHRONICLE_FILTERS: readonly ChronicleFilter[] = ['all', 'major', 'people'];
+export type ChronicleFilter = 'all' | 'major' | 'people' | 'affairs';
+export const CHRONICLE_FILTERS: readonly ChronicleFilter[] = ['all', 'major', 'people', 'affairs'];
+
+/**
+ * Thế sự (v0.6 F3): tin thế lực ở quận đang đứng, tin đồn thế lực từ quận kề, quan mới nhậm chức, và kết quả các sự kiện
+ * thế lực (bắt phu, lệ phí, phát chẩn, cướp, đoàn buôn, kiện ruộng, họ lớn dạm hỏi).
+ */
+const AFFAIRS_RUMORS = ['log.rumor.bandits', 'log.rumor.seized_bandits', 'log.rumor.seized_clan', 'log.rumor.retaken', 'log.rumor.magistrate'] as const;
+const AFFAIRS_EVENTS = ['corvee_levy', 'greedy_levy', 'relief_line', 'bandit_lure', 'bandit_raid', 'report_bandits', 'join_caravan', 'land_suit', 'clan_match'].map((id) => `event.${id}.`);
+export const isAffairsNews = (e: LogEntry): boolean =>
+  e.key.startsWith('log.faction.') || (AFFAIRS_RUMORS as readonly string[]).includes(e.key) || AFFAIRS_EVENTS.some((p) => e.key.startsWith(p));
 
 /**
  * Tin về người có tên (v0.4 F2): sinh, mất của người quanh mình, và sự kiện có người thật (kết quả mang tên người ấy).
@@ -50,11 +59,13 @@ const isNeighbourNews = (e: LogEntry): boolean => e.importance === 'minor' && e.
  * Những dòng hiện cho một năm:
  * - "Chuyện lớn": chỉ việc lớn;
  * - "Người quanh mình": chỉ tin về người có tên, không gập;
+ * - "Thế sự" (v0.6 F3): chỉ tin thế lực, không gập;
  * - "Tất cả": năm mới nhất hiện đủ, trừ tin sinh, mất của người chưa quen (F2); năm cũ gập mọi việc thường ngày. Người
  *   chơi mở năm nào thì năm đó hiện đủ.
  */
 export function visibleItems(g: YearGroup, filter: ChronicleFilter, latest: boolean, unfolded: boolean): { items: ChronicleItem[]; folded: number } {
   if (filter === 'people') return { items: g.items.filter((it) => isPeopleNews(it.entry)), folded: 0 };
+  if (filter === 'affairs') return { items: g.items.filter((it) => isAffairsNews(it.entry)), folded: 0 };
   if (filter === 'major') return { items: g.items.filter((it) => it.entry.importance === 'major'), folded: 0 };
   if (unfolded) return { items: g.items, folded: 0 };
   const hide = latest ? isNeighbourNews : (e: LogEntry) => e.importance !== 'major';

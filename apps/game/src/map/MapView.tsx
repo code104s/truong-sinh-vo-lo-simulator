@@ -1,4 +1,4 @@
-// Bản đồ vùng chơi: AtlasViewer (vector, nét ở mọi mức phóng) + lớp SVG cho nơi sinh (ADR 0006).
+// Bản đồ vùng chơi: AtlasViewer (vector, nét ở mọi mức phóng) + lớp SVG cho nơi sinh (ADR 0006), lớp "ai kiểm soát" (v0.6 F1).
 import { t } from '@tsvl/content';
 import type { Birthplace, BirthplaceId, RegionMapData, RegionSummary } from '@tsvl/shared';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
@@ -8,6 +8,7 @@ import { buildAtlasVector } from '../cartographer/render/atlas/svg/vector';
 import { AtlasViewer } from '../cartographer/render/atlas/svg/viewer';
 import { smoothRivers } from '../cartographer/render/rivers';
 import { KIND_CHAR } from '../ui/icons';
+import { controlPixels, rgbCss, type ControlLayer } from './control';
 import { countyLines, maskOutline, outsideMaskUrl, regionWorld } from './regionWorld';
 
 /** Điểm ảnh của bản đồ cho mỗi ô ở mức phóng 1. */
@@ -25,6 +26,10 @@ interface Props {
   onSelect: (id: BirthplaceId) => void;
   location?: number;
   route?: number[];
+  /** Lớp "ai kiểm soát" (F1): màu quận theo người giữ, đường bị cướp, thương hội giữ, chú giải. */
+  layer?: ControlLayer | null;
+  /** Đường bị cướp giữ, vẽ cả khi tắt lớp (F3: bản đồ di chuyển ghi đường nguy hiểm). */
+  dangerRoads?: [number, number][];
 }
 
 interface View {
@@ -33,7 +38,7 @@ interface View {
   k: number;
 }
 
-export function MapView({ map, region, seed, birthplaces, selected, onSelect, location, route = [] }: Props) {
+export function MapView({ map, region, seed, birthplaces, selected, onSelect, location, route = [], layer = null, dangerRoads = [] }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const canvasHost = useRef<HTMLDivElement>(null);
   const viewer = useRef<AtlasViewer | null>(null);
@@ -45,6 +50,9 @@ export function MapView({ map, region, seed, birthplaces, selected, onSelect, lo
   const outline = useMemo(() => maskOutline(map), [map]);
   const lines = useMemo(() => countyLines(map), [map]);
   const shade = useMemo(() => outsideMaskUrl(map, [60, 50, 30, 110]), [map]);
+  const fillKey = layer ? JSON.stringify(layer.fill) : '';
+  const controlUrl = useMemo(() => (layer ? pixelsUrl(map.W, map.H, controlPixels(map, layer.fill)) : null), [map, fillKey]);
+  const seatAt = (i: number) => `${map.counties[i]!.seat.x + 0.5},${map.counties[i]!.seat.y + 0.5}`;
 
   // Dựng danh sách vẽ vector một lần cho mỗi bản đồ
   useEffect(() => {
@@ -129,7 +137,10 @@ export function MapView({ map, region, seed, birthplaces, selected, onSelect, lo
         <g transform={g}>
           <g transform={cell}>
             <image href={shade} x={0} y={0} width={map.W} height={map.H} preserveAspectRatio="none" />
+            {controlUrl && <image href={controlUrl} x={0} y={0} width={map.W} height={map.H} preserveAspectRatio="none" class="control-fill" />}
             <path d={lines} class="county-line" />
+            {layer?.guildRoads.map(([a, b]) => <polyline key={`g${a}-${b}`} class="road-guild" points={`${seatAt(a)} ${seatAt(b)}`} />)}
+            {(layer?.banditRoads ?? dangerRoads).map(([a, b]) => <polyline key={`b${a}-${b}`} class="road-bandit" points={`${seatAt(a)} ${seatAt(b)}`} />)}
             <path d={outline} class="region-line" />
             {route.length > 1 && <polyline class="travel-route" points={route.map((i) => `${map.counties[i]!.seat.x + 0.5},${map.counties[i]!.seat.y + 0.5}`).join(' ')} />}
             {birthplaces.map((b) => (
@@ -161,7 +172,35 @@ export function MapView({ map, region, seed, birthplaces, selected, onSelect, lo
           <div>{t(`kind.${hovered.kind}`)}</div>
         </div>
       )}
+      {layer && <ControlLegend layer={layer} />}
       {!ready && <div class="map-wait">…</div>}
     </div>
   );
+}
+
+/** Chú giải lớp "ai kiểm soát": người giữ đất (màu, tên, số quận) và hai loại đường. */
+function ControlLegend({ layer }: { layer: ControlLayer }) {
+  return (
+    <div class="map-legend" onPointerDown={(ev) => ev.stopPropagation()}>
+      <strong>{t('ui.map.legend')}</strong>
+      <ul>
+        {layer.legend.map((e) => (
+          <li key={e.id}><span class="swatch" style={{ background: rgbCss(e.rgb, e.kind === 'government' ? 0.35 : 0.7) }} />{t(e.name.key, e.name.params)}<span class="muted"> · {t('ui.map.counties', { count: e.counties })}</span></li>
+        ))}
+        {layer.banditRoads.length > 0 && <li><span class="swatch road road-bandit" />{t('ui.map.road_bandits')}</li>}
+        {layer.guildRoads.length > 0 && <li><span class="swatch road road-guild" />{t('ui.map.road_guild')}</li>}
+      </ul>
+    </div>
+  );
+}
+
+/** Ảnh mỗi ô một điểm ảnh (trình duyệt làm mịn khi phóng). */
+function pixelsUrl(w: number, h: number, px: Uint8ClampedArray): string {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(w, h);
+  img.data.set(px);
+  ctx.putImageData(img, 0, 0);
+  return c.toDataURL();
 }

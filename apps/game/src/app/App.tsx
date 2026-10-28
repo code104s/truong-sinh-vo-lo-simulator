@@ -154,6 +154,8 @@ export function App({ client }: { client: SimClient }) {
           onTrade={(grain) => { setSaved(false); send({ type: 'TRADE', grain }, 'plan'); }}
           people={s.people}
           circle={s.circle}
+          factions={s.factions}
+          control={s.control}
         />
       )}
       {s.screen === 'summary' && s.summary && <SummaryScreen summary={s.summary} character={s.character} world={s.world} onBack={() => dispatch({ type: 'go', screen: 'menu' })} />}

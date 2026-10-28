@@ -38,8 +38,8 @@ export function Chronicle({ log, birthTick }: { log: LogEntry[]; birthTick: Tick
         </span>
       </div>
       <div class="log">
-        {(years.length === 0 || (filter === 'people' && !years.some((g) => visibleItems(g, filter, false, false).items.length))) && (
-          <p class="muted small">{t(filter === 'people' ? 'ui.chron.people_empty' : 'ui.chron.empty')}</p>
+        {(years.length === 0 || ((filter === 'people' || filter === 'affairs') && !years.some((g) => visibleItems(g, filter, false, false).items.length))) && (
+          <p class="muted small">{t(filter === 'people' ? 'ui.chron.people_empty' : filter === 'affairs' ? 'ui.chron.affairs_empty' : 'ui.chron.empty')}</p>
         )}
         {years.map((g, k) => {
           const { items, folded } = visibleItems(g, filter, k === 0, open.has(g.year));

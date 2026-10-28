@@ -608,6 +608,21 @@ p { margin: 0; }
   .hanging-rod { margin: 0 -10px; }
 }
 .travel-route { fill: none; stroke: var(--cinnabar); stroke-width: .35; stroke-dasharray: 1 .45; pointer-events: none; }
+
+/* —— Lớp "ai kiểm soát" (v0.6 F1) —— */
+.control-fill { pointer-events: none; }
+polyline.road-bandit { fill: none; stroke: var(--cinnabar); stroke-width: .55; stroke-dasharray: .7 .35; stroke-linecap: round; pointer-events: none; }
+.danger-tag { margin-left: 6px; padding: 0 5px; font-size: 12px; color: #f6eee2; background: var(--cinnabar); border-radius: 2px; }
+.danger-note { color: var(--cinnabar); font-weight: 600; }
+polyline.road-guild { fill: none; stroke: var(--ochre); stroke-width: .3; stroke-dasharray: .12 .35; stroke-linecap: round; pointer-events: none; }
+.map-legend { position: absolute; left: 10px; bottom: 10px; z-index: 3; padding: 8px 12px; max-width: min(340px, 70%); max-height: 45%; overflow: auto; cursor: default;
+  background: var(--paper-tex), rgba(241, 237, 229, .94); border: 1px solid rgba(31, 30, 28, .5); box-shadow: 0 4px 10px rgba(0, 0, 0, .15); font-size: 13px; }
+.map-legend ul { list-style: none; margin: 4px 0 0; padding: 0; }
+.map-legend li { display: flex; align-items: center; gap: 6px; line-height: 1.55; }
+.map-legend .swatch { flex: none; width: 14px; height: 12px; border: 1px solid rgba(31, 30, 28, .4); }
+.map-legend .swatch.road { height: 0; border: none; border-top: 3px dashed var(--cinnabar); }
+.map-legend .swatch.road-guild { border-top: 3px dotted var(--ochre); }
+.map-toggle { display: flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }
 .location-ring { fill: none; stroke: var(--jade); stroke-width: .25; pointer-events: none; }
 @media (max-height: 800px) and (min-width: 901px) {
   .planner { padding: 6px 0; gap: 6px; }
@@ -738,6 +753,9 @@ p { margin: 0; }
 .legacy dd.tone-bad { color: var(--cinnabar); }
 .estate .hungry { color: var(--cinnabar); }
 .summary .date-bar { justify-content: space-between; flex-wrap: wrap; }
+/* Bốn tab (v0.6 F4): không ngắt chữ trong một nút; hàng tab xuống dòng dưới tiêu đề khi cột hẹp */
+.summary .tabs { max-width: 100%; flex-wrap: wrap; }
+.summary .tabs .tab { white-space: nowrap; padding: 6px 7px; }
 .entry.turn .entry-date { line-height: 1.3; }
 .turn-title { display: block; font: 700 15px/1.3 var(--display); color: var(--cinnabar); margin-bottom: 2px; }
 
@@ -775,6 +793,14 @@ p { margin: 0; }
 .person-text .tone-good { color: var(--jade); }
 .person-text .tone-warn { color: var(--ochre); }
 .person-text .tone-bad { color: var(--cinnabar); font-weight: 600; }
+/* —— Thế lực ở {nơi} (v0.6 F2) —— */
+.faction-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.faction { width: 100%; display: flex; align-items: center; gap: 10px; padding: 4px 6px; text-align: left; font: inherit; color: var(--ink); background: transparent; border: 1px solid transparent; cursor: pointer; }
+.faction:hover { background: rgba(255, 255, 255, 0.5); border-color: var(--line); }
+.faction:focus-visible { outline: 2px dashed var(--cinnabar); outline-offset: 1px; }
+.faction .seal { flex: none; }
+.faction-card .section-title { display: inline-flex; align-items: center; gap: 8px; }
+.faction-card > p { margin: 10px 0 0; }
 .people-more { align-self: flex-start; }
 .person-card { width: min(420px, 100%); }
 .person-card-body { display: flex; gap: 16px; align-items: flex-start; }

@@ -41,5 +41,9 @@ export function logSeal(e: LogEntry): { char: string; tone: SealTone } | null {
   if (e.key === 'log.social.visit') return { char: '訪', tone: 'jade' };
   if (e.key === 'log.kin.inherit') return { char: '承', tone: 'ochre' };
   if (e.key.startsWith('log.rumor.')) return { char: '聞', tone: 'ochre' };
+  // Thế sự (v0.6 F3): cướp đỏ, quan phủ mực, họ lớn, thương hội vàng đất
+  if (e.key === 'log.faction.bandits_founded' || e.key === 'log.faction.seized_bandits') return { char: '匪', tone: 'red' };
+  if (e.key.startsWith('log.faction.campaign_') || e.key === 'log.faction.retaken') return { char: '官', tone: 'ink' };
+  if (e.key.startsWith('log.faction.')) return { char: '勢', tone: 'ochre' };
   return null;
 }
