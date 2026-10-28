@@ -1,13 +1,16 @@
-import { type ActionOption, type CalendarDate, type CharacterView, type EventCostTag, type MarketView, type MonthPlan, type PendingEvent, type SettlementKind, type TravelOption } from '@tsvl/shared';
+import { type ActionOption, type CalendarDate, type CharacterView, type EventCostTag, type MarketView, type MonthPlan, type NpcView, type PendingEvent, type PlanSlot, type SettlementKind, type TravelOption } from '@tsvl/shared';
 import { earnPlan, foodWeeks as brainFoodWeeks, GRAIN_RESERVE, hash32, MONEY_RESERVE, Rng, tradeDecision, weakPlan, workChoice, type BrainInput } from '@tsvl/sim';
 
-export const POLICIES = ['lazy', 'balanced', 'overwork', 'scholar', 'wanderer'] as const;
+export const POLICIES = ['lazy', 'balanced', 'overwork', 'scholar', 'wanderer', 'family'] as const;
 export type PolicyName = (typeof POLICIES)[number];
 export interface PolicyContext {
   character: CharacterView; date: CalendarDate; actions: ActionOption[]; travel: TravelOption[];
   settlements: readonly SettlementKind[]; seed: number; active: boolean;
   /** Chợ quận đang đứng (S7); không có thì chiến lược không mua bán. */
   market?: MarketView | null;
+  /** Người trong quận và khóa của ô xã giao nhắm vào họ (v0.5 S8, chiến lược `family`); không có thì không xã giao. */
+  people?: readonly NpcView[];
+  socialLock?: (slot: PlanSlot) => string | null;
 }
 
 /**
@@ -47,7 +50,15 @@ export function policyPlan(name: PolicyName, c: PolicyContext): MonthPlan | null
   const w = workChoice(b);
   const earn = () => { plan = earnPlan(w); };
   if (name !== 'overwork') { const weak = weakPlan(b, w); if (weak) return weak; }
-  if (name === 'balanced') earn();
+  if (name === 'balanced' || name === 'family') earn();
+  // Gia đình (v0.5 S8, Q13): như điều độ, ô nghỉ cuối tháng (tuần thứ ba) dành cho xã giao — nhờ cậy khi túng, cưới
+  // khi đủ thân, không thì sang thăm người hợp đôi cho thân dần. Người trong quận chỉ có trong ngữ cảnh tuần thứ hai, ba
+  if (name === 'family') {
+    const social = familySlot(c);
+    if (social) plan.slots[2] = social;
+    // Đang tìm người thành đôi mà nhà có của dư: thăm cả ô thứ hai, để thân kịp trước khi người ta cưới người khác
+    if (social?.action === 'action.visit' && household(c).foodWeeks >= FAMILY_COURT_WEEKS) plan.slots[1] = social;
+  }
   if (name === 'overwork') plan.slots = [{ action: w.first }, { action: w.second }, { action: w.work }];
   if (name === 'scholar') {
     // Học phải trả học phí; một ô làm thuê tự nuôi việc học. Chưa đủ một năm ăn thì đi làm; nơi này không có trường thì lên trấn.
@@ -70,6 +81,33 @@ export function policyPlan(name: PolicyName, c: PolicyContext): MonthPlan | null
     }
   }
   return plan;
+}
+
+/** Túng: của trong nhà (kho cộng tiền) đủ ăn dưới chừng ấy tuần thì đi nhờ người. */
+export const FAMILY_ASK_WEEKS = 8;
+/** Của trong nhà đủ ăn từ chừng ấy tuần thì thăm người hợp đôi hai ô mỗi tháng. */
+export const FAMILY_COURT_WEEKS = 52;
+const CLOSENESS_RANK: Record<string, number> = { stranger: 0, acquaintance: 1, friend: 2, close: 3 };
+
+/** Ô xã giao của người chơi máy `family`, hoặc null. Chỉ đọc view và khóa sim công bố (không đoán ai đã có gia đình). */
+function familySlot(c: PolicyContext): PlanSlot | null {
+  const lock = c.socialLock, people = c.people ?? [];
+  if (!lock || !people.length || !household(c).independent) return null;
+  const open = (action: string) => people.filter((p) => lock({ action, person: p.id }) === null);
+  if (household(c).foodWeeks < FAMILY_ASK_WEEKS) {
+    // Người thân trước, rồi người thân thiết hơn
+    const helpers = open('action.ask_help').sort((a, b) => Number(!a.kin) - Number(!b.kin) || (CLOSENESS_RANK[b.bond?.closeness ?? 'stranger']! - CLOSENESS_RANK[a.bond?.closeness ?? 'stranger']!));
+    if (helpers.length) return { action: 'action.ask_help', person: helpers[0]!.id };
+  }
+  // Khóa cưới hỏi của từng người, tính một lần cho cả hai bước dưới
+  const propose = people.map((p) => lock({ action: 'action.propose', person: p.id }));
+  const wed = people.find((_, i) => propose[i] === null);
+  if (wed) return { action: 'action.propose', person: wed.id };
+  // Người hợp đôi mà chưa đủ thân: sang thăm người thân thiết nhất (bằng nhau thì người đứng trước)
+  const suitors = people.filter((p, i) => propose[i] === 'lock.not_close' && lock({ action: 'action.visit', person: p.id }) === null);
+  if (!suitors.length) return null;
+  const best = suitors.reduce((a, b) => (CLOSENESS_RANK[b.bond?.closeness ?? 'stranger']! > CLOSENESS_RANK[a.bond?.closeness ?? 'stranger']! ? b : a));
+  return { action: 'action.visit', person: best.id };
 }
 
 /** Mua bán lương thực đầu tháng (lệnh TRADE, không tốn ô). "Lười" không mua bán. */

@@ -2,9 +2,10 @@
 import { GRAIN_PER_DOU, TICKS_PER_YEAR } from '@tsvl/shared';
 import { idiv } from '../../core/math';
 import { HARVEST_MONTH, sellPrice, supplyOf } from '../../economy/market';
-import { heal, loseGrain, moveGrain, occupy, payTo, receiveFrom, spendStamina, wound, sellGrainTo } from '../effects';
-import type { EventDef } from '../engine';
-import { figure, here, inVillage, man, month, nearestTown, percentOf, personality, sellValue, castOr, nearestWith, npcName } from './common';
+import { giveGrainTo, heal, loseGrain, moveGrain, occupy, payTo, receiveFrom, spendStamina, wound, sellGrainTo } from '../effects';
+import type { EventContext, EventDef } from '../engine';
+import { kinRole } from '../../npc/family';
+import { figure, here, inVillage, man, month, nearestTown, percentOf, personality, sellValue, castOr, nearestWith, npcName, npcAge, peopleHere, pickOne } from './common';
 
 /** Đấu đổi tay mỗi lần mua bán trong sự kiện (20 đấu = 200 thăng). */
 export const DEAL_GRAIN = 200;
@@ -15,6 +16,11 @@ export const LOAN_PRINCIPAL = 300;
 export const LOAN_INTEREST_PCT = 36;
 export const POLICE_FEE = 20;
 export const THEFT_PCT = 20;
+/** Kẻ trộm có tên (v0.5 S7): lương mất vào kho người ấy; không có tên thì mất hẳn. */
+const stolen = (ctx: EventContext): number => {
+  const g = percentOf(ctx.c.household.grain, THEFT_PCT);
+  return ctx.npc ? giveGrainTo(ctx, ctx.npc, g) : loseGrain(ctx, g);
+};
 export const RENT_HIKE_PCT = 10;
 export const RENT_GIFT = 60;
 
@@ -51,7 +57,8 @@ export const grainBroker: EventDef = {
   category: 'economy',
   weight: (ctx) => ((month(ctx) === 9 || month(ctx) === 10) && inVillage(ctx) && ctx.c.household.grain >= 300 ? 150_000 : 0),
   cooldownTicks: 30,
-  // Người thật (S6): thương nhân NPC gần nhất đủ bạc mua; mua bán đi qua túi, kho người ấy
+  // Người thật (S6): thương nhân NPC gần nhất đủ bạc mua; mua bán đi qua túi, kho người ấy. Bán thì quen mặt, tin nhau hơn
+  bonds: { sell: { closeness: 5, trust: 5 } },
   cast: (ctx) => nearestWith(ctx, (n) => n.occupation === 'merchant' && n.character.household.money >= sellValue(here(ctx), DEAL_GRAIN, BROKER_PCT)),
   variant: (ctx) => (ctx.npc ? 'named' : null),
   params: (ctx) => ({ offer: percentOf(sellPrice(here(ctx)), BROKER_PCT), ...npcName(ctx) }),
@@ -91,6 +98,8 @@ export const riceSpike: EventDef = {
     return ctx.age >= 14 && (s === 'scarce' || s === 'famine') && ctx.c.household.grain >= 300 ? 60_000 : 0;
   },
   cooldownTicks: 36,
+  // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
+  reputation: { share: 8, hoard: -5, hoard_robbed: -5 },
   params: (ctx) => ({ price: here(ctx).price }),
   choices: [
     {
@@ -144,15 +153,21 @@ export const granaryTheft: EventDef = {
   category: 'economy',
   weight: (ctx) => (ctx.age >= 12 && ctx.c.household.grain >= 300 ? 8_000 : 0),
   cooldownTicks: 108,
-  figure: (_ctx, rng) => figure(rng, 'young', 'poor'),
-  params: () => ({ fee: POLICE_FEE }),
+  // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
+  reputation: { chase_caught: 5 },
+  // Người thật (v0.5 S7): một người nghèo, đang đói ở quận này. Bị bắt quả tang thì người ấy thành thù
+  bonds: { chase_caught: { hostility: 30 }, report_found: { hostility: 30 } },
+  cast: (ctx, rng) => pickOne(peopleHere(ctx).filter((n) => { const a = npcAge(ctx, n); return a >= 16 && a < 46 && n.character.household.hunger > 0 && kinRole(ctx.c, n) === null; }), rng),
+  variant: (ctx) => (ctx.npc ? 'named' : null),
+  figure: castOr((_ctx, rng) => figure(rng, 'young', 'poor')),
+  params: (ctx) => ({ ...npcName(ctx), fee: POLICE_FEE }),
   choices: [
     {
       id: 'chase', costs: ['risk'],
       apply: (ctx, rng) => {
         if (rng.chance(400_000 + ctx.c.luck * 20_000)) return { result: 'chase_caught' };
         wound(ctx, 1);
-        return { result: 'chase_lost', params: { lost: idiv(loseGrain(ctx, percentOf(ctx.c.household.grain, THEFT_PCT)), GRAIN_PER_DOU) } };
+        return { result: 'chase_lost', params: { lost: idiv(stolen(ctx), GRAIN_PER_DOU) } };
       },
     },
     {
@@ -161,10 +176,10 @@ export const granaryTheft: EventDef = {
       apply: (ctx, rng) => {
         payTo(ctx, ctx.c.location, POLICE_FEE);
         if (rng.chance(400_000)) return { result: 'report_found' };
-        return { result: 'report_lost', params: { lost: idiv(loseGrain(ctx, percentOf(ctx.c.household.grain, THEFT_PCT)), GRAIN_PER_DOU) } };
+        return { result: 'report_lost', params: { lost: idiv(stolen(ctx), GRAIN_PER_DOU) } };
       },
     },
-    { id: 'accept', costs: ['grain'], apply: (ctx) => ({ result: 'accept', params: { lost: idiv(loseGrain(ctx, percentOf(ctx.c.household.grain, THEFT_PCT)), GRAIN_PER_DOU) } }) },
+    { id: 'accept', costs: ['grain'], apply: (ctx) => ({ result: 'accept', params: { lost: idiv(stolen(ctx), GRAIN_PER_DOU) } }) },
   ],
 };
 
@@ -197,6 +212,8 @@ export const taxCollector: EventDef = {
   // Còn nợ thuế đinh (S4) thì quan sai sớm muộn cũng tới
   weight: (ctx) => (ctx.c.household.independent && ctx.c.household.taxDebt > 0 ? 150_000 : 0),
   cooldownTicks: 12,
+  // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
+  reputation: { flee_caught: -10, flee_escaped: -10 },
   params: (ctx) => ({ amount: ctx.c.household.taxDebt }),
   figure: () => man('adult', 'official'),
   choices: [

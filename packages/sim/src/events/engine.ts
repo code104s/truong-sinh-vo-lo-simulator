@@ -7,6 +7,9 @@ import type { CharacterState } from '../life/character';
 import type { PlayerState } from '../life/player';
 import type { EconomyState } from '../economy/market';
 import { newNpcWorld, type NpcState, type NpcWorldState } from '../npc/state';
+import type { Bond } from '../social/bonds';
+import { shiftBond } from '../social/actions';
+import { addReputation, repAt } from '../social/reputation';
 
 /** Mọi thứ một sự kiện được đọc và (qua hàm có sổ cái ở effects.ts) được đổi. */
 export interface EventContext {
@@ -22,6 +25,10 @@ export interface EventContext {
   npcs: NpcWorldState;
   /** Người thật trong chuyện, nếu sự kiện đã chọn được (`cast`); null là người vô danh. */
   npc: NpcState | null;
+  /** Quan hệ của người chơi (v0.5 S4): lựa chọn với người thật đổi quan hệ với người ấy. */
+  bonds: Bond[];
+  /** Tiếng tăm của người chơi theo quận (v0.5 S6): lựa chọn có gắn tiếng cộng vào quận đang đứng. */
+  reputation: number[];
 }
 
 export interface ChoiceOutcome {
@@ -57,6 +64,10 @@ export interface EventDef {
    * `ctx.npc`). Không có người hợp thì null: sự kiện dùng người vô danh như v0.3.
    */
   cast?: (ctx: EventContext, rng: Rng) => NpcState | null;
+  /** Kết quả → tiếng tăm ở quận đang đứng (v0.5 S6, Q9): cứu người, giúp làng (+); trốn thuế, gây gổ, bỏ mặc (−). */
+  reputation?: Readonly<Record<string, number>>;
+  /** Kết quả → đổi quan hệ với người thật trong chuyện (v0.5 S4, ADR 0017); người vô danh thì không có gì. */
+  bonds?: Readonly<Record<string, Partial<Omit<Bond, 'id'>>>>;
   /** 2–4 lựa chọn; lựa chọn cuối là lối ra, không bao giờ bị khóa. */
   choices: ChoiceDef[];
 }
@@ -98,8 +109,8 @@ export function sortedCatalog(defs: readonly EventDef[]): EventDef[] {
 }
 
 /** `npcs`: người có tên của đời (Life truyền vào); bỏ trống thì mọi sự kiện dùng người vô danh. */
-export function makeContext(c: CharacterState, events: EventsState, player: PlayerState, eco: EconomyState, logic: RegionLogic, tick: Tick, npcs: NpcWorldState = newNpcWorld()): EventContext {
-  return { c, events, player, eco, logic, tick, age: ageYearsAt(c.birthTick, tick), npcs, npc: null };
+export function makeContext(c: CharacterState, events: EventsState, player: PlayerState, eco: EconomyState, logic: RegionLogic, tick: Tick, npcs: NpcWorldState = newNpcWorld(), bonds: Bond[] = [], reputation: number[] = []): EventContext {
+  return { c, events, player, eco, logic, tick, age: ageYearsAt(c.birthTick, tick), npcs, npc: null, bonds, reputation };
 }
 
 /** Ngữ cảnh kèm người thật của sự kiện đang chờ (đọc lại theo id, kể cả người đã mất). */
@@ -183,6 +194,9 @@ export function choose(state: EventsState, catalog: readonly EventDef[], ctx: Ev
   const lock = choice.available?.(ctx) ?? null;
   if (lock) return `lựa chọn đang bị khóa (${lock})`;
   const out = choice.apply(ctx, rng);
+  const shift = def.bonds?.[out.result];
+  if (shift && ctx.npc && !ctx.npc.death) shiftBond(ctx.bonds, ctx.npc.id, shift, repAt(ctx.reputation, ctx.c.location));
+  addReputation(ctx.reputation, ctx.c.location, def.reputation?.[out.result] ?? 0);
   state.pending = null;
   log({ key: `${def.id}.result.${out.result}`, params: { ...p.params, ...out.params }, importance: 'major' });
   return null;

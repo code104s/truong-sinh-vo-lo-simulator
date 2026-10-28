@@ -39,8 +39,11 @@ describe('khung NPC (v0.4 Bước 0)', () => {
   it('snapshot có danh sách NPC và luồng npc-world; qua schema; lưu, tải cùng digest', () => {
     const l = life();
     const s = l.snapshot();
-    expect(s.npcs.people).toHaveLength(12 + 20);
-    expect(s.npcs.nextId).toBe(33);
+    // Hạn mức 12 + 20; từ v0.5 có thể thêm người dựng làm cha mẹ người chơi (id sau hạn mức)
+    const extra = s.npcs.nextId - 33;
+    expect(extra).toBeGreaterThanOrEqual(0);
+    expect(extra).toBeLessThanOrEqual(2);
+    expect(s.npcs.people).toHaveLength(12 + 20 + extra);
     expect(Object.keys(s.rng.streams)).toContain('npc-world');
     expect(STREAMS).toContain('npc-world');
     expect(vLifeSnapshot.check(s, '$')).toBeNull();
@@ -62,7 +65,9 @@ describe('khung NPC (v0.4 Bước 0)', () => {
 
 describe('dân số ban đầu (v0.4 S1, ADR 0016)', () => {
   const lives = (n: number) => Array.from({ length: n }, (_, i) => Life.create({ worldSeed: `pop-${i}`, regionId: regionId('r0'), birthplaceId: birthplaceId('r0/c0') }, { id: birthplaceId('r0/c0'), name: 'Làng', nameHan: '村', kind: 'village', cell: { x: 0, y: 0 }, county: 0 }, region));
-  const people = (l: Life) => l.snapshot().npcs.people;
+  // Dân số ban đầu theo hạn mức (id 1..32); từ v0.5 S1, người dựng thêm làm cha mẹ người chơi có id sau đó
+  const seeded = NPC_QUOTA.village + NPC_QUOTA.town;
+  const people = (l: Life) => l.snapshot().npcs.people.filter((n) => Number(n.id.slice(1)) <= seeded);
 
   it('đủ hạn mức mỗi quận (làng 12, trấn 20); id theo thứ tự quận; dân nền trừ đi hạn mức', () => {
     const l = life();
@@ -71,7 +76,9 @@ describe('dân số ban đầu (v0.4 S1, ADR 0016)', () => {
     expect(ps.filter((n) => n.character.home === 1)).toHaveLength(NPC_QUOTA.town);
     expect(ps.map((n) => n.id)).toEqual(ps.map((_, i) => `n${i + 1}`));
     const fresh = createEconomy(region, 0);
-    expect(l.snapshot().economy.counties.map((c) => c.mouths)).toEqual(fresh.counties.map((c, i) => c.mouths - [12, 20][i]!));
+    // Người dựng thêm làm cha mẹ người chơi cũng trừ khỏi dân nền quận sinh
+    const extra = l.snapshot().npcs.nextId - 1 - (NPC_QUOTA.village + NPC_QUOTA.town);
+    expect(l.snapshot().economy.counties.map((c) => c.mouths)).toEqual(fresh.counties.map((c, i) => c.mouths - [12 + extra, 20][i]!));
     for (const n of ps) expect(n.character.location).toBe(n.character.home);
     // Quận người chơi ở tầng L0, quận khác L1
     expect(new Set(ps.filter((n) => n.character.home === 0).map((n) => n.tier))).toEqual(new Set(['L0']));
@@ -133,8 +140,9 @@ describe('dân số ban đầu (v0.4 S1, ADR 0016)', () => {
   it('người chơi thấy người ở quận đang đứng: đúng hợp đồng, theo id, không lộ thuộc tính ẩn', () => {
     const l = life();
     const vs = l.people();
-    expect(vs).toHaveLength(NPC_QUOTA.village);
-    expect(vs.map((v) => v.id)).toEqual(people(l).filter((n) => n.character.home === 0).map((n) => n.id));
+    const here = l.snapshot().npcs.people.filter((n) => n.character.home === 0);
+    expect(vs).toHaveLength(here.length);
+    expect(vs.map((v) => v.id)).toEqual(here.map((n) => n.id));
     for (const v of vs) {
       expect(vNpcView.check(v, '$')).toBeNull();
       expect(v.portrait.key).toBe(v.id);

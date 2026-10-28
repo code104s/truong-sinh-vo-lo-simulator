@@ -45,7 +45,7 @@ describe('SimHost', () => {
   it('READY rồi luồng chuẩn: GEN_WORLD → WORLD, NEW_LIFE → LOG + STATE', () => {
     const { h, out, send } = host();
     h.ready();
-    expect(out[0]).toMatchObject({ type: 'READY', protocolVersion: 4 });
+    expect(out[0]).toMatchObject({ type: 'READY', protocolVersion: 5 });
     const w = send({ type: 'GEN_WORLD', worldSeed: 'tsvl-01' });
     expect(w.map((m) => m.type)).toEqual(['PROGRESS', 'PROGRESS', 'WORLD']);
     const n = send({ type: 'NEW_LIFE', config: { worldSeed: 'tsvl-01', regionId: region.summary.id, birthplaceId: region.birthplaces[0]!.id } });
@@ -131,7 +131,7 @@ describe('SimHost — v0.2', () => {
     expect(send({ type: 'PREVIEW_TRAVEL', county })).toMatchObject([{ type: 'TRAVEL_PREVIEW' }]);
     const after = send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>;
     expect(after.save.digest).toBe(before.save.digest);
-    expect(after.save.version).toBe(4);
+    expect(after.save.version).toBe(5);
     expect(after.save.commandLog).toEqual(before.save.commandLog);
     expect(after.save.commandLog[0]!.cmd.type).toBe('NEW_LIFE');
   });
@@ -144,6 +144,10 @@ describe('SimHost — v0.2', () => {
     expect(st.character.home).toBe(region.birthplaces[2]!.county);
     expect(st.plan).toBeNull();
     expect(st.actions).toEqual([]);
+    // v0.5: người thân ở mọi quận (S1: cha mẹ thật), tiếng tăm có từ S6
+    expect(st.circle.map((p) => p.kin)).toEqual(['father', 'mother']);
+    expect(st.character.reputation).toBe('unknown');
+    expect(st.character.spouse).toBeUndefined();
   });
 
   it('cùng reqId không áp dụng ADVANCE hai lần, payload khác bị từ chối', () => {
@@ -195,7 +199,14 @@ describe('SimHost — v0.2', () => {
       for (let k = 0; k < 200 && a.current.life!.alive; k++) {
         const life = a.current.life!;
         const choices = life.actions().filter((x) => !x.locked && x.id !== 'action.travel');
-        call({ type: 'SET_PLAN', plan: { slots: [0, 1, 2].map(() => ({ action: choices[rng.int(0, choices.length - 1)]!.id })) } });
+        // Xã giao (v0.5 S4) nhắm vào một người ở quận đang đứng
+        const people = life.people();
+        const slot = () => {
+          const id = choices[rng.int(0, choices.length - 1)]!.id;
+          const social = id === 'action.visit' || id === 'action.ask_help' || id === 'action.propose';
+          return social && people.length ? { action: id, person: people[rng.int(0, people.length - 1)]!.id } : { action: social ? 'action.rest' : id };
+        };
+        call({ type: 'SET_PLAN', plan: { slots: [slot(), slot(), slot()] } });
         // Mua bán một đấu khi chắc được nhận (lệnh bị từ chối thì không vào nhật ký lệnh, test này coi là lỗi)
         const h = life.character.household, m = life.market();
         if (rng.int(0, 3) === 0) {

@@ -17,6 +17,8 @@ export const highwayRobbers: EventDef = {
   // Đang trên đường; đường qua núi vắng thì dễ gặp hơn
   weight: (ctx) => (traveling(ctx) ? (roughRoad(ctx) ? 60_000 : 20_000) : 0),
   cooldownTicks: 36,
+  // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
+  reputation: { fight_won: 5 },
   figure: () => man('adult', 'poor'),
   choices: [
     {

@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { ageYearsAt, calendarOf, type Birthplace, type RegionId } from '@tsvl/shared';
+import { ageYearsAt, calendarOf, type Birthplace, type PlanSlot, type RegionId } from '@tsvl/shared';
 import { BACKGROUNDS, EVENT_IDS, Life } from '@tsvl/sim';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { POLICIES, policyChoose, policyPlan, policyTrade, type PolicyContext, type PolicyName } from './policies';
@@ -24,11 +24,25 @@ export const EVENTS_PER_YEAR = [2, 4] as const;
  */
 export const NPC_AGE_GAP_MAX_YEARS = 1;
 export const NPC_WINDOW_YEARS = [16, 45] as const;
+/** Giá gốc một thăng (văn), để quy lương ra tiền khi so của cải (như phần chia lúc lập thân, ADR 0013). */
+const GRAIN_BASE_COIN = 4;
 /** Sự kiện hiếm, được phép không xảy ra trong một lượt batch (ghi chú trong ADR 0014). */
-export const RARE_EVENTS: readonly string[] = [];
+/**
+ * Quan hệ tác động tới kết cục (nghiệm thu v0.5 mục 6, Q13): trong các đời `family` sống tới 30 tuổi, ít nhất chừng ấy %
+ * đã cưới trước 30; trong số đó, ít nhất chừng ấy % có con; `family` chết đói không quá ngưỡng của điều độ. Chủ dự án
+ * bỏ tiêu chí "bần cùng chết đói ít hơn điều độ 25%" (S8): hơn nửa số chết đói ở tuổi thơ (hộ trừu tượng, Q2), còn nuôi
+ * con tốn lương bù trừ phần người thân giúp lúc về già.
+ */
+export const FAMILY_MARRIED_BY_30_PCT = 70;
+export const FAMILY_WITH_CHILDREN_PCT = 60;
+export const RARE_EVENTS: readonly string[] = [
+  // v0.5 S7–S8: cần kẻ thù, món nợ ơn hay người quen thân ngoài người thân — chưa chiến lược nào tạo ra (`family` chỉ thăm
+  // người hợp đôi). Đường đi của từng sự kiện có test riêng (events.test.ts). Con ốm, vợ chồng lục đục: `family` gặp.
+  'event.debt_called', 'event.enemy_revenge', 'event.friend_brings_rice', 'event.friend_in_need',
+];
 
 export interface BackgroundReport { count: number; meanAge: number; starvationPct: number }
-export interface PolicyReport { npcDeaths: number; npcMeanAge: number; policy: PolicyName; count: number; stuck: number; overCap: number; meanAge: number; medianAge: number; inRangePct: number; oldAgePct: number; starvationPct: number; causes: Record<string, number>; skills: Record<string, number>; byBackground: Record<string, BackgroundReport>; events: Record<string, number>; eventYears: number; ticks: number; ms: number }
+export interface PolicyReport { estateMedian: number; inheritedPct: number; inheritedMedian: number; npcDeaths: number; npcMeanAge: number; policy: PolicyName; count: number; stuck: number; overCap: number; meanAge: number; medianAge: number; inRangePct: number; oldAgePct: number; starvationPct: number; causes: Record<string, number>; skills: Record<string, number>; byBackground: Record<string, BackgroundReport>; events: Record<string, number>; eventYears: number; ticks: number; ms: number; starved: (StarvedInfo & { background: string })[]; reached30: number; marriedBy30: number; withChildren: number }
 
 /** Kết quả một đời trong batch: đủ để gộp thành báo cáo, gửi được qua luồng (structured clone). */
 export interface LifeResult {
@@ -44,6 +58,18 @@ export interface LifeResult {
   /** NPC mất trong cửa sổ đo (`NPC_WINDOW_YEARS` tuổi người chơi): số người, tổng tuổi lúc mất. */
   npcDeaths: number;
   npcDeathAgeSum: number;
+  /** Của cải lúc chết (văn, gồm lương quy theo giá gốc 4 văn/thăng) và tiền, lương được thừa kế trong đời (v0.5 S3). */
+  estate: number;
+  inherited: number;
+  /** Đời chết đói (v0.5 S8): hoàn cảnh lúc chết, để tìm nguyên nhân. */
+  starved?: StarvedInfo;
+  /** Gia đình (v0.5 S8): tuổi lúc cưới lần đầu (null: chưa cưới), số con chào đời. */
+  marriedAge: number | null;
+  children: number;
+}
+export interface StarvedInfo {
+  age: number; independent: boolean; town: boolean; away: boolean; landMu: number; tenure: string; money: number; hungerYears: number;
+  famine: boolean; badHarvests: number; taxShort: number; inherited: boolean; kinHelp: number; lastEvents: string[];
 }
 
 /** Bộ nhớ đệm đích đi được theo vùng/quận: thuần, mỗi luồng giữ một cái. */
@@ -68,7 +94,12 @@ export function runLife(regions: readonly BatchRegion[], policy: PolicyName, i: 
     if (life.tick % 36 === 35 && life.tick >= from && life.tick < to + 36) countDeaths();
     const key = `${r.seed}/${life.character.location}`;
     if (!optionsCache.has(key)) optionsCache.set(key, policy === 'wanderer' || policy === 'scholar' ? life.travel() : []);
-    const ctx = (): PolicyContext => ({ character: life.view(), date: calendarOf(life.tick), actions: life.actions(), travel: optionsCache.get(key)!, settlements: logic.settlementKind, seed: i, active: !!life.active, market: life.market() });
+    const ctx = (): PolicyContext => ({
+      character: life.view(), date: calendarOf(life.tick), actions: life.actions(), travel: optionsCache.get(key)!, settlements: logic.settlementKind, seed: i, active: !!life.active, market: life.market(),
+      // Xã giao (v0.5 S8): chỉ chiến lược `family`, ở tuần thứ hai, thứ ba của tháng — tuần chạy ô xã giao (kế hoạch xếp
+      // lại mỗi tuần)
+      ...(policy === 'family' && life.tick % 3 !== 0 ? { people: life.people(), socialLock: (slot: PlanSlot) => life.socialLock(slot) } : {}),
+    });
     const now = ctx();
     // Đầu tháng: mua bán lương thực (không tốn ô) rồi mới xếp kế hoạch, để kế hoạch thấy kho mới
     if (life.tick % 3 === 0 && now.character.canAct) { const g = policyTrade(policy, now); if (g !== 0 && life.trade(g) === null) Object.assign(now, ctx()); }
@@ -84,10 +115,39 @@ export function runLife(regions: readonly BatchRegion[], policy: PolicyName, i: 
   }
   countDeaths();
   const c = life.character;
-  if (life.alive) return { stuck: true, overCap: false, age: 0, cause: '', background: c.background, skills: {}, events, ticks, npcDeaths, npcDeathAgeSum };
+  // Thừa kế đã nhận (S3 v0.5): tin đã báo, cộng phần còn chờ báo nếu người chơi chết trước tuần người kia mất;
+  // quy lương (thăng) ra văn theo giá gốc như phần chia lúc lập thân
+  const pending = life.alive ? [] : life.snapshot().bequests;
+  const inherited = life.log.reduce((s, e) => s + (e.key === 'log.kin.inherit' ? Number(e.params.money) + Number(e.params.grain) * GRAIN_BASE_COIN : 0), 0)
+    + pending.reduce((s, x) => s + x.money + x.grain * GRAIN_BASE_COIN, 0);
+  const estate = c.household.money + c.household.grain * GRAIN_BASE_COIN;
+  const wed = life.log.find((e) => e.key.startsWith('log.marry.wed'));
+  const family = { marriedAge: wed ? ageYearsAt(c.birthTick, wed.tick) : null, children: life.log.filter((e) => e.key === 'log.kin.birth').length };
+  if (life.alive) return { stuck: true, overCap: false, age: 0, cause: '', background: c.background, skills: {}, events, ticks, npcDeaths, npcDeathAgeSum, estate, inherited, ...family };
   return {
     stuck: false, overCap: life.death!.tick - c.birthTick > c.lifespanBase + c.lifespanBonus, age: ageYearsAt(c.birthTick, life.death!.tick), cause: life.death!.cause,
-    background: c.background, skills: { ...c.skillXp }, events, ticks, npcDeaths, npcDeathAgeSum,
+    background: c.background, skills: { ...c.skillXp }, events, ticks, npcDeaths, npcDeathAgeSum, estate, inherited, ...family,
+    ...(life.death!.cause === 'starvation' ? { starved: starvedInfo(life, logic, inherited > 0) } : {}),
+  };
+}
+
+/** Đời sống tới 30 tuổi; trong đó, đời đã cưới trước 30; trong đó nữa, đời có con. */
+function familyStats(results: readonly LifeResult[]): { reached30: number; marriedBy30: number; withChildren: number } {
+  const grown = results.filter((x) => !x.stuck && x.age >= 30);
+  const wed = grown.filter((x) => x.marriedAge !== null && x.marriedAge < 30);
+  return { reached30: grown.length, marriedBy30: wed.length, withChildren: wed.filter((x) => x.children > 0).length };
+}
+
+/** Hoàn cảnh một đời chết đói: nơi ở, ruộng, tiền, năm đói kém, mấy năm cuối có gì (v0.5 S8). */
+function starvedInfo(life: Life, logic: RegionLogic, inherited: boolean): StarvedInfo {
+  const c = life.character, h = c.household, t = life.death!.tick;
+  const recent = life.log.filter((e) => e.tick >= t - 3 * 36);
+  const count = (key: string) => recent.filter((e) => e.key === key).length;
+  return {
+    age: ageYearsAt(c.birthTick, t), independent: h.independent, town: logic.settlementKind[c.location] !== 'village', away: c.location !== c.home,
+    landMu: h.landMu, tenure: h.tenure, money: h.money, hungerYears: h.hungerYears, famine: life.market().supply === 'famine',
+    badHarvests: count('log.world.harvest_bad'), taxShort: count('log.tax.short'), inherited, kinHelp: count('log.kin.help'),
+    lastEvents: recent.filter((e) => e.key.startsWith('event.')).map((e) => e.key.replace(/\.result\..*/, '')).slice(-4),
   };
 }
 
@@ -107,6 +167,7 @@ export function aggregate(policy: PolicyName, results: readonly LifeResult[], ms
   const byBg: Record<string, { ages: number[]; starved: number }> = {};
   const events: Record<string, number> = {};
   let eventYears = 0, stuck = 0, overCap = 0, ticks = 0, npcDeaths = 0, npcAgeSum = 0;
+  const estates = results.map((x) => x.estate).sort((a, b) => a - b), heirs = results.filter((x) => x.inherited > 0).map((x) => x.inherited).sort((a, b) => a - b);
   for (const x of results) {
     ticks += x.ticks; npcDeaths += x.npcDeaths; npcAgeSum += x.npcDeathAgeSum;
     for (const [id, k] of Object.entries(x.events)) events[id] = (events[id] ?? 0) + k;
@@ -123,7 +184,10 @@ export function aggregate(policy: PolicyName, results: readonly LifeResult[], ms
   const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
   const byBackground: Record<string, BackgroundReport> = {};
   for (const key of BACKGROUNDS) { const b = byBg[key]; if (b) byBackground[key] = { count: b.ages.length, meanAge: avg(b.ages), starvationPct: 100 * b.starved / b.ages.length }; }
-  return { npcDeaths, npcMeanAge: npcAgeSum / Math.max(1, npcDeaths), policy, count: n, stuck, overCap, meanAge: avg(ages), medianAge: ages[Math.floor(ages.length / 2)] ?? 0, inRangePct: 100 * ages.filter((a) => a >= 40 && a <= 80).length / n, oldAgePct: 100 * (causes.old_age ?? 0) / n, starvationPct: 100 * (causes.starvation ?? 0) / n, causes, skills, byBackground, events, eventYears, ticks, ms };
+  return { estateMedian: estates[Math.floor(estates.length / 2)] ?? 0, inheritedPct: (100 * heirs.length) / Math.max(1, n), inheritedMedian: heirs[Math.floor(heirs.length / 2)] ?? 0,
+    starved: results.flatMap((x) => (x.starved ? [{ ...x.starved, background: x.background }] : [])),
+    ...familyStats(results),
+    npcDeaths, npcMeanAge: npcAgeSum / Math.max(1, npcDeaths), policy, count: n, stuck, overCap, meanAge: avg(ages), medianAge: ages[Math.floor(ages.length / 2)] ?? 0, inRangePct: 100 * ages.filter((a) => a >= 40 && a <= 80).length / n, oldAgePct: 100 * (causes.old_age ?? 0) / n, starvationPct: 100 * (causes.starvation ?? 0) / n, causes, skills, byBackground, events, eventYears, ticks, ms };
 }
 
 export async function runPolicyBatch(regions: BatchRegion[], n: number, selection: string, out?: string, runner: LifeRunner = sequentialRunner(regions)): Promise<PolicyReport[]> {
@@ -139,7 +203,9 @@ export async function runPolicyBatch(regions: BatchRegion[], n: number, selectio
     console.log(`  Nguyên nhân: ${JSON.stringify(report.causes)} · kỹ năng trung bình: ${JSON.stringify(report.skills)}`);
     const bgs = report.byBackground;
     console.log(`  Xuất thân: ${BACKGROUNDS.filter((b) => bgs[b]).map((b) => `${b} ${bgs[b]!.count} đời · ${bgs[b]!.meanAge.toFixed(1)} tuổi · đói ${bgs[b]!.starvationPct.toFixed(0)}%`).join(' | ')}`);
+    console.log(`  Của cải lúc chết (trung vị): ${report.estateMedian} văn · được thừa kế: ${report.inheritedPct.toFixed(1)}% đời, trung vị ${report.inheritedMedian} văn`);
     console.log(`  NPC mất khi người chơi ${NPC_WINDOW_YEARS.join('–')} tuổi: ${report.npcDeaths} người · tuổi trung bình lúc mất ${report.npcMeanAge.toFixed(2)}`);
+    if (report.policy === 'family') console.log(`  Gia đình: cưới trước 30 tuổi ${pct(report.marriedBy30, report.reached30).toFixed(1)}% đời sống tới 30 (mục tiêu ≥ ${FAMILY_MARRIED_BY_30_PCT}) · có con ${pct(report.withChildren, report.marriedBy30).toFixed(1)}% (≥ ${FAMILY_WITH_CHILDREN_PCT})`);
     console.log(`  Sự kiện: ${(Object.values(report.events).reduce((a, b) => a + b, 0) / Math.max(1, report.eventYears)).toFixed(2)}/năm sau 12 tuổi · ${Object.keys(report.events).length} loại`);
   }
   const failed = batchCriteria(reports, selection === 'all');
@@ -150,6 +216,8 @@ export async function runPolicyBatch(regions: BatchRegion[], n: number, selectio
   if (!pass) process.exitCode = 1;
   return reports;
 }
+
+const pct = (k: number, n: number) => (100 * k) / Math.max(1, n);
 
 /** Trả danh sách tiêu chí không đạt (rỗng = PASS). `all`: đủ năm chiến lược, xét được so sánh giữa các chiến lược. */
 export function batchCriteria(reports: PolicyReport[], all: boolean): string[] {
@@ -164,6 +232,12 @@ export function batchCriteria(reports: PolicyReport[], all: boolean): string[] {
   if (balanced) {
     if (balanced.inRangePct < IN_RANGE_MIN_PCT) failed.push(`điều độ: 40–80 tuổi ${balanced.inRangePct.toFixed(1)}% < ${IN_RANGE_MIN_PCT}%`);
     if (balanced.starvationPct > BALANCED_STARVATION_MAX_PCT) failed.push(`điều độ: chết đói ${balanced.starvationPct.toFixed(1)}% > ${BALANCED_STARVATION_MAX_PCT}%`);
+  }
+  const family = by('family');
+  if (family) {
+    if (pct(family.marriedBy30, family.reached30) < FAMILY_MARRIED_BY_30_PCT) failed.push(`gia đình: cưới trước 30 tuổi ${pct(family.marriedBy30, family.reached30).toFixed(1)}% < ${FAMILY_MARRIED_BY_30_PCT}%`);
+    if (pct(family.withChildren, family.marriedBy30) < FAMILY_WITH_CHILDREN_PCT) failed.push(`gia đình: có con ${pct(family.withChildren, family.marriedBy30).toFixed(1)}% < ${FAMILY_WITH_CHILDREN_PCT}%`);
+    if (family.starvationPct > BALANCED_STARVATION_MAX_PCT) failed.push(`gia đình: chết đói ${family.starvationPct.toFixed(1)}% > ${BALANCED_STARVATION_MAX_PCT}%`);
   }
   if (lazy && lazy.starvationPct < LAZY_STARVATION_MIN_PCT) failed.push(`lười: chết đói ${lazy.starvationPct.toFixed(1)}% < ${LAZY_STARVATION_MIN_PCT}%`);
   if (!all) return failed;

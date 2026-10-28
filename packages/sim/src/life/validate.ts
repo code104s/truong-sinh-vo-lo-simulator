@@ -1,10 +1,12 @@
 // Validate snapshot sim khi tải save (ADR 0004): save hỏng hoặc bị sửa tay thì từ chối trước khi chạy.
 import {
   arr, bool, intRange, lit, nat, nonEmpty, nullable, obj, oneOf, opt, record, str, vNpcId, vRegionId, type EventFigure,
-  DEATH_CAUSES, FIGURE_AGES, FIGURE_CLASSES, GENDERS, SETTLEMENT_KINDS, TENURES, int, union, vBirthplaceId, vNewLifeConfig, vMonthPlan, vPlanSlot, vTravelPreview, type Validator,
+  DEATH_CAUSES, FIGURE_AGES, FIGURE_CLASSES, GENDERS, SETTLEMENT_KINDS, TENURES, int, union, vBirthplaceId, vNewLifeConfig, vMonthPlan, vPlanSlot, vTravelPreview, vLogEntry, type Validator,
 } from '@tsvl/shared';
 import type { RngState, RngStreamsSnapshot } from '../core/rng';
-import type { CharacterState, Condition, SpiritRoot } from './character';
+import type { CharacterState, Condition, KinLinks, SpiritRoot } from './character';
+import type { Bond } from '../social/bonds';
+import type { Inheritance } from '../npc/lifecycle';
 import type { Death } from './health';
 import { SIM_VERSION, type LifeSnapshot } from './life';
 import { BACKGROUNDS, ELEMENTS, PERSONALITIES, TRAITS } from './params';
@@ -14,6 +16,10 @@ import { HUNGER_MAX, type HouseholdState } from './household';
 import { DISASTERS, type CountyEconomy, type EconomyState } from '../economy/market';
 import type { EventsState, PendingState } from '../events/engine';
 import { NPC_TIERS, OCCUPATIONS, type NpcState, type NpcWorldState } from '../npc/state';
+import { PLAYER_ID } from '../npc/family';
+
+/** Liên kết ruột thịt: id NPC, hoặc "n0" là người chơi (vợ/chồng, cha mẹ của con người chơi; v0.5 S5). */
+const vKinId: Validator<string> = { check: (u, p) => (u === PLAYER_ID ? null : vNpcId.check(u, p)) };
 
 const skillRecord = (value: Validator<number>) => obj<Record<Skill, number>>({ farming: value, hunting: value, crafting: value, literacy: value, martial: value, trade: value });
 
@@ -53,6 +59,7 @@ const vCharacter = obj<CharacterState>({
     loan: nat, loanDue: int, reliefPct: intRange(0, 100), rentHikePct: intRange(0, 50), shieldUntil: int, stayUntil: intRange(0, 200),
     hungerYears: intRange(0, 200), lastHungerYear: intRange(-1, 200) }),
   alive: bool,
+  kin: obj<KinLinks>({ father: nullable(vKinId), mother: nullable(vKinId), spouse: nullable(vKinId) }),
 });
 
 const vDeath = obj<Death>({ tick: nat, cause: oneOf(DEATH_CAUSES), detail: str });
@@ -86,6 +93,10 @@ export const vLifeSnapshot = obj<LifeSnapshot>({
       plan: nullable(vMonthPlan), active: nullable(vActive), planWarned: bool,
     })),
   }),
+  bonds: arr(obj<Bond>({ id: vNpcId, closeness: intRange(0, 100), trust: intRange(0, 100), hostility: intRange(0, 100), owed: intRange(-100, 100) })),
+  bequests: arr(obj<Inheritance>({ from: vNpcId, name: nonEmpty, tick: int, money: nat, grain: nat, landMu: nat })),
+  reputation: arr(intRange(-100, 100)),
+  rumors: arr(vLogEntry),
   rng: obj<RngStreamsSnapshot>({ root: u32, streams: record(vRngState) }),
   death: nullable(vDeath),
   plan: nullable(vMonthPlan),

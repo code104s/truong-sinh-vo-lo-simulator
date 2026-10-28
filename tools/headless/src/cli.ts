@@ -30,8 +30,11 @@ function livesJob(j: LivesJob): LifeResult[] {
   return out;
 }
 
-/** Số đời mỗi việc: nhỏ để các luồng xong gần cùng lúc (đời dài ngắn khác nhau). */
-const LIVES_PER_JOB = 20;
+/**
+ * Số đời mỗi việc: nhỏ để các luồng xong gần cùng lúc (đời dài ngắn khác nhau). v0.5 S8: 20 → 5 (1.000 đời chỉ thành 50
+ * việc cho 15 luồng, vài đời dài cuối cùng giữ cả batch chờ).
+ */
+const LIVES_PER_JOB = 5;
 
 /**
  * Chạy đời song song trên K luồng (v0.4: batch có NPC chậm 15 lần). Các đời độc lập nhau nên kết quả từng đời giống hệt
@@ -337,14 +340,23 @@ const WORLD_CAUSES = ['illness', 'old_age', 'accident', 'starvation'];
 const WORLD_STARVATION_MAX_PCT = 10;
 const WORLD_UNDER16_PCT = [25, 45] as const;
 const WORLD_SPECIALIST_YEARS_PCT = 80;
+/**
+ * Gia đình (nghiệm thu v0.5 mục 6): trẻ có cha mẹ thật, người 25–50 có vợ/chồng, số con mỗi phụ nữ có chồng đã qua 45
+ * (chủ dự án chốt ở S2: số sinh giữ theo hạn mức nên tính trên người có chồng).
+ */
+const WORLD_BIRTHS_WITH_PARENTS_PCT = 60;
+const WORLD_MARRIED_PCT = [50, 85] as const;
+const WORLD_CHILDREN_PER_WOMAN = [2, 5] as const;
 
 async function worldCmd(n: number, years: number, threads: number, allL0: boolean) {
   if (!Number.isInteger(n) || n <= 0 || !Number.isInteger(years) || years <= 0) throw new Error('seeds/years phải là số nguyên dương');
   const seeds = Array.from({ length: n }, (_, i) => `tsvl-${String(i + 1).padStart(2, '0')}`);
   console.log(`Thế giới tự chạy ${years} năm × ${n} vùng, không người chơi${allL0 ? ' · mọi NPC ở tầng L0 (tuần)' : ''}`);
   const regions = await regionPool(seeds.map((seed) => ({ seed })), threads);
-  let ledgerBad = 0, ticks = 0, ms = 0, deathAges = 0, starvedNormal = 0, minQ = Number.MAX_SAFE_INTEGER, maxQ = 0, kids = 0, physYears = 0, merchYears = 0;
+  let ledgerBad = 0, ticks = 0, ms = 0, deathAges = 0, starvedNormal = 0, minQ = Number.MAX_SAFE_INTEGER, maxQ = 0, kids = 0, physYears = 0, merchYears = 0, births = 0, withParents = 0, married = 0, mothers = 0, motherKids = 0, wives = 0, wifeKids = 0;
   let famines = 0, countyYears = 0, lowMoney = 0, minPrice = Number.MAX_SAFE_INTEGER, maxPrice = 0, negative = 0;
+  // Phần tiền NPC nắm (‰): năm cuối thấp/cao nhất giữa các vùng, và cao nhất mọi năm (v0.5 S8: chi dùng chặn tiền dồn)
+  let npcEndMin = Number.MAX_SAFE_INTEGER, npcEndMax = 0, npcPeak = 0;
   const deaths: Record<string, number> = {};
   for (const r of regions) {
     if (!r.ok) throw new Error(`${r.seed}: ${r.error}`);
@@ -358,6 +370,8 @@ async function worldCmd(n: number, years: number, threads: number, allL0: boolea
     for (const [k, v] of Object.entries(s.deaths)) deaths[k] = (deaths[k] ?? 0) + v;
     deathAges += s.deathAgeSum; starvedNormal += s.starvationNormalYears;
     minQ = Math.min(minQ, s.minQuotaPct); maxQ = Math.max(maxQ, s.maxQuotaPct); kids += s.childrenPermille; physYears += s.yearsWithPhysician; merchYears += s.yearsWithMerchant;
+    npcEndMin = Math.min(npcEndMin, s.npcMoneyPermilleEnd); npcEndMax = Math.max(npcEndMax, s.npcMoneyPermilleEnd); npcPeak = Math.max(npcPeak, s.npcMoneyPermilleMax);
+    births += s.births; withParents += s.birthsWithParents; married += s.marriedPermille; mothers += s.mothersOver45; motherKids += s.childrenOfMothersOver45; wives += s.wivesOver45; wifeKids += s.childrenOfWivesOver45;
     console.log(`  ${r.seed}: ${s.counties} quận · NPC ${s.npcStart} → ${s.npcEnd} · ${(took * 1000 / s.ticks).toFixed(1)} µs/tick · tiền ${s.moneyStart === s.moneyEnd ? 'bảo toàn' : `LỆCH ${s.moneyEnd - s.moneyStart}`}`);
   }
   const died = Object.values(deaths).reduce((x, y) => x + y, 0);
@@ -367,7 +381,7 @@ async function worldCmd(n: number, years: number, threads: number, allL0: boolea
   const every = famines ? countyYears / famines : Infinity;
   const lowMoneyPct = lowMoney / (countyYears / years) / 10;
   console.log(`Kinh tế có NPC: đói kém mỗi quận 1 lần / ${every.toFixed(1)} năm (mục tiêu 8–15) · giá ${minPrice}–${maxPrice}% (70–500) · tháng-quận quỹ cạn ${lowMoneyPct.toFixed(1)}% (≤ 5) · kho âm ${negative} vùng`);
-  console.log(`Sổ cái lệch (kiểm từng tick): ${ledgerBad} vùng`);
+  console.log(`Sổ cái lệch (kiểm từng tick): ${ledgerBad} vùng · NPC nắm ${npcEndMin / 10}–${npcEndMax / 10}% tổng tiền năm cuối (cao nhất mọi năm ${npcPeak / 10}%)`);
   // Tiêu chí nghiệm thu v0.4 mục 6 (docs/v0.4-giai-doan-a.md): dân số NPC, sổ cái, kinh tế v0.3
   const meanDeathAge = deathAges / Math.max(1, died), under16Pct = kids / regions.length / 10;
   const yearsPct = (k: number) => (100 * k) / (regions.length * (years - 1));
@@ -380,11 +394,16 @@ async function worldCmd(n: number, years: number, threads: number, allL0: boolea
   if (under16Pct < WORLD_UNDER16_PCT[0] || under16Pct > WORLD_UNDER16_PCT[1]) failed.push(`dưới 16 tuổi ${under16Pct.toFixed(1)}% ngoài ${WORLD_UNDER16_PCT.join('–')}%`);
   if (yearsPct(physYears) < WORLD_SPECIALIST_YEARS_PCT) failed.push(`năm có thầy thuốc ${yearsPct(physYears).toFixed(0)}% < ${WORLD_SPECIALIST_YEARS_PCT}%`);
   if (yearsPct(merchYears) < WORLD_SPECIALIST_YEARS_PCT) failed.push(`năm có thương nhân ${yearsPct(merchYears).toFixed(0)}% < ${WORLD_SPECIALIST_YEARS_PCT}%`);
+  const parentsPct = (100 * withParents) / Math.max(1, births), marriedPct = married / regions.length / 10, perWoman = wifeKids / Math.max(1, wives);
+  console.log(`Gia đình: trẻ sinh có cha mẹ thật ${parentsPct.toFixed(1)}% (mục tiêu ≥ ${WORLD_BIRTHS_WITH_PARENTS_PCT}) · người 25–50 có vợ/chồng ${marriedPct.toFixed(1)}% (${WORLD_MARRIED_PCT.join('–')}) · phụ nữ có chồng đã qua 45: ${perWoman.toFixed(2)} con (${WORLD_CHILDREN_PER_WOMAN.join('–')}, ${wives} người; tính cả người không chồng ${(motherKids / Math.max(1, mothers)).toFixed(2)})`);
+  if (parentsPct < WORLD_BIRTHS_WITH_PARENTS_PCT) failed.push(`trẻ có cha mẹ thật ${parentsPct.toFixed(1)}% < ${WORLD_BIRTHS_WITH_PARENTS_PCT}%`);
+  if (marriedPct < WORLD_MARRIED_PCT[0] || marriedPct > WORLD_MARRIED_PCT[1]) failed.push(`có vợ/chồng ${marriedPct.toFixed(1)}% ngoài ${WORLD_MARRIED_PCT.join('–')}%`);
+  if (perWoman < WORLD_CHILDREN_PER_WOMAN[0] || perWoman > WORLD_CHILDREN_PER_WOMAN[1]) failed.push(`số con mỗi phụ nữ có chồng ${perWoman.toFixed(2)} ngoài ${WORLD_CHILDREN_PER_WOMAN.join('–')}`);
   if (ledgerBad) failed.push(`sổ cái lệch ở ${ledgerBad} vùng`);
   if (negative || minPrice < 70 || maxPrice > 500 || every < 8 || every > 15 || lowMoneyPct > 5) failed.push('kinh tế ngoài tiêu chí v0.3');
   for (const f of failed) console.log(`  ✗ ${f}`);
   const pass = failed.length === 0;
-  console.log(pass ? 'KẾT QUẢ: PASS (dân số NPC, sổ cái, kinh tế v0.3)' : 'KẾT QUẢ: FAIL');
+  console.log(pass ? 'KẾT QUẢ: PASS (dân số NPC, gia đình, sổ cái, kinh tế v0.3)' : 'KẾT QUẢ: FAIL');
   if (!pass) process.exitCode = 1;
 }
 

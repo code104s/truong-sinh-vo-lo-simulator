@@ -22,6 +22,11 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'action.trade', group: 'livelihood', slots: 1, stamina: 60, riskPpm: 0, skill: 'trade', places: ['town', 'city'] },
   { id: 'action.study', group: 'study', slots: 1, stamina: 30, riskPpm: 0, skill: 'literacy', places: ['town', 'city'] },
   { id: 'action.train', group: 'study', slots: 1, stamina: 240, riskPpm: 800, skill: 'martial', minStamina: 80 },
+  // Xã giao (v0.5 S4): nhắm vào một người cùng quận (PlanSlot.person)
+  { id: 'action.visit', group: 'social', slots: 1, stamina: 30, riskPpm: 0 },
+  { id: 'action.ask_help', group: 'social', slots: 1, stamina: 10, riskPpm: 0 },
+  // Cưới hỏi (v0.5 S5): sính lễ theo xuất thân nhà trai; bên kia nhận lời theo quan hệ
+  { id: 'action.propose', group: 'social', slots: 1, stamina: 30, riskPpm: 0 },
   { id: 'action.rest', group: 'rest', slots: 1, stamina: 0, riskPpm: 0 },
   { id: 'action.heal', group: 'heal', slots: 1, stamina: 20, riskPpm: 0, places: ['town', 'city'] },
   { id: 'action.travel', group: 'travel', slots: 1, stamina: 100, riskPpm: 300, minStamina: 30 },
@@ -29,6 +34,9 @@ export const ACTIONS: readonly ActionDef[] = [
   // Sự kiện đặt vào (S6): việc gấp (gánh nước, đắp bờ, đuổi châu chấu, đốn củi, gánh lúa), đóng cửa tránh dịch
   { id: 'action.toil', group: 'livelihood', slots: 1, stamina: 180, riskPpm: 300, hidden: true },
   { id: 'action.shelter', group: 'rest', slots: 1, stamina: 0, riskPpm: 0, hidden: true },
+  // Sự kiện gia đình đặt vào (v0.5 S5): chăm cha mẹ ốm, lo tang
+  { id: 'action.nurse', group: 'livelihood', slots: 2, stamina: 90, riskPpm: 0, hidden: true },
+  { id: 'action.mourn', group: 'livelihood', slots: 1, stamina: 60, riskPpm: 0, hidden: true },
 ];
 /** Tra theo id (bảng dựng một lần; vòng NPC gọi nhiều lần mỗi tuần). */
 const ACTION_BY_ID: ReadonlyMap<string, ActionDef> = new Map(ACTIONS.map((a) => [a.id, a]));
@@ -57,7 +65,8 @@ export function actionOptions(c: CharacterState, tick: Tick, logic: RegionLogic,
     id: d.id, group: d.group, slots: d.slots,
     cost: { stamina: d.stamina === 0 ? 'cost.none' : d.stamina < 80 ? 'cost.low' : d.stamina < HEAVY_STAMINA ? 'cost.medium' : 'cost.high', risk: d.riskPpm === 0 ? 'risk.none' : d.riskPpm < 300 ? 'risk.low' : d.riskPpm < 1000 ? 'risk.medium' : 'risk.high',
       money: moneyCost(d.id) },
-    gains: [...moneyGains(d.id), ...(d.skill ? [`skill.${d.skill}`] : [d.group === 'rest' ? 'gain.recovery' : d.group === 'heal' ? 'gain.healing' : 'gain.location'])],
+    // Xã giao (v0.5) không có cái được chung: thân thiết, cái ăn, gia đình đã ở moneyGains
+    gains: [...moneyGains(d.id), ...(d.skill ? [`skill.${d.skill}`] : d.group === 'social' ? [] : [d.group === 'rest' ? 'gain.recovery' : d.group === 'heal' ? 'gain.healing' : 'gain.location'])],
     locked: actionLock(d, c, tick, kind, market),
   }));
 }
@@ -66,7 +75,9 @@ export function actionOptions(c: CharacterState, tick: Tick, logic: RegionLogic,
 export function validatePlan(plan: MonthPlan, logic: RegionLogic): boolean {
   return plan.slots.every((s) => !!actionDef(s.action) && !actionDef(s.action)!.hidden && (s.action === 'action.travel'
     ? s.target !== undefined && s.target < logic.counties.length
-    : s.target === undefined));
+    : s.target === undefined)
+    // Xã giao cần một người; việc khác không nhắm vào ai (v0.5 S4)
+    && (actionDef(s.action)!.group === 'social') === (s.person !== undefined));
 }
 
 export function slotLock(slot: PlanSlot, c: CharacterState, tick: Tick, logic: RegionLogic, market?: CountyEconomy): string | null {

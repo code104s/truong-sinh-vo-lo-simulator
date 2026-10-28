@@ -1,5 +1,5 @@
 // Hành động, kế hoạch tháng, di chuyển và nhật ký lệnh (ADR 0008, 0009, 0011; v0.3: ADR 0012, 0014). Chỉ kiểu và validate, không có luật.
-import { vChoiceId, vContentId, type ChoiceId, type ContentId } from './contentId';
+import { vChoiceId, vContentId, vNpcId, type ChoiceId, type ContentId, type NpcId } from './contentId';
 import { lit, nat, nullable, obj, oneOf, opt, tagged, type Validator } from './schema';
 import { vNewLifeConfig, type NewLifeConfig } from './world';
 
@@ -11,7 +11,7 @@ export type ActionId = string;
 /** Chỉ số quận trong RegionMapData.counties. */
 export type CountyIndex = number;
 
-const vActionId: Validator<ActionId> = {
+export const vActionId: Validator<ActionId> = {
   check: (u, p) => (typeof u === 'string' && /^action\.[a-z0-9_]+$/.test(u) ? null : `${p}: cần id hành động dạng "action.ten"`),
 };
 
@@ -19,6 +19,8 @@ export interface PlanSlot {
   action: ActionId;
   /** Quận đích, chỉ khi di chuyển. */
   target?: CountyIndex;
+  /** Người được nhắm tới, chỉ cho hành động xã giao (v0.5, ADR 0017). */
+  person?: NpcId;
 }
 
 /** Ba ô của một tháng (thượng, trung, hạ tuần). Kế hoạch tự lặp cho tới khi người chơi sửa. */
@@ -26,7 +28,7 @@ export interface MonthPlan {
   slots: [PlanSlot, PlanSlot, PlanSlot];
 }
 
-export const ACTION_GROUPS = ['livelihood', 'study', 'rest', 'heal', 'travel'] as const;
+export const ACTION_GROUPS = ['livelihood', 'study', 'social', 'rest', 'heal', 'travel'] as const;
 export type ActionGroup = (typeof ACTION_GROUPS)[number];
 
 /** Hành động khả dụng ở nơi đang đứng, sim tính sẵn. FE chỉ hiển thị, không chứa luật. */
@@ -91,7 +93,7 @@ export interface CommandRecord {
   cmd: RecordedCommand;
 }
 
-export const vPlanSlot = obj<PlanSlot>({ action: vActionId, target: opt(nat) });
+export const vPlanSlot = obj<PlanSlot>({ action: vActionId, target: opt(nat), person: opt(vNpcId) });
 
 export const vMonthPlan: Validator<MonthPlan> = (() => {
   const base = obj<MonthPlan>({ slots: { check: (u, p) => (Array.isArray(u) && u.length === 3 ? null : `${p}: cần đúng 3 ô`) } });

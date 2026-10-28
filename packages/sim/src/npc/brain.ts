@@ -28,12 +28,21 @@ export interface BrainInput {
   usable: (id: string) => boolean;
   /** Chợ quận đang đứng; null thì không mua bán. */
   market: { buyPrice: number; maxBuy: number; maxSell: number; supply: SupplyBand } | null;
+  /**
+   * Cả nhà ăn bao nhiêu mỗi tuần (thăng): khẩu phần mình cộng con đang nuôi (v0.5 S2). Mặc định 10, khẩu phần một người
+   * lớn; mọi ngưỡng tính bằng tuần ăn của cả nhà.
+   */
+  need?: number;
 }
 
-/** Kho cộng tiền dư (ngoài phần giữ) quy ra lương theo giá mua, tính bằng tuần ăn. */
+/** Khẩu phần một người lớn mỗi tuần (thăng): GRAIN_RESERVE, SELL_ABOVE ứng với 36, 72 tuần ăn của một người. */
+const ADULT_NEED = 10;
+const needOf = (b: BrainInput) => Math.max(1, b.need ?? ADULT_NEED);
+
+/** Kho cộng tiền dư (ngoài phần giữ) quy ra lương theo giá mua, tính bằng tuần ăn của cả nhà. */
 export function foodWeeks(b: BrainInput): number {
   const price = Math.max(1, b.market?.buyPrice ?? 40);
-  return Math.floor((b.grain + Math.floor((Math.max(0, b.money - MONEY_RESERVE) * 10) / price)) / 10);
+  return Math.floor((b.grain + Math.floor((Math.max(0, b.money - MONEY_RESERVE) * 10) / price)) / needOf(b));
 }
 export const weeksToHarvest = (month: number) => ((HARVEST_MONTH - month + 12) % 12 || 12) * 3;
 export const struggling = (b: BrainInput) => b.independent && foodWeeks(b) < SURVIVAL_WEEKS;
@@ -88,11 +97,13 @@ export function weakPlan(b: BrainInput, w: WorkChoice): MonthPlan | null {
 export function tradeDecision(b: BrainInput): number {
   const m = b.market;
   if (!b.independent || !m) return 0;
-  if (b.grain < GRAIN_RESERVE && m.supply !== 'famine') {
+  // Giữ một năm ăn, bán phần trên hai năm ăn — của cả nhà
+  const reserve = Math.floor((GRAIN_RESERVE * needOf(b)) / ADULT_NEED), sellAbove = Math.floor((SELL_ABOVE * needOf(b)) / ADULT_NEED);
+  if (b.grain < reserve && m.supply !== 'famine') {
     const afford = Math.floor(((b.money - MONEY_RESERVE) * 10) / Math.max(1, m.buyPrice)) - 1;
-    return Math.max(0, Math.min(GRAIN_RESERVE - b.grain, afford, m.maxBuy));
+    return Math.max(0, Math.min(reserve - b.grain, afford, m.maxBuy));
   }
-  if (b.grain > SELL_ABOVE) return -Math.min(b.grain - SELL_ABOVE, m.maxSell);
+  if (b.grain > sellAbove) return -Math.min(b.grain - sellAbove, m.maxSell);
   return 0;
 }
 

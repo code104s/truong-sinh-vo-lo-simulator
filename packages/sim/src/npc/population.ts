@@ -1,6 +1,6 @@
 // Dân số NPC ban đầu (ADR 0016, v0.4 Q1): người có tên rút từ dân nền theo hạn mức mỗi quận, sinh đủ tuổi, xuất thân,
 // nghề lúc đời người chơi bắt đầu. Toàn số nguyên, tất định theo seed gốc của đời.
-import { birthplaceId, TICKS_PER_YEAR, type SettlementKind, type Tick } from '@tsvl/shared';
+import { birthplaceId, TICKS_PER_YEAR, type Gender, type SettlementKind, type Tick } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { idiv } from '../core/math';
 import { Rng } from '../core/rng';
@@ -9,6 +9,7 @@ import { createCharacter, lifespanCap, type CharacterState } from '../life/chara
 import { agingPhase } from '../life/health';
 import { becomeIndependent, COMING_OF_AGE } from '../life/household';
 import { SKILL_XP_MAX, type Skill } from '../life/skills';
+import type { Background } from '../life/params';
 import { staminaMax } from '../life/stamina';
 import { allocateNpc, type NpcState, type NpcWorldState, type Occupation } from './state';
 
@@ -75,42 +76,66 @@ function pickOccupation(kind: SettlementKind, c: CharacterState, age: number, ha
  * đếm hai lần. Người lớn ra riêng với phần chia lấy từ quỹ, kho quận nhà (sổ cái không đổi). `rng`: luồng `npc-world`.
  */
 export function seedPopulation(world: NpcWorldState, eco: EconomyState, logic: RegionLogic, rng: Rng, tick: Tick, playerCounty: number | null): void {
-  const regionId = world.regionId, lifeRoot = world.root;
-  const weights = AGE_BANDS.map((b) => b[2]);
   logic.settlementKind.forEach((kind, county) => {
     const quota = NPC_QUOTA[kind];
     const ce = eco.counties[county]!;
     ce.mouths = Math.max(1, ce.mouths - quota);
     let hasPhysician = false;
     for (let k = 0; k < quota; k++) {
-      const { id, rng: state } = allocateNpc(world, lifeRoot);
-      const own = Rng.fromState(state);
-      const band = AGE_BANDS[rng.weighted(weights)]!;
-      let age = rng.int(band[0], band[1]);
-      const weekOfYear = rng.int(0, TICKS_PER_YEAR - 1);
-      const place = { birthTick: tick - age * TICKS_PER_YEAR - weekOfYear, birthplaceId: birthplaceId(`${regionId}/c${logic.counties[county]!.worldIndex}`), birthplaceKind: kind, county };
-      const c = createCharacter(place, own, own);
-      // Không sinh người đã quá thọ: trẻ lại cho còn ít nhất hai năm sống
-      const maxAge = idiv(lifespanCap(c), TICKS_PER_YEAR) - LIFESPAN_MARGIN_YEARS;
-      if (age > maxAge) {
-        age = Math.max(0, maxAge);
-        c.birthTick = tick - age * TICKS_PER_YEAR - weekOfYear;
-        for (const s of Object.keys(c.skillLastUsed) as Skill[]) c.skillLastUsed[s] = c.birthTick;
-      }
-      agingPhase(c, tick);
-      c.health = c.healthMax;
-      c.stamina = staminaMax(c, tick);
-      const occupation = pickOccupation(kind, c, age, hasPhysician, own);
-      if (occupation === 'physician') hasPhysician = true;
-      seedSkill(c, occupation, age, tick);
-      if (age >= COMING_OF_AGE) {
-        becomeIndependent(c, ce);
-        // Người lớn đã sống tới giờ thì có kho dành dụm theo số năm tự lo, lấy từ kho quận nhà (không tạo từ hư không)
-        const top = Math.min(Math.max(0, startReserve(age) - c.household.grain), ce.grain);
-        c.household.grain += top; ce.grain -= top;
-      }
-      const npc: NpcState = { id, character: c, occupation, tier: county === playerCounty ? 'L0' : 'L1', rng: own.state(), death: null, plan: null, active: null, planWarned: false };
-      world.people.push(npc);
+      const npc = spawnNpc(world, eco, logic, rng, tick, county, playerCounty, { hasPhysician });
+      if (npc.occupation === 'physician') hasPhysician = true;
     }
   });
+}
+
+/** Định sẵn khi dựng một người (cha mẹ của người chơi, v0.5): giới, xuất thân, tuổi. Không định thì rút như dân số ban đầu. */
+export interface SpawnOptions {
+  gender?: Gender;
+  background?: Background;
+  age?: number;
+  /** Quận đã có thầy thuốc chưa (mỗi quận tối đa một). */
+  hasPhysician?: boolean;
+}
+
+/**
+ * Một người có tên đã sống tới lúc `tick` ở `county`: tuổi theo tháp tuổi (hoặc định sẵn), nghề, kỹ năng theo số năm
+ * đã làm, người lớn ra riêng với phần chia và kho dành dụm lấy từ quỹ, kho quận nhà. Không trừ dân nền (người gọi lo).
+ */
+export function spawnNpc(world: NpcWorldState, eco: EconomyState, logic: RegionLogic, rng: Rng, tick: Tick, county: number, playerCounty: number | null, opts: SpawnOptions = {}): NpcState {
+  const kind = logic.settlementKind[county]!;
+  const ce = eco.counties[county]!;
+  const { id, rng: state } = allocateNpc(world, world.root);
+  const own = Rng.fromState(state);
+  let age: number;
+  if (opts.age === undefined) {
+    const band = AGE_BANDS[rng.weighted(AGE_BANDS.map((b) => b[2]))]!;
+    age = rng.int(band[0], band[1]);
+  } else age = opts.age;
+  const weekOfYear = rng.int(0, TICKS_PER_YEAR - 1);
+  const place = {
+    birthTick: tick - age * TICKS_PER_YEAR - weekOfYear, birthplaceId: birthplaceId(`${world.regionId}/c${logic.counties[county]!.worldIndex}`), birthplaceKind: kind, county,
+    ...(opts.gender ? { gender: opts.gender } : {}), ...(opts.background ? { background: opts.background } : {}),
+  };
+  const c = createCharacter(place, own, own);
+  // Không sinh người đã quá thọ: trẻ lại cho còn ít nhất hai năm sống
+  const maxAge = idiv(lifespanCap(c), TICKS_PER_YEAR) - LIFESPAN_MARGIN_YEARS;
+  if (age > maxAge) {
+    age = Math.max(0, maxAge);
+    c.birthTick = tick - age * TICKS_PER_YEAR - weekOfYear;
+    for (const s of Object.keys(c.skillLastUsed) as Skill[]) c.skillLastUsed[s] = c.birthTick;
+  }
+  agingPhase(c, tick);
+  c.health = c.healthMax;
+  c.stamina = staminaMax(c, tick);
+  const occupation = pickOccupation(kind, c, age, opts.hasPhysician ?? false, own);
+  seedSkill(c, occupation, age, tick);
+  if (age >= COMING_OF_AGE) {
+    becomeIndependent(c, ce);
+    // Người lớn đã sống tới giờ thì có kho dành dụm theo số năm tự lo, lấy từ kho quận nhà (không tạo từ hư không)
+    const top = Math.min(Math.max(0, startReserve(age) - c.household.grain), ce.grain);
+    c.household.grain += top; ce.grain -= top;
+  }
+  const npc: NpcState = { id, character: c, occupation, tier: county === playerCounty ? 'L0' : 'L1', rng: own.state(), death: null, plan: null, active: null, planWarned: false };
+  world.people.push(npc);
+  return npc;
 }

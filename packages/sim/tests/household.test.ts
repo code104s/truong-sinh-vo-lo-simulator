@@ -23,6 +23,8 @@ function adult(seed = 'hunger', patch: (c: CharacterState) => void = () => {}) {
   const s = l.snapshot();
   s.character.birthTick = 0; s.tick = 20 * 36 + 2;
   s.character.health = s.character.healthMax = 1000; s.character.stamina = 900; s.character.conditions = [];
+  // Luật đói của riêng một người: không có người thân cho gạo (người thân giúp kiểm ở family.test.ts, v0.5)
+  s.character.kin = { father: null, mother: null, spouse: null };
   patch(s.character);
   return Life.restore(s, [], region);
 }
@@ -241,8 +243,10 @@ describe('hậu quả của đói', () => {
 
   it('đủ ăn trở lại thì hết đói và hồi sức', () => {
     const l = adult('recover', (c) => { c.household.independent = true; c.household.grain = 500; c.household.hunger = 6; });
-    // Sự kiện có lựa chọn có thể chen vào (S6: sự kiện gọi người thật làm đổi chuỗi RNG): chọn đường cuối để đi tiếp
-    for (let k = 0; k < 3; k++) autoAdvance(l, 'month', lastChoice);
+    // Sự kiện có lựa chọn có thể chen vào (S6: sự kiện gọi người thật làm đổi chuỗi RNG): chọn đường cuối để đi tiếp.
+    // Tua dừng ở mỗi sự kiện, tin lớn: tua cho đủ ba tháng theo tick, không theo số lần bấm (v0.5 S7)
+    const end = l.tick + 9;
+    while (l.alive && l.tick < end) autoAdvance(l, 'month', lastChoice);
     expect(l.character.household.hunger).toBe(0);
     expect(l.log.some((e) => e.key === 'log.hunger.recovered')).toBe(true);
   });

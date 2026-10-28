@@ -28,6 +28,13 @@ export interface SpiritRoot {
   purity: number;
 }
 
+/** Liên kết ruột thịt, hôn nhân (v0.5, ADR 0018): id NPC hoặc null. Con, anh chị em suy ra từ liên kết cha mẹ. */
+export interface KinLinks {
+  father: string | null;
+  mother: string | null;
+  spouse: string | null;
+}
+
 /** Trạng thái đầy đủ của nhân vật trong sim. Chỉ số nguyên, chuỗi, boolean, null. */
 export interface CharacterState {
   name: string;
@@ -65,6 +72,8 @@ export interface CharacterState {
   /** Túi tiền, kho lương, ruộng, bộ đếm đói (ADR 0013). */
   household: HouseholdState;
   alive: boolean;
+  /** Cha, mẹ, vợ/chồng (v0.5). */
+  kin: KinLinks;
 }
 
 /**
@@ -92,12 +101,13 @@ export function traitDef(id: string) {
 }
 
 export function createCharacter(
-  input: { birthTick: Tick; birthplaceId: BirthplaceId; birthplaceKind: SettlementKind; county: number },
+  input: { birthTick: Tick; birthplaceId: BirthplaceId; birthplaceKind: SettlementKind; county: number; gender?: Gender; background?: Background },
   r: Rng,
   names: Rng,
 ): CharacterState {
-  const gender: Gender = r.int(0, 1) === 0 ? 'male' : 'female';
-  const background = BACKGROUNDS[r.weighted(BACKGROUND_WEIGHTS[input.birthplaceKind])]!;
+  // Giới, xuất thân định sẵn (cha mẹ dựng cho người chơi, v0.5) thì không rút: các đường cũ rút y như trước
+  const gender: Gender = input.gender ?? (r.int(0, 1) === 0 ? 'male' : 'female');
+  const background = input.background ?? BACKGROUNDS[r.weighted(BACKGROUND_WEIGHTS[input.birthplaceKind])]!;
   const personality = r.pick(PERSONALITIES);
   const constitution = bell10(r);
   const aptitude = bell10(r);
@@ -143,6 +153,7 @@ export function createCharacter(
     home: input.county, location: input.county, stamina: 0, skillXp: emptySkills(), skillLastUsed: emptySkills(input.birthTick),
     background, personality, constitution, aptitude, luck, traits, spiritRoot,
     lifespanBase, lifespanBonus: 0, health: 0, healthMax: 0, scars: 0, conditions: [], household: newHousehold(), alive: true,
+    kin: { father: null, mother: null, spouse: null },
   };
   return c;
 }
@@ -186,5 +197,7 @@ export function toView(c: CharacterState, tick: Tick, buyPricePerDou: number): C
     skills: skillViews(c),
     canAct: c.alive && ageYearsAt(c.birthTick, tick) >= ACTION_MIN_AGE,
     household: householdView(c, tick, buyPricePerDou),
+    // Tiếng tăm theo quận, vợ/chồng: có từ S4–S6 v0.5 (ADR 0017, 0018)
+    reputation: 'unknown',
   };
 }

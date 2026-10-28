@@ -20,6 +20,8 @@ export const drought: EventDef = {
   category: 'disaster',
   weight: (ctx) => (striking(ctx, 'drought') ? 1_000_000 : 0),
   cooldownTicks: 30,
+  // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
+  reputation: { irrigate: 3 },
   choices: [
     { id: 'irrigate', costs: ['stamina', 'time'], apply: (ctx) => { occupy(ctx, 'action.toil', 2); relieve(ctx, 50); return { result: 'irrigate' }; } },
     {
@@ -43,6 +45,8 @@ export const flood: EventDef = {
   category: 'disaster',
   weight: (ctx) => (striking(ctx, 'flood') ? 1_000_000 : 0),
   cooldownTicks: 30,
+  // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
+  reputation: { dyke: 3 },
   choices: [
     { id: 'dyke', costs: ['stamina', 'time'], apply: (ctx) => { occupy(ctx, 'action.toil', 2); relieve(ctx, 50); return { result: 'dyke' }; } },
     // Khuân thóc lên gò cao: giữ được kho, ruộng thì đành chịu
@@ -59,6 +63,8 @@ export const locusts: EventDef = {
   category: 'disaster',
   weight: (ctx) => (striking(ctx, 'locust') ? 1_000_000 : 0),
   cooldownTicks: 30,
+  // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
+  reputation: { drive_off: 3 },
   choices: [
     { id: 'drive_off', costs: ['stamina', 'time'], apply: (ctx) => { occupy(ctx, 'action.toil', 1); relieve(ctx, 30); return { result: 'drive_off' }; } },
     {
@@ -105,6 +111,8 @@ export const houseFire: EventDef = {
   // Mùa hanh khô dễ cháy; nhà có của mới mất được
   weight: (ctx) => (ctx.age >= 14 && ctx.c.household.grain >= 200 ? (month(ctx) >= 10 || month(ctx) <= 3 ? 3_000 : 1_500) : 0),
   cooldownTicks: 360,
+  // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
+  reputation: { rush_in_saved: 15, rush_in_burnt: 10 },
   choices: [
     {
       id: 'rush_in', costs: ['health', 'risk'],

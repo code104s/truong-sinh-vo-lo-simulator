@@ -7,6 +7,8 @@ import { EVENTS, WANDERING_PHYSICIAN_FEE } from '../src/events/catalog';
 import { checkCatalog, makeContext, newEventsState, rollEvent, type EventDef } from '../src/events/engine';
 import type { CharacterState } from '../src/life/character';
 import type { LifeSnapshot } from '../src/life/life';
+import { kinRole, PLAYER_ID } from '../src/npc/family';
+import type { Bond } from '../src/social/bonds';
 
 const region: RegionLogic = {
   kmPerCellMilli: 6000,
@@ -279,13 +281,48 @@ describe('người thật trong sự kiện (v0.4 S6)', () => {
     if (eventId === 'event.village_funeral') { const n = alive(0)[0]!; n.character.alive = false; n.death = { tick: s.tick - 5, cause: 'old_age', detail: 'old_age.natural' }; }
     if (eventId === 'event.wandering_physician') alive(1)[0]!.occupation = 'physician';
     if (eventId === 'event.grain_broker') { const n = alive(1)[0]!; n.occupation = 'merchant'; n.character.household.money = 100_000; }
-    const ctx = makeContext(s.character, s.events, s, s.economy, region, s.tick, s.npcs);
+    // Gia đình (v0.5 S5): mẹ người chơi già, ốm ở cùng quận; hay vừa mất
+    const mother = s.npcs.people.find((n) => n.id === s.character.kin.mother)!;
+    if (eventId === 'event.parent_ill' || eventId === 'event.kin_funeral') { mother.character.location = s.character.location; mother.character.birthTick = s.tick - 60 * 36; }
+    if (eventId === 'event.parent_ill') mother.character.conditions = [{ id: 'illness.fever', kind: 'illness', severity: 'serious', weeksLeft: 6 }];
+    if (eventId === 'event.kin_funeral') { mother.character.alive = false; mother.death = { tick: s.tick - 2, cause: 'old_age', detail: 'old_age.natural' }; }
+    // Quan hệ (v0.5 S7): một người lạ cùng quận (không phải người thân) đóng vai người trong chuyện
+    const n = alive(0).find((x) => kinRole(s.character, x) === null)!;
+    const bond = (b: Partial<Bond>) => { s.bonds.push({ id: n.id, closeness: 0, trust: 0, hostility: 0, owed: 0, ...b }); s.bonds.sort((a, b2) => Number(a.id.slice(1)) - Number(b2.id.slice(1))); };
+    const unwed = () => { const sp = s.npcs.people.find((x) => x.id === n.character.kin.spouse); if (sp) sp.character.kin.spouse = null; n.character.kin.spouse = null; };
+    if (eventId === 'event.granary_theft') { n.character.household.hunger = 2; n.character.birthTick = s.tick - 30 * 36; }
+    if (eventId === 'event.neighbor_harvest') n.occupation = 'farmer';
+    if (eventId === 'event.matchmaker') {
+      unwed(); s.character.kin.spouse = null;
+      Object.assign(n.character, { gender: s.character.gender === 'male' ? 'female' : 'male', birthTick: s.character.birthTick });
+      n.character.household.independent = true;
+    }
+    if (eventId === 'event.village_wedding') Object.assign(n.character, { gender: 'female', birthTick: s.tick - 19 * 36 }), n.character.kin.spouse = 'n9999';
+    if (eventId === 'event.friend_brings_rice') { bond({ closeness: 60 }); n.character.household.grain = 1_000; }
+    if (eventId === 'event.enemy_revenge') bond({ hostility: 50 });
+    if (eventId === 'event.child_ill') {
+      Object.assign(n.character, { birthTick: s.tick - 8 * 36, conditions: [{ id: 'illness.fever', kind: 'illness', severity: 'serious', weeksLeft: 4 }] });
+      // Con chỉ sinh từ cặp vợ chồng (S5): người chơi đã có vợ/chồng
+      n.character.kin.father = PLAYER_ID; s.character.kin.spouse = 'n9999';
+    }
+    if (eventId === 'event.debt_called') bond({ owed: -30 });
+    if (eventId === 'event.estate_dispute') {
+      mother.character.alive = false; mother.death = { tick: s.tick - 4, cause: 'old_age', detail: 'old_age.natural' }; mother.character.kin.spouse = null;
+      n.character.kin.mother = mother.id; n.character.household.independent = true;
+    }
+    if (eventId === 'event.friend_in_need') { bond({ closeness: 30 }); n.character.household.hunger = 2; }
+    if (eventId === 'event.spouse_quarrel') { unwed(); s.character.kin.spouse = n.id; n.character.kin.spouse = PLAYER_ID; }
+    const ctx = makeContext(s.character, s.events, s, s.economy, region, s.tick, s.npcs, s.bonds, s.reputation);
     ctx.npc = def.cast!(ctx, Rng.fromSeed(1));
     return { s, ctx, def };
   }
-  const NAMED = ['event.beggar', 'event.grain_broker', 'event.market_brawl', 'event.village_funeral', 'event.wandering_physician'];
+  const NAMED = [
+    'event.beggar', 'event.child_ill', 'event.debt_called', 'event.enemy_revenge', 'event.estate_dispute', 'event.friend_brings_rice', 'event.friend_in_need',
+    'event.grain_broker', 'event.granary_theft', 'event.kin_funeral', 'event.market_brawl', 'event.matchmaker', 'event.neighbor_harvest', 'event.parent_ill',
+    'event.spouse_quarrel', 'event.village_funeral', 'event.village_wedding', 'event.wandering_physician',
+  ];
 
-  it('năm sự kiện gọi người thật: biến thể "named" có tên, thẻ là người ấy, mọi khóa văn bản đủ', async () => {
+  it('mười tám sự kiện gọi người thật (v0.5 S5 thêm cha mẹ ốm, tang; S7 thêm chín sự kiện quan hệ, nối trộm kho, gặt giúp): biến thể "named" có tên, thẻ là người ấy, mọi khóa văn bản đủ', async () => {
     const { t } = await import('@tsvl/content');
     const MISSING = /⟨|\{\w+\}/;
     expect(EVENTS.filter((d) => d.cast).map((d) => d.id)).toEqual(NAMED);

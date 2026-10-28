@@ -144,11 +144,25 @@ describe('tất định và lưu/tải (nghiệm thu Sim)', () => {
     // v0.4 S4: snapshot NPC thêm seed gốc, vùng; trẻ sinh giữ hạn mức, lập thân NPC, nghề đổi theo kỹ năng → digest đổi.
     // v0.4 S6: sự kiện gọi người thật (thẻ, lựa chọn đổi túi, kho, thương tích NPC), trạng thái sự kiện thêm người đã gặp,
     // nhật ký thêm tin sinh, mất → digest đổi; tuổi và nguyên nhân chết giữ nguyên.
+    // v0.5 Bước 0: SIM_VERSION 0.5.0 → digest đổi; tuổi và nguyên nhân chết giữ nguyên.
+    // v0.5 S1: cha mẹ thật (chọn hoặc dựng thêm bằng luồng npc-world), liên kết ruột thịt, kho quan hệ trong snapshot;
+    // người chơi mang họ cha → digest đổi; tuổi và nguyên nhân chết giữ nguyên.
+    // v0.5 S2: hôn nhân NPC, trẻ có cha mẹ, con ăn vào kho cha mẹ, người thân giúp khi đói (cả người chơi) → đời mẫu
+    // chỉ nghỉ được cha mẹ mang gạo sang khi đói nên sống lâu hơn (21 → 31–43 tuổi); vẫn chết đói khi cha mẹ hết dư hoặc mất.
+    // v0.5 S3: thừa kế (cha mẹ mất thì người chơi được chia), phí thầy thuốc vào túi thầy thuốc, chi dùng 4%/năm phần
+    // tiền trên 5.000 văn → đời mẫu chỉ nghỉ sống bằng của thừa kế lâu hơn (31–43 → 42–53 tuổi), vẫn chết đói khi hết.
+    // v0.5 S4: luồng RNG social, quan hệ đổi theo lựa chọn sự kiện có người thật, phai đầu năm → digest đổi.
+    // v0.5 S5: NPC cưới thì nhà trai đưa sính lễ (của cải cha mẹ, phần thừa kế đổi), sự kiện cha mẹ ốm, lo tang người
+    // thân → đời mẫu chỉ nghỉ sống 49/53/42 → 52/53/42 tuổi, vẫn chết đói khi hết của.
+    // v0.5 S6: tiếng tăm theo quận (thiếu thuế mất tiếng, quen người mới theo tiếng), tin đồn → digest đổi, tuổi giữ.
+    // v0.5 S7: chín sự kiện quan hệ (đời mẫu chọn lựa chọn đầu đang mở, phần lớn tốn tiền), trộm kho có tên
+    // → 51/52/42 tuổi.
+    // v0.5 S8: chi dùng hằng năm tính trên phần tiền vượt 15.000 văn (trước 5.000) → digest đổi, tuổi giữ.
     expect(out).toMatchInlineSnapshot(`
       [
-        "21 starvation 020b6087f56abe47",
-        "21 starvation 91e1efaf76723ee4",
-        "21 starvation 8550625d5831c891",
+        "51 starvation 97d749eea598d497",
+        "52 starvation 3f4472cd29e9e4cb",
+        "42 starvation 0bd0fa7f295b5397",
       ]
     `);
   });

@@ -14,6 +14,7 @@ import { fatiguePct, recoverStamina, spendStamina } from './stamina';
 import { previewTravel, routeTerrainPct } from './travel';
 import { recordFarmWeek } from '../economy/farming';
 import { settleAction } from '../economy/income';
+import { physicianIn, type NpcWorldState } from '../npc/state';
 import type { CountyEconomy, EconomyState } from '../economy/market';
 
 export interface ActiveAction { slot: PlanSlot; remaining: number; total: number; preview: TravelPreview | null }
@@ -33,7 +34,13 @@ const REST: PlanSlot = { action: 'action.rest' };
 export const TRANSIENT_LOCKS: ReadonlySet<string> = new Set(['lock.winter', 'lock.stamina', 'lock.health', 'lock.hunger', 'lock.money', 'lock.no_work']);
 
 /** Pha 5. Mỗi ô chỉ trừ giá một lần; hành động đang dở tiếp tục qua ranh tháng. */
-export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic: RegionLogic, eco: EconomyState, rng: RngSource, log: Log): { death: Death | null; carePct: number } {
+/** Hành động xã giao của người chơi (v0.5 S4): khóa riêng (người ấy có ở đây không) và tác dụng lên quan hệ. */
+export interface SocialHooks {
+  lock(slot: PlanSlot, c: CharacterState): string | null;
+  act(slot: PlanSlot, c: CharacterState, log: Log): void;
+}
+
+export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic: RegionLogic, eco: EconomyState, rng: RngSource, log: Log, people: NpcWorldState | null = null, social: SocialHooks | null = null): { death: Death | null; carePct: number } {
   const age = ageYearsAt(c.birthTick, tick);
   if (age < ACTION_MIN_AGE) {
     if (age >= 5 && isYearStart(tick)) {
@@ -49,14 +56,15 @@ export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic
 
   const planned = s.active?.slot ?? s.plan?.slots[tick % TICKS_PER_MONTH] ?? REST;
   const market = eco.counties[c.location]!;
-  const lock = slotLock(planned, c, tick, logic, market);
+  const d0 = actionDef(planned.action);
+  const lock = slotLock(planned, c, tick, logic, market) ?? (d0?.group === 'social' ? (social ? social.lock(planned, c) : 'lock.person_away') : null);
   if (lock && !TRANSIENT_LOCKS.has(lock)) {
     if (!s.planWarned) log({ key: 'log.plan.invalid', params: { action: planned.action, reason: lock }, importance: 'minor' });
     s.planWarned = true;
     s.active = null;
   }
   // Khóa tạm thời mà đang đi dở: nghỉ ô này, chuyến đi chờ ô sau.
-  if (lock) return perform(actionDef(REST.action)!, null, c, tick, logic, market, rng, log, age);
+  if (lock) return perform(actionDef(REST.action)!, null, c, tick, logic, market, rng, log, age, people);
 
   const d = actionDef(planned.action)!;
   if (!s.active) {
@@ -65,8 +73,9 @@ export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic
     s.active = { slot: { ...planned }, total, remaining: total, preview };
   }
   const active = s.active;
-  const result = perform(d, active.preview, c, tick, logic, market, rng, log, age);
+  const result = perform(d, active.preview, c, tick, logic, market, rng, log, age, people);
   if (result.death) return result;
+  if (d.group === 'social' && social) social.act(active.slot, c, log);
   active.remaining--;
   if (active.remaining === 0) {
     s.active = null;
@@ -86,8 +95,8 @@ function arrive(s: PlayerState, c: CharacterState, county: number, logic: Region
 }
 
 /** Trừ giá, cho kết quả và tính rủi ro của một ô. Việc thường ngày không ghi nhật ký. */
-function perform(d: ActionDef, route: TravelPreview | null, c: CharacterState, tick: Tick, logic: RegionLogic, market: CountyEconomy, rng: RngSource, log: Log, age: number): { death: Death | null; carePct: number } {
-  const { ppm, carePct } = slotEffects(d, route, c, tick, logic, market, rng, log);
+function perform(d: ActionDef, route: TravelPreview | null, c: CharacterState, tick: Tick, logic: RegionLogic, market: CountyEconomy, rng: RngSource, log: Log, age: number, people: NpcWorldState | null): { death: Death | null; carePct: number } {
+  const { ppm, carePct } = slotEffects(d, route, c, tick, logic, market, rng, log, people);
   // Mỗi hệ thống dùng luồng riêng; nguy hiểm đường tính trên dữ liệu nguyên đã lưu.
   const death = d.riskPpm > 0 ? slotMishap(c, tick, ppm, d.group === 'travel' ? 'accident.travel' : 'accident.action', rng.get(d.group === 'travel' ? 'travel' : 'actions'), log, age) : null;
   if (death) return { death, carePct };
@@ -99,14 +108,16 @@ function perform(d: ActionDef, route: TravelPreview | null, c: CharacterState, t
  * Phần tất định và kinh tế của một ô (trừ thể lực, kỹ năng, tuần công, tiền, nghỉ, chữa), trả về rủi ro (ppm) của ô.
  * Tầng NPC L1 (ADR 0015) gọi ba lần rồi rút rủi ro một lần cho cả tháng.
  */
-export function slotEffects(d: ActionDef, route: TravelPreview | null, c: CharacterState, tick: Tick, logic: RegionLogic, market: CountyEconomy, rng: RngSource, log: Log): { ppm: number; carePct: number } {
+export function slotEffects(d: ActionDef, route: TravelPreview | null, c: CharacterState, tick: Tick, logic: RegionLogic, market: CountyEconomy, rng: RngSource, log: Log, people: NpcWorldState | null = null): { ppm: number; carePct: number } {
   const tired = fatiguePct(c, tick);
   if (spendStamina(c, d.stamina)) log({ key: 'log.exhaustion', params: {}, importance: 'minor' });
   if (d.skill) gainSkill(c, d.skill, tick);
   // Tuần công tính cho mùa tới; gặt đầu tháng thu hoạch (ADR 0012)
   if (d.id === 'action.farm') recordFarmWeek(c.household, c.location);
   // Tiền, lương của ô này ở chợ đang đứng (ADR 0012); đi đường thiếu tiền trọ thì rủi ro cao hơn
-  const moneyRiskPct = settleAction(d.id, c, tick, market, rng.get('actions'));
+  // Chữa bệnh: phí vào túi thầy thuốc NPC ở quận đang đứng nếu có (v0.5 S3)
+  const physician = d.id === 'action.heal' && people ? physicianIn(people, c.location) : null;
+  const moneyRiskPct = settleAction(d.id, c, tick, market, rng.get('actions'), physician?.character.household ?? null);
   let carePct = 0;
   if (d.group === 'rest') { c.health = Math.min(c.healthMax, c.health + 18); carePct = 10; }
   if (d.group === 'heal') {

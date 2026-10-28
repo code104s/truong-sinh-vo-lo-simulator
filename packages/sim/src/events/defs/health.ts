@@ -1,6 +1,6 @@
 // Sức khỏe (ADR 0014; văn phong: docs/van-phong.md).
 import { HEAL_FEE } from '../../economy/income';
-import { catchIllness, heal, hurt, loseGrain, payTo } from '../effects';
+import { catchIllness, heal, hurt, loseGrain, payNpc, payTo } from '../effects';
 import type { EventDef } from '../engine';
 import { figure, ill, inTown, inVillage, man, castOr, nearestWith, npcName } from './common';
 
@@ -15,7 +15,8 @@ export const wanderingPhysician: EventDef = {
   // Thầy thuốc giỏi chỉ đi ngang làng; ở trấn, thành thì đã có thầy thuốc
   weight: (ctx) => (ctx.age >= 12 && ill(ctx) && inVillage(ctx) ? 60_000 : 0),
   cooldownTicks: 108,
-  // Người thật (S6): thầy thuốc NPC ở trấn, thành gần nhất (theo km giữa trị sở)
+  // Người thật (S6): thầy thuốc NPC ở trấn, thành gần nhất (theo km giữa trị sở). Nhờ chữa thì tin, quen người ấy hơn
+  bonds: { pay: { closeness: 5, trust: 10 }, herbs_ok: { closeness: 2 }, herbs_bad: { trust: -5 } },
   cast: (ctx) => nearestWith(ctx, (n) => n.occupation === 'physician'),
   variant: (ctx) => (ctx.npc ? 'named' : null),
   params: (ctx) => ({ fee: WANDERING_PHYSICIAN_FEE, ...npcName(ctx) }),
@@ -25,7 +26,8 @@ export const wanderingPhysician: EventDef = {
       id: 'pay', costs: ['money'],
       available: (ctx) => (ctx.c.household.money >= WANDERING_PHYSICIAN_FEE ? null : 'lock.money'),
       apply: (ctx) => {
-        payTo(ctx, ctx.c.location, WANDERING_PHYSICIAN_FEE);
+        // Thầy thuốc thật: phí vào túi người ấy (v0.5 S3); vô danh: quỹ quận như v0.3
+        if (ctx.npc) payNpc(ctx, ctx.npc, WANDERING_PHYSICIAN_FEE); else payTo(ctx, ctx.c.location, WANDERING_PHYSICIAN_FEE);
         ctx.c.conditions = ctx.c.conditions.filter((x) => x.kind !== 'illness');
         heal(ctx, 50);
         return { result: 'pay' };

@@ -7,6 +7,7 @@ import { FARM_YIELD_PER_WEEK, farmSkillPct } from '../../economy/farming';
 import { nearestTownFrom, routeTerrainPct } from '../../life/travel';
 import type { EventContext } from '../engine';
 import { npcFigure, type NpcState } from '../../npc/state';
+import { REP_KNOWN } from '../../social/reputation';
 
 export const figure = (rng: Rng, ageBand: EventFigure['ageBand'], cls: EventFigure['class']): EventFigure => ({ gender: rng.int(0, 1) === 0 ? 'male' : 'female', ageBand, class: cls });
 export const man = (ageBand: EventFigure['ageBand'], cls: EventFigure['class']): EventFigure => ({ gender: 'male', ageBand, class: cls });
@@ -42,6 +43,14 @@ export const sellValue = (ce: CountyEconomy, grain: number, pct = 100) => mulDiv
 export const nearestTown = (ctx: EventContext): number | null => nearestTownFrom(ctx.logic, ctx.c.location);
 
 export const percentOf = (n: number, pct: number) => mulDiv(n, pct, 100);
+
+/** Tiếng tăm của người chơi ở quận đang đứng (v0.5 S6). */
+export const repHere = (ctx: EventContext): number => ctx.reputation[ctx.c.location] ?? 0;
+/** Trọng số theo tiếng tăm: tiếng tốt (từ "được trọng") hay tiếng xấu (từ "bị chê") nhân thêm phần trăm. */
+export const byReputation = (ctx: EventContext, w: number, goodPct: number, badPct: number): number => {
+  const rep = repHere(ctx);
+  return rep >= REP_KNOWN ? mulDiv(w, goodPct, 100) : rep <= -REP_KNOWN ? mulDiv(w, badPct, 100) : w;
+};
 
 /** NPC còn sống ở quận người chơi đang đứng, theo id (S6: người thật trong sự kiện). */
 export const peopleHere = (ctx: EventContext): NpcState[] => ctx.npcs.people.filter((n) => n.death === null && n.character.location === ctx.c.location);

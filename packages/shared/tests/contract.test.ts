@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   HIDDEN_CHARACTER_KEYS, TICKS_PER_YEAR,
   ageYearsAt, base64ToBytes, HARVEST_MONTH, weeksToHarvest, bytesToBase64, calendarOf, decodeSave, encodeSave, isMonthStart, isYearStart,
-  parseCommand, parseWorkerMessage, vCharacterView, vHouseholdView, vMarketView, vNpcView, vPendingEvent, PROTOCOL_VERSION, SAVE_VERSION,
+  parseCommand, parseWorkerMessage, vCharacterView, vHouseholdView, vLifeSummary, vMarketView, vMonthPlan, vNpcView, vPendingEvent, PROTOCOL_VERSION, SAVE_VERSION,
 } from '../src/index';
 import {
   sampleBirthplace, sampleCharacter, sampleHousehold, sampleLife, sampleLog, sampleMap, sampleMarket, sampleNpc, sampleOption, samplePending, samplePlan, sampleSave, sampleSummary,
@@ -87,7 +87,7 @@ describe('tin worker → UI', () => {
       { type: 'READY', protocolVersion: 1, simVersion: '0.1.0' },
       { type: 'PROGRESS', reqId: 1, stage: 'worldgen.terrain', pct: 40 },
       { type: 'WORLD', reqId: 1, worldSeed: 'tsvl-01', region: sampleSummary, map: sampleMap(), birthplaces: [sampleBirthplace] },
-      { type: 'STATE', reqId: 2, date: calendarOf(37), character: sampleCharacter, running: false, plan: samplePlan, active: null, slotIndex: 1, actions: [sampleOption], travel: [], market: sampleMarket, pending: null, people: [sampleNpc] },
+      { type: 'STATE', reqId: 2, date: calendarOf(37), character: sampleCharacter, running: false, plan: samplePlan, active: null, slotIndex: 1, actions: [sampleOption], travel: [], market: sampleMarket, pending: null, people: [sampleNpc], circle: [{ ...sampleNpc, kin: 'mother' }] },
       { type: 'LOG', reqId: 2, entries: [sampleLog] },
       { type: 'INTERRUPT', reqId: 2, entry: { ...sampleLog, importance: 'major' } },
       { type: 'DIED', reqId: 3, summary: sampleLife },
@@ -158,10 +158,11 @@ describe('save', () => {
     expect(decodeSave('{').ok).toBe(false);
     // Save v1 của v0.1 bị từ chối (ADR 0004)
     expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 1 })).ok).toBe(false);
-    // Save v2 của v0.2 (v0.3 Q9), save v3 của v0.3 (v0.4 Q10) bị từ chối, save đời sau cũng vậy
+    // Save v2 (v0.3 Q9), v3 (v0.4 Q10), v4 của v0.4 (v0.5 Q11) bị từ chối, save đời sau cũng vậy
     expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 2 })).ok).toBe(false);
     expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 3 })).ok).toBe(false);
-    expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 5 })).ok).toBe(false);
+    expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 4 })).ok).toBe(false);
+    expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 6 })).ok).toBe(false);
     expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), format: 'other' })).ok).toBe(false);
   });
 });
@@ -183,7 +184,7 @@ describe('v0.2: kế hoạch tháng, di chuyển, nhật ký lệnh (ADR 0008–
   });
 
   it('STATE mang kế hoạch, hành động khả dụng, đích đi được', () => {
-    const base = { type: 'STATE', reqId: 2, date: calendarOf(37), character: sampleCharacter, running: false, active: null, market: null, pending: null, people: [] };
+    const base = { type: 'STATE', reqId: 2, date: calendarOf(37), character: sampleCharacter, running: false, active: null, market: null, pending: null, people: [], circle: [] };
     expect(parseWorkerMessage({ ...base, plan: samplePlan, slotIndex: 1, actions: [sampleOption, { ...sampleOption, id: 'action.hunt', locked: 'lock.winter' }], travel: [{ county: 2, slots: 1, risk: 'risk.low' }] })).toMatchObject({ ok: true });
     expect(parseWorkerMessage({ ...base, plan: null, slotIndex: 0, actions: [], travel: [] })).toMatchObject({ ok: true });
     expect(parseWorkerMessage({ ...base, plan: null, slotIndex: 3, actions: [], travel: [] }).ok).toBe(false);
@@ -214,7 +215,7 @@ describe('v0.2: kế hoạch tháng, di chuyển, nhật ký lệnh (ADR 0008–
 });
 
 describe('v0.3: hộ, chợ, mua bán, sự kiện (ADR 0012–0014)', () => {
-  const state = { type: 'STATE', reqId: 2, date: calendarOf(41), character: sampleCharacter, running: false, plan: null, active: null, slotIndex: 2, actions: [], travel: [], people: [] };
+  const state = { type: 'STATE', reqId: 2, date: calendarOf(41), character: sampleCharacter, running: false, plan: null, active: null, slotIndex: 2, actions: [], travel: [], people: [], circle: [] };
 
   it('nhận TRADE và CHOOSE hợp lệ', () => {
     expect(parseCommand({ type: 'TRADE', reqId: 1, grain: 30 })).toMatchObject({ ok: true });
@@ -284,11 +285,7 @@ describe('v0.3: hộ, chợ, mua bán, sự kiện (ADR 0012–0014)', () => {
 });
 
 describe('v0.4: NPC (ADR 0015, 0016)', () => {
-  const state = { type: 'STATE', reqId: 2, date: calendarOf(41), character: sampleCharacter, running: false, plan: null, active: null, slotIndex: 2, actions: [], travel: [], market: null, pending: null };
-
-  it('phiên bản giao thức 4, save 4', () => {
-    expect([PROTOCOL_VERSION, SAVE_VERSION]).toEqual([4, 4]);
-  });
+  const state = { type: 'STATE', reqId: 2, date: calendarOf(41), character: sampleCharacter, running: false, plan: null, active: null, slotIndex: 2, actions: [], travel: [], market: null, pending: null, circle: [] };
 
   it('STATE mang người trong quận; STATE kiểu v0.3 (thiếu people) bị từ chối', () => {
     expect(parseWorkerMessage({ ...state, people: [sampleNpc, { ...sampleNpc, id: 'n2', gender: 'male' }] })).toMatchObject({ ok: true });
@@ -303,10 +300,15 @@ describe('v0.4: NPC (ADR 0015, 0016)', () => {
     ['nghề không phải id nội dung', { occupation: 'Nông' }],
     ['dải sức khỏe lạ', { healthBand: 'fine' }],
     ['chân dung thiếu khóa', { portrait: { ageBand: 'adult', class: 'common', key: '' } }],
+    ['khóa xã giao sai id hành động (v0.5 F2)', { social: [{ action: 'visit', locked: null }] }],
+    ['khóa xã giao thiếu lý do (v0.5 F2)', { social: [{ action: 'action.visit' }] }],
   ])('NpcView từ chối: %s', (_n, patch) => {
     expect(vNpcView.check({ ...sampleNpc, ...patch }, '$')).not.toBeNull();
   });
 
+  it('NpcView nhận khóa xã giao (v0.5 F2)', () => {
+    expect(vNpcView.check({ ...sampleNpc, social: [{ action: 'action.visit', locked: null }, { action: 'action.propose', locked: 'lock.not_close' }] }, '$')).toBeNull();
+  });
   it('NpcView không lộ thuộc tính ẩn', () => {
     for (const key of HIDDEN_CHARACTER_KEYS) expect(vNpcView.check({ ...sampleNpc, [key]: 1 }, '$'), key).not.toBeNull();
   });
@@ -318,3 +320,44 @@ describe('v0.4: NPC (ADR 0015, 0016)', () => {
   });
 });
 
+describe('v0.5: quan hệ, gia đình, tiếng tăm (ADR 0017, 0018)', () => {
+  const state = { type: 'STATE', reqId: 2, date: calendarOf(41), character: sampleCharacter, running: false, plan: null, active: null, slotIndex: 2, actions: [], travel: [], market: null, pending: null, people: [] };
+  const bond = { closeness: 'friend', trust: 'trusted', hostility: 'none', owed: 'they_owe' };
+
+  it('phiên bản giao thức 5, save 5', () => {
+    expect([PROTOCOL_VERSION, SAVE_VERSION]).toEqual([5, 5]);
+  });
+
+  it('STATE mang người thân, người quen ở mọi quận; STATE kiểu v0.4 (thiếu circle) bị từ chối', () => {
+    expect(parseWorkerMessage({ ...state, circle: [{ ...sampleNpc, kin: 'mother' }, { ...sampleNpc, id: 'n9', bond }] })).toMatchObject({ ok: true });
+    expect(parseWorkerMessage({ ...state, circle: [] })).toMatchObject({ ok: true });
+    expect(parseWorkerMessage(state).ok).toBe(false);
+  });
+
+  it('NpcView: vai ruột thịt, quan hệ theo dải; không nhận số thô hay vai lạ', () => {
+    expect(vNpcView.check({ ...sampleNpc, kin: 'spouse', bond }, '$')).toBeNull();
+    expect(vNpcView.check({ ...sampleNpc, kin: 'cousin' }, '$')).not.toBeNull();
+    expect(vNpcView.check({ ...sampleNpc, bond: { ...bond, closeness: 72 } }, '$')).not.toBeNull();
+    expect(vNpcView.check({ ...sampleNpc, bond: { ...bond, score: 3 } }, '$')).not.toBeNull();
+  });
+
+  it('CharacterView có tiếng tăm (bắt buộc), vợ/chồng (tùy); kiểu v0.4 bị từ chối', () => {
+    expect(vCharacterView.check({ ...sampleCharacter, spouse: 'n4' }, '$')).toBeNull();
+    expect(vCharacterView.check({ ...sampleCharacter, reputation: 'famous' }, '$')).not.toBeNull();
+    expect(vCharacterView.check({ ...sampleCharacter, spouse: 'n0' }, '$')).not.toBeNull();
+    const { reputation: _r, ...v04 } = sampleCharacter;
+    expect(vCharacterView.check(v04, '$')).not.toBeNull();
+  });
+
+  it('ô kế hoạch nhắm vào người: id NPC đúng dạng', () => {
+    expect(vMonthPlan.check({ slots: [{ action: 'action.visit', person: 'n12' }, { action: 'action.rest' }, { action: 'action.rest' }] }, '$')).toBeNull();
+    expect(vMonthPlan.check({ slots: [{ action: 'action.visit', person: 'Lý Hoa' }, { action: 'action.rest' }, { action: 'action.rest' }] }, '$')).not.toBeNull();
+  });
+
+  it('tổng kết có di sản; thiếu di sản bị từ chối', () => {
+    expect(vLifeSummary.check(sampleLife, '$')).toBeNull();
+    const { legacy: _l, ...v04 } = sampleLife;
+    expect(vLifeSummary.check(v04, '$')).not.toBeNull();
+    expect(vLifeSummary.check({ ...sampleLife, legacy: { ...sampleLife.legacy, friends: -1 } }, '$')).not.toBeNull();
+  });
+});

@@ -5,8 +5,9 @@ import { gainSkill } from '../../life/skills';
 import { idiv } from '../../core/math';
 import { giveGrainTo, heal, loseGrain, moveGrain, payTo, refresh, spendStamina, wound, woundNpc } from '../effects';
 import type { EventContext, EventDef } from '../engine';
+import { kinRole } from '../../npc/family';
 import { npcFigure, type NpcState } from '../../npc/state';
-import { castOr, figure, inTown, inVillage, man, month, nearestTown, npcAge, npcName, peopleHere, personality, pickOne, doingNow } from './common';
+import { byReputation, castOr, figure, inTown, inVillage, man, month, nearestTown, npcAge, npcName, peopleHere, personality, pickOne, doingNow } from './common';
 
 /**
  * Lập thân (G2): viết ở S6, bật ở S7 cùng chiến lược batch có kinh tế (giữ một năm ăn, bán phần thừa, giữ tiền thuế).
@@ -58,10 +59,15 @@ export const BEGGAR_MEAL = 30;
 export const beggar: EventDef = {
   id: 'event.beggar',
   category: 'daily',
-  // Người xin ăn chỉ tới nhà có cái ăn; mùa đông đói rét nên tới nhiều hơn
+  // Người xin ăn chỉ tới nhà có cái ăn; mùa đông đói rét nên tới nhiều hơn. Không tăng theo tiếng tốt: đã thử ở S6
+  // (gấp đôi khi được nể) thì người hay cho càng được nể, càng bị xin, chết đói của người chơi máy điều độ 5,0% → 5,1%
   weight: (ctx) => (ctx.age >= 12 && ctx.c.household.grain >= BEGGAR_GIFT ? (month(ctx) >= 10 ? 50_000 : 30_000) : 0),
   cooldownTicks: 48,
-  // Người thật (S6): ai trong quận đang đói, hết gạo; cho thì gạo vào kho người ấy
+  // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
+  reputation: { give: 3, share_meal: 5 },
+  // Người thật (S6): ai trong quận đang đói, hết gạo; cho thì gạo vào kho người ấy. Quan hệ (S4 v0.5): cho thì người ấy
+  // nợ ơn mình; đóng cửa thì nhạt; bị cạy kho thì sinh hiềm khích
+  bonds: { give: { closeness: 10, owed: 20 }, share_meal: { closeness: 15, owed: 30 }, refuse: { closeness: -5 }, refuse_stolen: { hostility: 10 } },
   cast: (ctx, rng) => pickOne(peopleHere(ctx).filter((n) => { const h = n.character.household; return h.independent && (h.hunger > 0 || (h.grain < BEGGAR_MEAL && h.money < BEGGAR_MEAL)); }), rng),
   variant: (ctx) => (ctx.npc ? 'named' : month(ctx) >= 10 ? 'winter' : null),
   params: npcName,
@@ -87,6 +93,8 @@ export const villageFestival: EventDef = {
   // Hội làng đầu xuân (tháng Giêng) và rằm tháng Tám
   weight: (ctx) => (ctx.age >= 12 && inVillage(ctx) && (month(ctx) === 1 || month(ctx) === 8) ? 120_000 : 0),
   cooldownTicks: 100,
+  // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
+  reputation: { pay_dues: 2, labor: 2, stay_home: -2 },
   variant: (ctx) => (month(ctx) === 8 ? 'autumn' : null),
   figure: () => man('old', 'common'),
   params: () => ({ dues: FESTIVAL_DUES }),
@@ -112,7 +120,14 @@ export const neighborHarvest: EventDef = {
   // Mùa gặt tháng Chín, người còn sức
   weight: (ctx) => (ctx.age >= 14 && inVillage(ctx) && month(ctx) === 9 && ctx.c.stamina >= 300 ? 80_000 : 0),
   cooldownTicks: 36,
-  figure: (_ctx, rng) => figure(rng, 'adult', 'common'),
+  // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
+  reputation: { help: 3 },
+  // Người thật (v0.5 S7): một nhà làm ruộng trong làng. Gặt giúp thì gần nhau hơn, người ta nhớ ơn
+  bonds: { help: { closeness: 10, owed: 5 }, decline: { closeness: -3 } },
+  cast: (ctx, rng) => pickOne(peopleHere(ctx).filter((n) => n.occupation === 'farmer' && npcAge(ctx, n) >= 16 && kinRole(ctx.c, n) === null), rng),
+  variant: (ctx) => (ctx.npc ? 'named' : null),
+  params: npcName,
+  figure: castOr((_ctx, rng) => figure(rng, 'adult', 'common')),
   choices: [
     {
       id: 'help', costs: ['stamina', 'time'],
@@ -126,9 +141,14 @@ export const marketBrawl: EventDef = {
   id: 'event.market_brawl',
   category: 'daily',
   // Chợ trấn đông người dễ sinh chuyện; người nóng nảy dễ dính vào hơn
-  weight: (ctx) => (ctx.age >= 14 && inTown(ctx) ? (personality(ctx, 'hot_tempered') ? 60_000 : 25_000) : 0),
+  // Kẻ có tiếng xấu ở trấn hay bị gây sự hơn (S6)
+  weight: (ctx) => (ctx.age >= 14 && inTown(ctx) ? byReputation(ctx, personality(ctx, 'hot_tempered') ? 60_000 : 25_000, 100, 150) : 0),
   cooldownTicks: 72,
-  // Người thật (S6): một người lớn trẻ ở trấn; lảng đi thì người ấy bị đánh bị thương
+  // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
+  reputation: { break_up: 5, break_up_hurt: 5, join: -10, join_hurt: -10 },
+  // Người thật (S6): một người lớn trẻ ở trấn; lảng đi thì người ấy bị đánh bị thương. Quan hệ (S4 v0.5): can ra thì
+  // người ấy nợ ơn; xông vào đánh thì thành thù; lảng đi thì nhạt
+  bonds: { break_up: { closeness: 5, owed: 10 }, break_up_hurt: { closeness: 5, owed: 15 }, join: { hostility: 25 }, join_hurt: { hostility: 25 }, walk_away_named: { closeness: -5 } },
   cast: (ctx, rng) => pickOne(peopleHere(ctx).filter((n) => { const a = npcAge(ctx, n); return a >= 16 && a < 50; }), rng),
   variant: (ctx) => (ctx.npc ? 'named' : null),
   params: npcName,
@@ -167,6 +187,8 @@ export const villageFuneral: EventDef = {
   // Người thật (S6): người trong quận vừa mất trong năm; có người mất thật thì đám tang dễ xảy ra hơn
   weight: (ctx) => (ctx.age >= 12 && inVillage(ctx) ? (recentDead(ctx) ? 100_000 : 25_000) : 0),
   cooldownTicks: 72,
+  // Tiếng tăm ở quận đang đứng (v0.5 S6, Q9)
+  reputation: { condolence: 2, help: 4, stay_away: -2 },
   cast: (ctx) => recentDead(ctx),
   variant: (ctx) => (ctx.npc ? 'named' : null),
   params: (ctx) => ({ gift: FUNERAL_GIFT, ...npcName(ctx), ...(ctx.npc ? { age: ageYearsAt(ctx.npc.character.birthTick, ctx.npc.death!.tick) } : {}) }),

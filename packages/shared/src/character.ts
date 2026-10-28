@@ -1,9 +1,9 @@
 // Những gì người chơi được thấy về nhân vật, nhật ký và tổng kết đời (ADR 0001, 0005).
 import type { Tick } from './calendar';
 import { STAMINA_BANDS, vSkillView, type CountyIndex, type SkillView, type StaminaBand } from './actions';
-import { vContentId, type ContentId } from './contentId';
+import { vContentId, vNpcId, type ContentId, type NpcId } from './contentId';
 import { TENURES, vHouseholdView, type Coin, type Grain, type HouseholdView, type Tenure } from './economy';
-import { arr, bool, int, intRange, nat, nonEmpty, obj, oneOf, record, str, union } from './schema';
+import { arr, bool, int, intRange, nat, nonEmpty, nullable, obj, oneOf, opt, record, str, union } from './schema';
 import { vBirthplaceId, vNewLifeConfig, type BirthplaceId, type NewLifeConfig } from './world';
 
 export { CONTENT_ID_RE, type ContentId } from './contentId';
@@ -16,6 +16,10 @@ export type HealthBand = (typeof HEALTH_BANDS)[number];
 
 export const SEVERITIES = ['mild', 'serious', 'grave'] as const;
 export type Severity = (typeof SEVERITIES)[number];
+
+/** Tiếng tăm của người chơi ở một quận, theo dải (v0.5, ADR 0017). */
+export const REPUTATION_BANDS = ['infamous', 'disliked', 'unknown', 'respected', 'renowned'] as const;
+export type ReputationBand = (typeof REPUTATION_BANDS)[number];
 
 export interface ConditionView {
   id: ContentId;
@@ -59,6 +63,10 @@ export interface CharacterView {
   canAct: boolean;
   /** Túi tiền, kho lương, ruộng, mức đói (ADR 0013). */
   household: HouseholdView;
+  /** Tiếng tăm ở quận đang đứng (v0.5, ADR 0017). */
+  reputation: ReputationBand;
+  /** Vợ/chồng còn sống (v0.5, ADR 0018). */
+  spouse?: NpcId;
 }
 
 /** Khóa không bao giờ được xuất hiện trong CharacterView (test ở shared và sim). */
@@ -91,7 +99,17 @@ export interface LifeSummary {
   estate: { money: Coin; grain: Grain; landMu: number; tenure: Tenure };
   /** Số năm tuổi có ít nhất một tuần không đủ khẩu phần, kể cả lúc còn nhỏ bị bỏ đói (F5). */
   hungerYears: number;
+  /** Di sản quan hệ (v0.5): vợ/chồng, con, số bạn và kẻ thù, tiếng tăm ở quê nhà. */
+  legacy: Legacy;
   digest: string;
+}
+
+export interface Legacy {
+  spouse: { name: string; alive: boolean } | null;
+  children: { name: string; alive: boolean }[];
+  friends: number;
+  enemies: number;
+  reputation: ReputationBand;
 }
 
 export const vCharacterView = obj<CharacterView>({
@@ -115,6 +133,8 @@ export const vCharacterView = obj<CharacterView>({
   skills: arr(vSkillView),
   canAct: bool,
   household: vHouseholdView,
+  reputation: oneOf(REPUTATION_BANDS),
+  spouse: opt(vNpcId),
 });
 
 export const vLogEntry = obj<LogEntry>({
@@ -136,5 +156,10 @@ export const vLifeSummary = obj<LifeSummary>({
   milestones: arr(vLogEntry),
   estate: obj<LifeSummary['estate']>({ money: nat, grain: nat, landMu: nat, tenure: oneOf(TENURES) }),
   hungerYears: nat,
+  legacy: obj<Legacy>({
+    spouse: nullable(obj<{ name: string; alive: boolean }>({ name: nonEmpty, alive: bool })),
+    children: arr(obj<{ name: string; alive: boolean }>({ name: nonEmpty, alive: bool })),
+    friends: nat, enemies: nat, reputation: oneOf(REPUTATION_BANDS),
+  }),
   digest: nonEmpty,
 });

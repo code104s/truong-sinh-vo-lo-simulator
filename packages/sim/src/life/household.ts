@@ -97,9 +97,13 @@ export function becomeIndependent(c: CharacterState, home: CountyEconomy, opts: 
   h.stayUntil = 0;
   h.money += money;
   h.grain += grain;
-  h.landMu = opts.landless ? 0 : share.landMu;
-  h.tenure = opts.landless ? 'none' : share.tenure;
-  return { money, grain, landMu: h.landMu };
+  // Ruộng đã thừa kế lúc còn nhỏ (v0.5 S3) vẫn là của mình: cộng thêm phần chia; có ruộng thừa kế thì ít nhất là tự canh
+  const inherited = h.landMu;
+  const shareLand = opts.landless ? 0 : share.landMu;
+  h.landMu = inherited + shareLand;
+  h.tenure = shareLand > 0 ? share.tenure : inherited > 0 ? 'owner' : opts.landless ? 'none' : share.tenure;
+  // Trả phần chia lúc lập thân (tin kể "phần chia"); ruộng thừa kế đã báo khi nhận
+  return { money, grain, landMu: shareLand };
 }
 
 const BAND_RANK: Record<HungerBand, number> = { fed: 0, hungry: 1, starving: 2, famished: 3 };
@@ -109,14 +113,41 @@ const BAND_RANK: Record<HungerBand, number> = { fed: 0, hungry: 1, starving: 2, 
  * - Chưa ra riêng: cha mẹ nuôi; quận nhà đói kém thì có thể bị bỏ đói theo xuất thân (luồng economy).
  * - Đã ra riêng: ăn từ kho của mình; thiếu thì tự mua ở chợ quận đang đứng nếu còn tiền (`buy` trả số thăng mua được).
  */
-export function feedPhase(c: CharacterState, tick: Tick, homeSupply: SupplyBand, economyRng: Rng, log: Log, market: CountyEconomy | null = null): void {
+/**
+ * Cha mẹ thật nuôi một đứa con (v0.5): túi, kho của chính đứa trẻ (12–15 tuổi có đi làm), rồi của người mẹ, người cha
+ * còn sống; chợ nơi đang ở.
+ */
+export interface ParentFeed { own: HouseholdState; parents: readonly HouseholdState[]; market: CountyEconomy }
+/** Cha mẹ chỉ chia phần dư: giữ lại một năm ăn của mình và tiền thuế, thuốc (như bộ não: GRAIN_RESERVE, MONEY_RESERVE). */
+export const PARENT_KEEP_GRAIN = 360;
+export const PARENT_KEEP_MONEY = 300;
+
+export function feedPhase(c: CharacterState, tick: Tick, homeSupply: SupplyBand, economyRng: Rng, log: Log, market: CountyEconomy | null = null, parent: ParentFeed | null = null): void {
   const h = c.household;
   const ration = rationOf(c, tick);
   let eaten: number;
-  if (!h.independent) {
+  const child = !h.independent && ageYearsAt(c.birthTick, tick) < COMING_OF_AGE;
+  if (child && parent) {
+    // Con dưới 16 có cha mẹ thật (chủ dự án chốt sau Bước 0 v0.5): ăn kho mình trước, rồi phần dư của mẹ, của cha;
+    // thiếu thì mua bằng túi mình, rồi phần tiền dư của mẹ, của cha
+    const own = parent.own;
+    eaten = Math.min(own.grain, ration);
+    own.grain -= eaten;
+    for (const p of parent.parents) { const take = Math.min(Math.max(0, p.grain - PARENT_KEEP_GRAIN), ration - eaten); p.grain -= take; eaten += take; }
+    if (eaten < ration) { const got = buyGrain(parent.market, own, ration - eaten); own.grain -= got; eaten += got; }
+    for (const p of parent.parents) {
+      if (eaten >= ration) break;
+      const spendable = { money: Math.max(0, p.money - PARENT_KEEP_MONEY), grain: 0 };
+      const before = spendable.money;
+      eaten += buyGrain(parent.market, spendable, ration - eaten);
+      p.money -= before - spendable.money;
+    }
+    // Cha mẹ hết cách thì họ hàng, làng xóm cưu mang phần thiếu như hộ trừu tượng (ADR 0013): năm thường đủ ăn, năm đói
+    // kém có thể bị bỏ đói (chủ dự án chọn ở S2 v0.5)
+    if (eaten < ration && !(homeSupply === 'famine' && economyRng.chance(FAMINE_SKIP_PPM[c.background]))) eaten = ration;
+  } else if (!h.independent) {
     // Chỉ rút RNG khi đói kém, để năm thường không đổi luồng. Người lớn còn ở nhà là trạng thái tạm tới khi bật
     // ra riêng (S3/S4): được nuôi đủ, không thì hộ cha mẹ trừu tượng "bỏ đói" cả người 60 tuổi.
-    const child = ageYearsAt(c.birthTick, tick) < COMING_OF_AGE;
     eaten = child && homeSupply === 'famine' && economyRng.chance(FAMINE_SKIP_PPM[c.background]) ? 0 : ration;
   } else {
     if (h.grain < ration && market) buyGrain(market, h, ration - h.grain);

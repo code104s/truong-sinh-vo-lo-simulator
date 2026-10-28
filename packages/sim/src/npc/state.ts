@@ -84,3 +84,9 @@ export function npcView(n: NpcState, tick: Tick): NpcView {
 export function npcViews(world: NpcWorldState, county: number, tick: Tick): NpcView[] {
   return peopleAt(world, county).map((n) => npcView(n, tick));
 }
+
+/** Thầy thuốc NPC còn sống đang ở quận (người có id nhỏ nhất); null nếu không có (v0.5 S3: phí chữa bệnh vào túi người này). */
+export function physicianIn(world: NpcWorldState, county: number): NpcState | null {
+  for (const n of world.people) if (n.death === null && n.occupation === 'physician' && n.character.location === county) return n;
+  return null;
+}

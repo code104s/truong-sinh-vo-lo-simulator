@@ -13,6 +13,15 @@ export function payTo(ctx: EventContext, county: number, amount: number): number
   return n;
 }
 
+/** Trả tiền cho một người có tên (v0.5): từ túi người chơi sang túi người ấy, trong giới hạn túi. */
+export function payNpc(ctx: EventContext, n: NpcState, amount: number): number {
+  const h = ctx.c.household;
+  const paid = Math.max(0, Math.min(amount, h.money));
+  h.money -= paid;
+  n.character.household.money += paid;
+  return paid;
+}
+
 /** Mất lương thực (ăn, cho, bị lấy); trả về số thăng đã mất. Lương mất đi không vào đâu: nó đã bị ăn. */
 export function loseGrain(ctx: EventContext, amount: number): number {
   const h = ctx.c.household;
@@ -103,6 +112,13 @@ export function sellGrainTo(ctx: EventContext, n: NpcState, grain: number, money
   ctx.c.household.grain -= g; n.character.household.grain += g;
   n.character.household.money -= pay; ctx.c.household.money += pay;
   return pay;
+}
+
+/** Lương từ kho NPC sang kho người chơi (được biếu, được giúp); trả số thăng nhận. */
+export function takeGrainFrom(ctx: EventContext, n: NpcState, amount: number): number {
+  const g = Math.max(0, Math.min(amount, n.character.household.grain));
+  n.character.household.grain -= g; ctx.c.household.grain += g;
+  return g;
 }
 
 /** NPC bị thương nhẹ (không chồng thương). */

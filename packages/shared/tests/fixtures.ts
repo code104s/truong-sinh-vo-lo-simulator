@@ -85,6 +85,7 @@ export const sampleCharacter: CharacterView = {
   skills: [{ id: 'skill.farming', rank: 'rank.novice' }],
   canAct: true,
   household: sampleHousehold,
+  reputation: 'unknown',
 };
 
 export const sampleNpc: NpcView = {
@@ -113,14 +114,15 @@ export const sampleLife: LifeSummary = {
   milestones: [{ ...sampleLog, importance: 'major' }],
   estate: { money: 1200, grain: 340, landMu: 6, tenure: 'owner' },
   hungerYears: 3,
+  legacy: { spouse: { name: 'Lý Thị Hoa', alive: false }, children: [{ name: 'Trần Văn Bình', alive: true }], friends: 2, enemies: 1, reputation: 'respected' },
   digest: '0123456789abcdef',
 };
 
 export function sampleSave(): SaveFile {
   return {
     format: 'tsvl-save',
-    version: 4,
-    protocolVersion: 4,
+    version: 5,
+    protocolVersion: 5,
     simVersion: '0.1.0',
     worldSeed: 'tsvl-01',
     region: { summary: sampleSummary, map: sampleMap(), birthplaces: [sampleBirthplace], logic: { adjacency: [[0, 1]] } },
