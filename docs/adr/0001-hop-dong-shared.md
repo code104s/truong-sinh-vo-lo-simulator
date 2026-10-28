@@ -360,3 +360,33 @@ Lý do: bảng chọn người cần lý do khóa của từng việc xã giao n
 - Nhánh bị ảnh hưởng:
   - **Sim:** `Life.people()` tính khóa bằng `Life.socialLock` (khóa chung của hành động rồi khóa theo người), đúng như khi ô chạy;
   - **FE:** bảng chọn việc có nhóm Xã giao → chọn người; thẻ tuần hiện tên người và lý do khóa (người đã rời quận: "không ở đây").
+
+### 2026-10-28 — v0.6 Bước 0 (ADR 0019)
+Lý do: v0.6 thêm thế lực (quan phủ, gia tộc, thương hội, băng cướp). `PROTOCOL_VERSION` 5 → **6**, `SAVE_VERSION` 5 → **6**. Save v0.5 bị từ chối, không chuyển đổi (v0.6 Q11).
+- `factions.ts` (mới):
+  - `FACTION_KINDS` (`government`, `clan`, `guild`, `bandits`); `FactionId` dạng `"f3"`, cấp tăng dần, không dùng lại;
+  - `STRENGTH_BANDS` (`feeble`, `modest`, `strong`, `dominant`), `ATTITUDE_BANDS` (để ngỏ, v0.6 chưa gửi);
+  - `FactionName { key: ContentId; params }` — tên ghép từ khóa nội dung và tham số (họ, nơi), giao diện dịch. **Khác bản nháp** (Giai đoạn A mục 4 ghi `name: string`): sim không được tạo chuỗi hiển thị;
+  - `FactionView { id, kind, name, seat, counties, strength, members, leader?, attitude? }` — dải chữ, không lộ số;
+  - `FACTION_FATES` (`rose`, `fell`, `gone`, `endured`).
+- `npc.ts`: `NpcView` thêm `faction?: FactionId`.
+- `actions.ts`: `TravelOption` thêm `danger?` (id băng cướp giữ đường; kiểm dạng id ở chỗ, không import `factions.ts` để khỏi vòng); xuất `vActionId`.
+- `character.ts`: `LifeSummary.legacy` thêm `factions: { name: FactionName; kind; fate }[]`.
+- `calendar.ts`: thêm `monthOf(tick)`, `seasonOf(tick)` (tháng, mùa từ tick, không dựng cả `CalendarDate`).
+- Tin `STATE` thêm `factions: FactionView[]` và `control: (FactionId | null)[]` (theo chỉ số quận). STATE kiểu v0.5 (thiếu hai trường) bị từ chối.
+- Nhánh bị ảnh hưởng:
+  - **Sim:**
+    - `SIM_VERSION` 0.6.0; luồng RNG `factions`; pha Thế lực (rỗng) đầu quý, giữa pha Thế giới và pha NPC;
+    - snapshot thêm `factions { nextId, list }`; sổ cái cộng kho thế lực;
+    - `STATE.factions`, `control` rỗng tới S1; digest pin đổi, tuổi và nguyên nhân chết của ba đời mẫu giữ nguyên.
+  - **Nội dung:** `faction.<loại>.name`, `faction.kind.*`, `faction.strength.*`, `faction.fate.*`.
+  - **FE:** máy trạng thái giữ `factions`, `control`; giao diện ở F1–F5.
+
+### 2026-10-28 — v0.6 F1 (ADR 0019)
+Lý do: bản đồ "ai kiểm soát" vẽ đường bị cướp, thương hội giữ; `FactionView` mới có quận giữ, chưa có đường. v6 chưa phát hành nên không tăng `PROTOCOL_VERSION`, `SAVE_VERSION` (save không chứa `FactionView`).
+- `factions.ts`: `FactionView` thêm `roads?: [CountyIndex, CountyIndex][]` — đường thế lực giữ (thương hội, băng cướp), mỗi đường một cặp quận kề [nhỏ, lớn]; không giữ đường thì bỏ trống. Validate: cặp số tự nhiên, số đầu nhỏ hơn.
+- Nhánh bị ảnh hưởng: **Sim** `factionViews(fw, logic)` quy chỉ số cạnh ra cặp quận; **FE** lớp "ai kiểm soát" (F1).
+
+### 2026-10-28 — đóng v0.6: `SIM_VERSION` 0.6.1
+Lý do: trong v0.6 hình snapshot đổi nhiều lần sau Bước 0 (kho, người giữ quận, độ tham của thế lực S1–S5; mức thuế, lương của quận S6; chủ nợ S7; thế lực đã thấy F4) mà `SIM_VERSION` vẫn 0.6.0. Save tạo trong lúc phát triển bị từ chối bằng lỗi schema khó hiểu. Theo quy ước ở mục 0.3.1 (đổi hình snapshot thì tăng `SIM_VERSION`), tăng lên **0.6.1** khi đóng phiên bản: save dev cũ bị từ chối bằng lỗi `VERSION`, giao diện báo save bản cũ. `PROTOCOL_VERSION`, `SAVE_VERSION` giữ 6.
+
