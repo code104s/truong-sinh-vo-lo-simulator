@@ -390,3 +390,90 @@ Lý do: bản đồ "ai kiểm soát" vẽ đường bị cướp, thương hộ
 ### 2026-10-28 — đóng v0.6: `SIM_VERSION` 0.6.1
 Lý do: trong v0.6 hình snapshot đổi nhiều lần sau Bước 0 (kho, người giữ quận, độ tham của thế lực S1–S5; mức thuế, lương của quận S6; chủ nợ S7; thế lực đã thấy F4) mà `SIM_VERSION` vẫn 0.6.0. Save tạo trong lúc phát triển bị từ chối bằng lỗi schema khó hiểu. Theo quy ước ở mục 0.3.1 (đổi hình snapshot thì tăng `SIM_VERSION`), tăng lên **0.6.1** khi đóng phiên bản: save dev cũ bị từ chối bằng lỗi `VERSION`, giao diện báo save bản cũ. `PROTOCOL_VERSION`, `SAVE_VERSION` giữ 6.
 
+
+### 2026-10-29 — v0.7 Bước 0 (ADR 0020)
+Lý do: v0.7 thêm thân phận nghề của người chơi. `PROTOCOL_VERSION` 6 → **7**, `SAVE_VERSION` 6 → **7**. Save v0.6 bị từ chối, không chuyển đổi (v0.7 Q12).
+- `careers.ts` (mới):
+  - `CAREERS` (`farmer`, `artisan`, `hunter`, `merchant`, `physician`, `soldier`, `drifter`, `recluse`, `outlaw`), khóa nội dung `career.<id>`;
+  - `CAREER_RANKS` (`apprentice`, `journeyman`, `master`), khóa nội dung `career.rank.<bậc>`;
+  - `CareerView { id, rank, since: Tick, faction?: FactionId }` — dải chữ, không lộ số kinh nghiệm;
+  - `CareerRecord { id, rank, years }` — một nghề đã làm trong đời, bậc cao nhất.
+- `character.ts`: `CharacterView` thêm `career: CareerView | null` (bắt buộc; view kiểu v0.6 thiếu trường bị từ chối); `LifeSummary.legacy` thêm `careers: CareerRecord[]`.
+- Kỹ năng: thêm `medicine` (y thuật) ở sim; `SkillView` không đổi hình.
+- Nhánh bị ảnh hưởng:
+  - **Sim:**
+    - `SIM_VERSION` 0.7.0; snapshot thêm `career` (luôn `null` tới S1); `skillXp`, `skillLastUsed` thêm `medicine`;
+    - `view().career` `null`, `legacy.careers` rỗng; digest pin đổi, tuổi và nguyên nhân chết của ba đời mẫu giữ nguyên.
+  - **Nội dung:** `career.*`, `career.rank.*`, `skill.medicine`.
+  - **FE:** chưa hiển thị (F1–F5).
+
+### 2026-10-29 — v0.7 S1 (ADR 0020)
+Lý do: người chơi rời nghề là một quyết định tức thời, không tốn ô, như mua bán lương. v7 chưa phát hành nên không tăng `PROTOCOL_VERSION`, `SAVE_VERSION`.
+- `protocol.ts`: lệnh `LEAVE_CAREER { reqId }`.
+- `actions.ts`: `RecordedCommand` thêm `{ type: 'LEAVE_CAREER' }` để phát lại save.
+- Hành động mới `action.apprentice` (xin học việc, học việc): nhóm `social`, nhắm vào một người (`PlanSlot.person`); `NpcView.social` có thêm khóa của nó. Không đổi kiểu.
+- Nhánh bị ảnh hưởng: **Sim** xử lý lệnh, ghi nhật ký lệnh; **Nội dung** `action.apprentice`, `gain.career`, `lock.not_master`, `log.career.*`; **FE** nút rời nghề ở F1–F5.
+
+### 2026-10-29 — v0.7 S3b (ADR 0021)
+Lý do: kho đồ của người chơi (chủ dự án duyệt Q13–Q20). v7 chưa phát hành nên không tăng `PROTOCOL_VERSION`, `SAVE_VERSION`.
+- `economy.ts`:
+  - `GOODS` (`hide`, `wares`, `herb`), `GoodId`, khóa nội dung `good.<id>`;
+  - `GOOD_UNITS_PER_PART` = 10: hàng đếm bằng phân, giá văn/phần — như thăng và đấu của lương thực;
+  - `HouseholdView` thêm `goods: GoodStack[]` (chỉ món đang có) và `goodsCap` (sức gánh, phân) — `goodsCap` thêm ngoài ADR 0021 để giao diện F3b vẽ sức gánh mà không giữ số cân bằng;
+  - `MarketView` thêm `goods: MarketGoodView[]` (đủ ba món: giá mua, bán mỗi phần, dải cung, xu hướng, giới hạn mua bán bằng phân).
+- `actions.ts`: `PlanSlot.cargo?: Cargo` (`'grain'` hay một `GoodId`; chỉ cho `action.haul`); `RecordedCommand` thêm `{ type: 'TRADE_GOODS'; good; qty }`.
+- `protocol.ts`: lệnh `TRADE_GOODS { reqId, good, qty }` (phân; > 0 mua, < 0 bán, khác 0).
+- Nhánh bị ảnh hưởng:
+  - **Sim:** snapshot thêm túi đồ của hộ, chợ hàng mỗi quận; xử lý lệnh, ghi nhật ký lệnh; digest pin đổi (ghi chú ở `life.test.ts`).
+  - **Nội dung:** `good.*`, `gain.goods`, `lock.goods_full`, `log.haul.goods_*`.
+  - **FE:** fixture test thêm trường mới; khối Hành trang, chợ hàng, chọn hàng cho chuyến buôn ở F3b.
+
+### 2026-10-29 — v0.7 S7 (ADR 0020 Q9)
+- Không đổi kiểu. `FactionView.attitude` (có từ v6, để ngỏ) **bắt đầu gửi** cho mọi thế lực còn sống, theo dải `ATTITUDE_BANDS`.
+- Nhánh bị ảnh hưởng: **Sim** gửi dải thái độ; **Nội dung** `lock.hostile`; **FE** hiện thái độ ở khối "Thế lực ở {nơi}" (F3).
+
+### 2026-10-29 — v0.7 F1 (ADR 0020)
+Lý do: giao diện thân phận nghề cần biết thầy là ai và việc nào tính năm làm nghề mà không giữ bảng nghề của sim. v7 chưa phát hành nên không tăng `PROTOCOL_VERSION`, `SAVE_VERSION`.
+- `careers.ts`: `CareerView.mentor?: { id, name, alive }` — thầy dạy nghề; sim còn giữ người đã mất một năm, quá hạn thì bỏ trường.
+- `actions.ts`: `ActionOption.career?: CareerId` (việc riêng của nghề ấy), `ActionOption.careerWork?: true` (ô này tính vào năm làm nghề đang làm).
+- `schema.ts`: `lit` nhận cả giá trị boolean.
+- Nhánh bị ảnh hưởng: **Sim** gửi ba trường (không đổi snapshot, digest); **Nội dung** `ui.hud.career`, `ui.career.*`, `ui.plan.career_*`, `ui.plan.other_careers`; **FE** dòng nghề trên thanh trạng thái, khối Nghề ở hồ sơ, bảng chọn việc.
+
+### 2026-10-29 — v0.7 F2 (ADR 0020)
+Lý do: bảng chọn nghề cần biết ai nhận học việc ở đây, giá, lý do khóa; hộp rời nghề cần biết rời thì mất gì. Mọi luật ở sim; giao diện chỉ đọc. v7 chưa phát hành nên không tăng `PROTOCOL_VERSION`, `SAVE_VERSION`.
+- `careers.ts`:
+  - `CareerView` thêm `years` (số năm đã làm nghề) và `leave: CareerLeaveView` — `angers?` (thế lực phật lòng khi bỏ nha môn, bỏ hội), `outlaw?: { way: 'atone' | 'desert'; fee }` (ra băng chuộc tội hay trốn);
+  - `CAREER_WAYS` (`mentor`, `faction`, `own`, `event`), `CAREER_ENTRY_ACTIONS`;
+  - `CareerEntryView { career, way, action, mentors, locked }`, `CareerMentorOffer { id, gift, locked }` — thầy ở quận đang đứng, lễ nhập môn, khóa của ô học việc như khi ô chạy.
+- `protocol.ts`: `STATE.careers: CareerEntryView[]` — đủ chín nghề theo `CAREERS`; rỗng khi chưa tự xếp việc. STATE thiếu trường bị từ chối.
+- Nhánh bị ảnh hưởng:
+  - **Sim:** `Life.careerBoard()`; `careerView` nhận lời báo rời nghề; `canAtone` và `leaveAngers` dùng chung cho lời báo và lệnh `LEAVE_CAREER` (không đổi luật, snapshot, digest).
+  - **Nội dung:** `ui.careers.*`, `ui.leave.*`, `lock.no_mentor_here`.
+  - **FE:** bảng chọn nghề (xếp việc vào nghề vào tuần sắp chạy), hộp hỏi lại trước khi rời nghề.
+
+### 2026-10-29 — v0.7 F3 (ADR 0020)
+Lý do: thẻ sự kiện cần đóng triện nghề, biên niên cần lọc "Nghề" mà giao diện không giữ danh sách sự kiện của từng nghề. v7 chưa phát hành nên không tăng `PROTOCOL_VERSION`, `SAVE_VERSION`.
+- `events.ts`: `PendingEvent.career?: CareerId` — sự kiện riêng của một nghề.
+- `character.ts`: `LogEntry.career?: CareerId` — dòng kết quả của sự kiện riêng của nghề; save cũ không có trường vẫn hợp lệ.
+- Nhánh bị ảnh hưởng:
+  - **Sim:** `pendingView` và dòng kết quả lấy từ `EventDef.career` (nhật ký không nằm trong digest; luật, snapshot không đổi).
+  - **Nội dung:** `ui.event.career`, `ui.chron.career*`, `ui.factions.attitude_tag`, `ui.factions.attitude_hint.*`.
+  - **FE:** triện nghề trên thẻ sự kiện, biên niên, thanh trạng thái, khối Nghề; lọc "Nghề"; thái độ thế lực ở khối "Thế lực ở {nơi}".
+
+### 2026-10-29 — v0.7 F3b (ADR 0021)
+Lý do: giao diện chọn chuyến buôn cần biết đi đâu, chở gì thì lời bao nhiêu, mà không giữ công thức giá, phí chở, vốn theo bậc. v7 chưa phát hành nên không tăng `PROTOCOL_VERSION`, `SAVE_VERSION`.
+- `actions.ts`: `HaulOption { county, cargo, slots, margin, profit, risk, danger?, locked }` — số ô cả đi lẫn về; lời mỗi đấu, mỗi phần và lời cả chuyến nếu đường êm theo giá niêm yết lúc này (có thể âm); khóa như lúc khởi hành.
+- `protocol.ts`: `STATE.hauls: HaulOption[]` — mỗi quận đi được × mỗi hàng; rỗng khi không phải thương nhân hay chưa tự xếp việc.
+- Nhánh bị ảnh hưởng:
+  - **Sim:** `haulEstimate` tách khỏi `haulTrip` (cùng phép tính, kết quả không đổi), `Life.hauls()`; không rút RNG, không đổi snapshot, digest.
+  - **Nội dung:** `ui.goods.*`, `ui.haul.*`; `ui.market.open` đổi thành "Vào chợ mua bán".
+  - **FE:** khối Hành trang, chợ hàng trong khối chợ và hộp mua bán (lệnh `TRADE_GOODS`), chọn quận đích và hàng cho chuyến buôn.
+- Ghi chú: `MarketGoodView.maxSell` có thể thấp hơn mức sim nhận một phân khi quỹ chợ là giới hạn (sim làm tròn tiền bán xuống). Giữ nguyên vì người chơi máy trong batch dùng số này; giao diện dùng như giới hạn an toàn.
+
+### 2026-10-29 — v0.7 F4 (ADR 0020)
+Lý do: tổng kết "Một đời làm nghề" cần biết nghề nào còn làm tới lúc nhắm mắt. v7 chưa phát hành nên không tăng `PROTOCOL_VERSION`, `SAVE_VERSION`.
+- `careers.ts`: `CareerRecord.current?: true` — chỉ nghề đang làm lúc chết (dòng cuối `LifeSummary.legacy.careers`); các lần đã rời không có.
+- Nhánh bị ảnh hưởng: **Sim** `legacyCareers` ghi cờ (snapshot không đổi: các nghề đã rời vẫn không có cờ); **Nội dung** `ui.summary.career*`; **FE** dòng nghề cả đời dưới tên trên bia, khối "Một đời làm nghề" (gộp các lần vào cùng nghề: bậc cao nhất, cộng năm, số lần vào), triện nghề ở ngã rẽ là sự kiện nghề.
+
+### 2026-10-29 — đóng v0.7: `SIM_VERSION` 0.7.1
+Lý do: sau Bước 0 (0.7.0) hình snapshot đổi thêm nhiều lần (nghề đã rời S1, ruộng dân nền đã bán S2, kho đồ và chợ hàng S3b, thái độ thế lực S7). Như lúc đóng v0.6, tăng lên **0.7.1**: save dev cũ bị từ chối bằng lỗi `VERSION`, giao diện báo save bản cũ. Hợp đồng v7 phát hành cùng phiên bản này; `PROTOCOL_VERSION`, `SAVE_VERSION` giữ 7. Save nghiệm thu sinh lại bằng 0.7.1.
