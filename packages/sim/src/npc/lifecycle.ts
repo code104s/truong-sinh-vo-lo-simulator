@@ -12,7 +12,7 @@ import { becomeIndependent, COMING_OF_AGE, RATION_CHILD, rationOf, type Househol
 import { staminaMax } from '../life/stamina';
 import { nearestTownFrom } from '../life/travel';
 import { NPC_QUOTA, PHYSICIAN_PERSONALITIES } from './population';
-import { allocateNpc, type NpcState, type NpcWorldState, type Occupation } from './state';
+import { allocateNpc, type NpcState, type NpcWorldState, type Occupation, type PlayerDoctor } from './state';
 import { adopt, byIdOf, childrenOf, couplesFor, fitsAge, pickCouple, PLAYER_ID, single, wed } from './family';
 import type { Death } from '../life/health';
 
@@ -69,8 +69,9 @@ export function die(n: NpcState, death: Death, eco: EconomyState, ctx: DeathCont
     heirs.forEach((x, i) => { if (x.isPlayer && (got[i]!.money > 0 || got[i]!.grain > 0 || got[i]!.landMu > 0)) ctx!.player!.inherited.push({ from: n.id, name: c.name, tick: death.tick, ...got[i]! }); });
   } else {
     home.money += h.money; home.grain += h.grain;
+    h.goods.forEach((q, g) => { home.goods[g]!.stock += q; });
   }
-  h.money = 0; h.grain = 0; h.landMu = 0;
+  h.money = 0; h.grain = 0; h.landMu = 0; h.goods.fill(0);
 }
 
 /** Người thừa kế mà người chơi nhận được (để ghi tin `log.kin.inherit`). */
@@ -81,7 +82,7 @@ export interface Inheritance { from: string; name: string; tick: number; money: 
  */
 export interface DeathContext {
   world: NpcWorldState;
-  player: { c: CharacterState; inherited: Inheritance[]; death?: Death | null } | null;
+  player: { c: CharacterState; inherited: Inheritance[]; death?: Death | null; doctor?: PlayerDoctor | null } | null;
   /** Người chơi trong dáng người có tên (`playerStandIn`); null khi thế giới tự chạy. */
   me?: NpcState | null;
 }
@@ -114,6 +115,8 @@ export function bequeath(from: HouseholdState, to: readonly HouseholdState[]): {
   return to.map((h, i) => {
     const got = { money: part(from.money, i), grain: part(from.grain, i), landMu: part(from.landMu, i) };
     h.money += got.money; h.grain += got.grain; h.landMu += got.landMu;
+    // Túi đồ chia như tiền (v0.7 S3b); không tính vào sức gánh của người nhận
+    from.goods.forEach((q, g) => { h.goods[g]! += part(q, i); });
     if (got.landMu > 0 && h.independent && (h.tenure === 'none' || h.tenure === 'tenant')) h.tenure = 'owner';
     return got;
   });

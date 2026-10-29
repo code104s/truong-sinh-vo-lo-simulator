@@ -4,6 +4,7 @@ import { idiv, mulDiv } from '../core/math';
 import type { CharacterState } from '../life/character';
 import type { HouseholdState } from '../life/household';
 import type { CountyEconomy, EconomyState } from './market';
+import { rankStep, type CareerState } from '../life/career';
 
 /** Một tuần công ở độ phì 100%, thời tiết 100%, chưa có kỹ năng: 5 đấu. */
 export const FARM_YIELD_PER_WEEK = 50;
@@ -13,6 +14,12 @@ export const FARM_SKILL_MAX_PCT = 60;
 export const WEEKS_PER_MU = 3;
 export const LAND_TAX_PCT = 10;
 export const RENT_PCT = 50;
+/**
+ * Nông dân theo bậc (v0.7 S2): lão nông làm được, có tiếng gặt nhiều hơn (+10%, +20%) và thuê được ruộng tô nhẹ hơn
+ * (tô 45%, 40%). Người không làm nghề nông và NPC giữ 100%, tô 50%.
+ */
+export const FARM_RANK_PCT = [100, 110, 120] as const;
+export const RENT_RANK_CUT = [0, 5, 10] as const;
 
 /**
  * Thuế điền trên `gross` thăng ở quận có ruộng (v0.6 S6, Q7): lệ 10% nhân nửa phần lệch của mức thuế người giữ quận —
@@ -55,20 +62,21 @@ export function ownWeeks(c: CharacterState): number {
  * Đầu tháng thu hoạch, sau khi dân nền gặt: người chơi gặt phần mình, nộp thuế điền (ruộng nhà) và tô (ruộng thuê)
  * vào kho quận nơi có ruộng; nhà giàu thu tô phần đất cho thuê từ kho dân nền quận nhà. Mùa mới bắt đầu.
  */
-export function harvestPlayer(c: CharacterState, eco: EconomyState, logic: RegionLogic): HarvestResult {
+export function harvestPlayer(c: CharacterState, eco: EconomyState, logic: RegionLogic, career: CareerState | null = null): HarvestResult {
   const h = c.household;
   const res: HarvestResult = { gross: 0, tax: 0, rent: 0, landlordIncome: 0, net: 0 };
   if (h.farmWeeks > 0) {
     const field = eco.counties[h.farmCounty]!;
     // Tai họa: phần thiệt so với năm thường được cứu lại theo reliefPct (gánh nước, đắp bờ… — S6)
     const weather = field.weatherPct < 100 ? field.weatherPct + mulDiv(100 - field.weatherPct, h.reliefPct, 100) : field.weatherPct;
-    const perWeek = mulDiv(mulDiv(mulDiv(FARM_YIELD_PER_WEEK, farmSkillPct(c), 100), logic.fertilityPct[h.farmCounty]!, 100), weather, 100);
+    const step = rankStep(career, 'farmer');
+    const perWeek = mulDiv(mulDiv(mulDiv(mulDiv(FARM_YIELD_PER_WEEK, farmSkillPct(c), 100), FARM_RANK_PCT[step], 100), logic.fertilityPct[h.farmCounty]!, 100), weather, 100);
     const own = ownWeeks(c);
     const ownGross = perWeek * own;
     const rentedGross = perWeek * (h.farmWeeks - own);
     res.gross = ownGross + rentedGross;
     res.tax = landTax(ownGross, field);
-    res.rent = mulDiv(rentedGross, RENT_PCT + h.rentHikePct, 100);
+    res.rent = mulDiv(rentedGross, RENT_PCT - RENT_RANK_CUT[step] + h.rentHikePct, 100);
     field.grain += res.tax + res.rent;
     field.taxGrain += res.tax;
     res.net = res.gross - res.tax - res.rent;

@@ -1,7 +1,7 @@
 // Một đời người: vòng tick theo pha có nhịp (ADR 0002), tua, nhật ký, snapshot (ADR 0004).
 import {
-  GRAIN_PER_DOU, TICKS_PER_MONTH, TICKS_PER_YEAR, ageYearsAt, calendarOf, isMonthStart, isQuarterStart, isYearStart,
-  type AdvanceMode, type Birthplace, type FactionView, type PlanSlot, type CharacterView, type LifeSummary, type LogEntry, type MarketView, type NpcView, type NewLifeConfig, type PendingEvent, type Tick, type MonthPlan, type SupplyBand,
+  CAREERS, CARGOS, GRAIN_PER_DOU, TICKS_PER_MONTH, TICKS_PER_YEAR, ageYearsAt, calendarOf, isMonthStart, isQuarterStart, isYearStart,
+  type ActionOption, type AdvanceMode, type Birthplace, type CareerEntryView, type CareerLeaveView, type CareerRecord, type GoodId, type HaulOption, type FactionView, type PlanSlot, type CharacterView, type LifeSummary, type LogEntry, type MarketView, type NpcView, type NewLifeConfig, type PendingEvent, type Tick, type MonthPlan, type SupplyBand,
 } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { digestOf } from '../core/digest';
@@ -14,7 +14,7 @@ import { feedPhase, rationOf, stayAtHomeYear } from './household';
 import { harvestPlayer } from '../economy/farming';
 import { EVENTS } from '../events/catalog';
 import { choose as chooseEvent, makeContext, newEventsState, pendingView, rollEvent, type EventsState } from '../events/engine';
-import { headTax, tradeGrain, yearlySpending } from '../economy/income';
+import { headTax, spoilGoods, tradeGoods, tradeGrain, yearlySpending } from '../economy/income';
 import {
   buyPrice, countyMoney, createEconomy, economyMonth, epidemicAt, HARVEST_MONTH, marketView, supplyOf, worldYearStart, type EconomyState,
 } from '../economy/market';
@@ -28,14 +28,19 @@ import { previewTravel } from './travel';
 import { npcPhase } from '../npc/phase';
 import type { Inheritance } from '../npc/lifecycle';
 import { seedPopulation } from '../npc/population';
-import { newNpcWorld, npcMoney, npcView, peopleAt, type NpcState, type NpcWorldState } from '../npc/state';
+import { newNpcWorld, npcMoney, npcView, peopleAt, type NpcState, type NpcWorldState, type PlayerDoctor } from '../npc/state';
 import { assignPlayerParents, childrenOf, giversOf, kinHelp, kinRole, lookup, PLAYER_ID, seedFamilies } from '../npc/family';
 import { bondOf, bondView, ensureBond, PARENT_CLOSENESS, PARENT_TRUST, type Bond } from '../social/bonds';
 import { addReputation, fadeReputation, newReputation, repAt, reputationBand, spreadReputation } from '../social/reputation';
 import { foundGovernment } from '../factions/government';
 import { factionMark, factionNews, factionRumors } from '../factions/news';
 import { legacyFactions, trackSeen, type FactionSeen } from '../factions/seen';
+import { haulEstimate, haulLock, haulMargin, haulTrip, joinGuild, joinGuildLock, type GuildJoinWorld } from './merchant';
+import { enlist, enlistLock, type EnlistWorld } from './soldier';
+import { ATONE_FEE, bandOf, canAtone, leaveBand, OUTLAW_CAUGHT_REP, ownEnter, ownLock, taxExempt, type OwnWorld } from './wayward';
+import { apprenticeAct, apprenticeLock, CAREER_DEFS, careerView, careerWorked, careerYear, entryGift, leaveAngers, legacyCareers, leaveCareer, mentorCareer, rankStep, type ApprenticeWorld, type CareerState } from './career';
 import { roadRisk, routeDanger } from '../factions/impact';
+import { LEAVE_ATTITUDE, shiftAttitude } from '../factions/attitude';
 import { controlOf, membershipOf, factionMoney, factionPhase, factionViews, newFactionWorld, type FactionWorldState } from '../factions/state';
 
 /** Việc xấu ngoài sự kiện, gắn tiếng ở quận nhà (v0.5 S6, Q9): thiếu thuế đinh, khất nợ vay. */
@@ -55,9 +60,10 @@ const KIN_ORDER = ['father', 'mother', 'spouse', 'son', 'daughter', 'sibling'] a
  * Đổi khi hình snapshot đổi, để save cũ bị từ chối rõ ràng (lỗi VERSION) thay vì lỗi schema. 0.3.1: hộ thêm nợ vay,
  * tai họa, lập thân (S6–S7) và bộ đếm năm đói (F5). 0.4.0: NPC trong snapshot, luồng `npc-world` (v0.4 Bước 0).
  * 0.6.1: đóng v0.6 — snapshot đổi hình nhiều lần sau 0.6.0 (thế lực S1–S8, chủ nợ, thế lực đã thấy F4); save dev cũ bị
- * từ chối bằng lỗi VERSION.
+ * từ chối bằng lỗi VERSION. 0.7.0: hợp đồng v7 — thân phận nghề, kỹ năng y thuật (v0.7 Bước 0). 0.7.1: đóng v0.7 —
+ * snapshot đổi hình sau 0.7.0 (nghề đã rời S1, ruộng đã bán S2, kho đồ S3b, thái độ thế lực S7).
  */
-export const SIM_VERSION = '0.6.1';
+export const SIM_VERSION = '0.7.1';
 /**
  * `npc-world`: tạo dân số ban đầu và trẻ sinh mới (ADR 0016); mỗi NPC còn có luồng riêng trong NpcState.
  * `social`: hành động xã giao của người chơi (v0.5 S4, ADR 0017). `factions`: pha Thế lực (v0.6, ADR 0019).
@@ -88,6 +94,10 @@ export interface LifeSnapshot extends PlayerState {
   factions: FactionWorldState;
   /** Thế lực người chơi đã thấy và thước đo thịnh suy (v0.6 F4: "Thế sự một đời"). */
   factionsSeen: FactionSeen[];
+  /** Thân phận nghề của người chơi (v0.7, ADR 0020); null khi chưa vào nghề. */
+  career: CareerState | null;
+  /** Các nghề đã rời (S1), cho tổng kết đời. */
+  careers: CareerRecord[];
   rng: RngStreamsSnapshot;
   death: Death | null;
 }
@@ -136,7 +146,7 @@ export class Life {
     const bonds: Bond[] = [];
     for (const p of [parents.father, parents.mother]) Object.assign(ensureBond(bonds, p.id), { closeness: PARENT_CLOSENESS, trust: PARENT_TRUST });
     // Tuần sinh coi như đã qua: tick kế tiếp là tuần sau khi sinh
-    const life = new Life({ simVersion: SIM_VERSION, config, tick: birthTick + 1, character, economy, events: newEventsState(), npcs, bonds, bequests: [], reputation: newReputation(logic.counties.length), rumors: [], factions, factionsSeen: [], rng: streams.snapshot(), death: null, plan: null, active: null, planWarned: false }, streams, [], logic);
+    const life = new Life({ simVersion: SIM_VERSION, config, tick: birthTick + 1, character, economy, events: newEventsState(), npcs, bonds, bequests: [], reputation: newReputation(logic.counties.length), rumors: [], factions, factionsSeen: [], career: null, careers: [], rng: streams.snapshot(), death: null, plan: null, active: null, planWarned: false }, streams, [], logic);
     life.push({ tick: birthTick, key: 'log.birth', params: { birthplace: birthplace.name, background: `background.${character.background}` }, importance: 'major' });
     return life;
   }
@@ -148,7 +158,17 @@ export class Life {
 
   get plan(): MonthPlan | null { return this.s.plan ? { slots: this.s.plan.slots.map((p) => ({ ...p })) as MonthPlan['slots'] } : null; }
   get active(): PlayerState['active'] { return this.s.active ? JSON.parse(JSON.stringify(this.s.active)) as PlayerState['active'] : null; }
-  actions() { return actionOptions(this.s.character, this.displayTick, this.logic, this.s.economy); }
+  actions() {
+    const options = actionOptions(this.s.character, this.displayTick, this.logic, this.s.economy, this.s.career);
+    // Ứng tuyển sai dịch (v0.7 S4): khóa theo quan phủ (trị sở, tuổi, chỗ trống) như lúc chạy tuần
+    // Gọi thẳng hàm khóa, không dựng cả bộ móc xã giao (mỗi lần dựng hơn chục hàm; batch gọi bảng chọn mỗi tuần)
+    const s = this.s;
+    const enlistOption = options.find((a) => a.id === 'action.enlist');
+    if (enlistOption && !enlistOption.locked) enlistOption.locked = enlistLock(s.character, { career: s.career, careers: s.careers, factions: s.factions, npcs: s.npcs, bonds: s.bonds, logic: this.logic, tick: s.tick });
+    // Bỏ quê, dựng lều (S6): khóa riêng (ruộng, núi rừng, đã ở nghề ấy)
+    for (const o of options) if (!o.locked && (o.id === 'action.drift' || o.id === 'action.build_hut')) o.locked = ownLock(o.id, s.character, { career: s.career, careers: s.careers, npcs: s.npcs, bonds: s.bonds, logic: this.logic, tick: s.tick });
+    return options;
+  }
   /** Nơi đi được; mức rủi ro tính cả người giữ đường, đường băng cướp giữ ghi `danger` (v0.6 S6). */
   travel() {
     const roads = this.roads();
@@ -160,8 +180,29 @@ export class Life {
     });
   }
   previewTravel(county: number) { return previewTravel(this.logic, this.s.character.location, county, this.roads()); }
+  /**
+   * Chuyến buôn đi được từ quận đang đứng (v0.7 F3b), mỗi quận đích × mỗi hàng: lời mỗi đấu, mỗi phần và lời cả chuyến
+   * nếu đường êm, theo giá niêm yết lúc này; khóa như lúc khởi hành. Chỉ thương nhân. Không rút RNG.
+   */
+  hauls(actions: ActionOption[] = this.actions()): HaulOption[] {
+    const option = actions.find((a) => a.id === 'action.haul');
+    if (this.s.career?.id !== 'merchant' || !option) return [];
+    const c = this.s.character, eco = this.s.economy, roads = this.roads();
+    return this.logic.counties.flatMap((_, county) => {
+      const p = county === c.location ? null : previewTravel(this.logic, c.location, county, roads);
+      if (!p) return [];
+      const danger = routeDanger(this.s.factions, this.logic, p.route);
+      return CARGOS.map((cargo): HaulOption => {
+        const e = haulEstimate(c.household.money, this.s.career, eco, this.logic, p.route, cargo);
+        return {
+          county, cargo, slots: p.slots * 2, margin: haulMargin(eco, this.logic, p.route, cargo), profit: e.revenue - e.cost, risk: p.risk,
+          ...(danger ? { danger } : {}), locked: option.locked ?? haulLock(c, eco, p.route, this.logic, cargo),
+        };
+      });
+    });
+  }
   /** Ô tuần này là đi đường (đang dở chuyến hay kế hoạch xếp đi): chỉ khi ấy mới cần rủi ro đường (S8, hiệu năng). */
-  private travelling(t: Tick): boolean { return (this.s.active?.slot ?? this.s.plan?.slots[t % TICKS_PER_MONTH])?.action === 'action.travel'; }
+  private travelling(t: Tick): boolean { const a = (this.s.active?.slot ?? this.s.plan?.slots[t % TICKS_PER_MONTH])?.action; return a === 'action.travel' || a === 'action.haul'; }
   /** Hệ số rủi ro mỗi đường theo người giữ (v0.6 S6). */
   private roads(): number[] { return roadRisk(this.s.factions, this.logic.adjacency.length); }
   setPlan(plan: MonthPlan): boolean {
@@ -192,7 +233,7 @@ export class Life {
   view(): CharacterView {
     const c = this.s.character;
     // Tiếng tăm ở quận đang đứng (S6)
-    const v = { ...toView(c, this.displayTick, buyPrice(this.s.economy.counties[c.location]!)), reputation: reputationBand(repAt(this.s.reputation, c.location)) };
+    const v = { ...toView(c, this.displayTick, buyPrice(this.s.economy.counties[c.location]!)), reputation: reputationBand(repAt(this.s.reputation, c.location)), career: careerView(this.s.career, this.s.npcs, this.leaveView()) };
     // Vợ/chồng còn sống (v0.5 S5)
     const sp = this.spouse();
     return sp && sp.death === null ? { ...v, spouse: sp.id } : v;
@@ -231,7 +272,32 @@ export class Life {
     this.worldPhase(t, log);
     // 2 Thế lực (v0.6, ADR 0019): đầu quý; chuyện thế lực ở quận kề thành tin đồn (S6)
     const before = isQuarterStart(t) ? factionMark(this.s.factions, this.logic.counties.length) : null;
-    const report = factionPhase(this.s.factions, this.s.economy, this.s.npcs, this.logic, t, this.streams.get('factions'));
+    // Người chơi trong luật gia đình (S5): nhận con như mọi cặp vợ chồng, nhận phần thừa kế (cả khi người thân tử trận)
+    // Người chơi là thầy thuốc từ bậc làm được (S5): người bệnh NPC trong quận đang đứng trả phí cho người chơi
+    const doctor = this.s.career?.id === 'physician' && rankStep(this.s.career, 'physician') >= 1 ? { county: c.location, purse: c.household } : null;
+    const family: { c: CharacterState; inherited: Inheritance[]; death: Death | null; doctor: PlayerDoctor | null } = { c, inherited: this.s.bequests, death: null, doctor };
+    const report = factionPhase(this.s.factions, this.s.economy, this.s.npcs, this.logic, t, this.streams.get('factions'), { character: c, career: this.s.career, log, deaths: { world: this.s.npcs, player: family } });
+    // Sai dịch (v0.7 S4): bị cho nghỉ (kho cạn), bị người giỏi hơn thay thì mất nghề; chết trận
+    const duty = report?.soldier ?? null;
+    if (duty?.left) {
+      leaveCareer(this.s, this.s.bonds, this.s.npcs);
+      log({ key: `log.soldier.${duty.left}`, params: {}, importance: 'major' });
+    }
+    // Theo cướp (S6): bị bắt sau trận tiễu thì mất nghề, mất nửa túi, tiếng xấu; băng tan thì về làm dân thường
+    const outlaw = report?.outlaw ?? null;
+    if (outlaw?.caught) {
+      leaveCareer(this.s, this.s.bonds, this.s.npcs);
+      addReputation(this.s.reputation, c.home, OUTLAW_CAUGHT_REP);
+      log({ key: 'log.outlaw.caught', params: { coin: outlaw.fine }, importance: 'major' });
+    } else if (this.s.career?.id === 'outlaw' && !bandOf(this.s.factions, this.s)) {
+      leaveCareer(this.s, this.s.bonds, this.s.npcs);
+      log({ key: 'log.outlaw.disband', params: {}, importance: 'major' });
+    }
+    // Thương hội người chơi là hội viên đã tan (S3): phần chia đã nhận, thân phận nghề không còn hội
+    if (this.s.career?.id === 'merchant' && this.s.career.faction && !this.s.factions.list.some((f) => f.id === this.s.career!.faction && f.ended === null)) {
+      this.s.career.faction = null;
+      log({ key: 'log.guild.ended', params: {}, importance: 'major' });
+    }
     if (before) {
       this.s.rumors.push(...factionRumors(this.s.factions, this.logic, before, c.location, t));
       // Tin thế sự ở chính quận đang đứng (F3); thế lực đã thấy, thịnh suy (F4)
@@ -239,12 +305,15 @@ export class Life {
       trackSeen(this.s.factionsSeen, this.s.factions, this.logic, c.location);
     }
     const firstNew = this.s.npcs.nextId;
-    // Người chơi trong luật gia đình (S5): nhận con như mọi cặp vợ chồng; là mẹ thì có thể sinh khó
-    const family: { c: CharacterState; inherited: Inheritance[]; death: Death | null } = { c, inherited: this.s.bequests, death: null };
+    // Là mẹ thì có thể sinh khó
     npcPhase(this.s.npcs, this.s.economy, this.logic, t, c.location, { player: family });
     this.npcNews(t, firstNew, log);
     // Quan hệ phai dần mỗi năm (v0.5 S4)
-    if (isYearStart(t)) fadeBonds(c, { npcs: this.s.npcs, bonds: this.s.bonds, rng: this.streams.get('social') });
+    if (isYearStart(t)) {
+      fadeBonds(c, { npcs: this.s.npcs, bonds: this.s.bonds, rng: this.streams.get('social') });
+      // Người lưu lạc ít quan hệ bền: quan hệ phai gấp đôi (S6, Q7)
+      if (this.s.career?.id === 'drifter') fadeBonds(c, { npcs: this.s.npcs, bonds: this.s.bonds, rng: this.streams.get('social') });
+    }
     // Thừa kế (v0.5 S3): cha, mẹ, vợ/chồng mất thì người chơi nhận phần mình. Người ở tầng L1 tính cả tháng nên có thể
     // mất vào tuần sau: tin báo đúng tuần mất, sau tin người ấy mất (phần chia giữ trong snapshot tới lúc ấy)
     this.s.bequests = this.s.bequests.filter((x) => {
@@ -260,7 +329,7 @@ export class Life {
     // 4 Sự kiện (tuần): bệnh, tai nạn, rồi sự kiện có lựa chọn
     const here = this.s.economy.counties[c.location]!;
     const epidemic = epidemicAt(here, t) && !(c.household.shieldUntil > t);
-    let death = family.death ?? eventsPhase(c, t, this.streams.get('illness'), this.streams.get('accident'), log, epidemic);
+    let death = duty?.death ?? outlaw?.death ?? family.death ?? eventsPhase(c, t, this.streams.get('illness'), this.streams.get('accident'), log, epidemic);
     if (!death) rollEvent(this.s.events, EVENTS, this.context(t), this.streams.get('events'));
     // 5 Người chơi: tuổi thơ hoặc ô kế hoạch tháng (ADR 0008).
     const action = death ? { death, carePct: 0 } : playerPhase(this.s, c, t, this.logic, this.s.economy, this.streams, log, this.s.npcs, this.socialHooks(), this.travelling(t) ? this.roads() : null);
@@ -269,7 +338,7 @@ export class Life {
     if (!death) {
       const market = this.s.economy.counties[c.location]!;
       feedPhase(c, t, this.homeSupply(), this.streams.get('economy'), log, market);
-      if (isYearStart(t)) { agingPhase(c, t); decaySkills(c, t); }
+      if (isYearStart(t)) { agingPhase(c, t); decaySkills(c, t); careerYear(this.s, c, this.s.bonds, this.s.npcs, log); }
       death = consequencesPhase(c, t, this.streams.get('health'), log, action.carePct);
     }
     if (!death) {
@@ -336,7 +405,8 @@ export class Life {
       worldYearStart(eco, this.streams.get('weather'), t);
       this.stayAtHome(t, log);
       const debtBefore = c.household.taxDebt;
-      const paid = headTax(c, eco.counties[c.home]!, t);
+      // Lưu lạc, ẩn dật không nộp thuế đinh nơi nào (S6, Q7)
+      const paid = taxExempt(this.s) ? 0 : headTax(c, eco.counties[c.home]!, t);
       // Thiếu thuế là chuyện lớn với người tự nuôi mình; quan sai tới đòi ở S5
       if (c.household.taxDebt > debtBefore) {
         log({ key: 'log.tax.short', params: { paid, owed: c.household.taxDebt }, importance: 'major' });
@@ -351,10 +421,11 @@ export class Life {
     const before = supplyOf(here);
     const supplyBefore = eco.counties.map(supplyOf);
     economyMonth(eco, this.logic, t);
+    spoilGoods(c.household);
     this.rumorsMonth(t, supplyBefore, log);
     const county = this.logic.counties[c.location]!.name ?? 'place.unknown';
     if (calendarOf(t).month === HARVEST_MONTH) {
-      const crop = harvestPlayer(c, eco, this.logic);
+      const crop = harvestPlayer(c, eco, this.logic, this.s.career);
       if (crop.gross > 0 || crop.landlordIncome > 0) {
         const dou = (x: number) => idiv(x, GRAIN_PER_DOU);
         log({ key: crop.landlordIncome > 0 ? 'log.harvest.landlord' : 'log.harvest.own', params: { net: dou(crop.net), rent: dou(crop.rent), tax: dou(crop.tax), income: dou(crop.landlordIncome) }, importance: 'minor' });
@@ -436,6 +507,13 @@ export class Life {
     return tradeGrain(this.s.character.household, this.s.economy.counties[this.s.character.location]!, grain);
   }
 
+  /** Lệnh TRADE_GOODS (v0.7 S3b, ADR 0021): mua (> 0) hoặc bán (< 0) phân hàng ở chợ đang đứng, không tốn ô. */
+  tradeGoods(good: GoodId, qty: number): string | null {
+    if (!this.alive) return 'đã chết';
+    if (ageYearsAt(this.s.character.birthTick, this.s.tick) < ACTION_MIN_AGE) return 'chưa đủ tuổi tự lo liệu';
+    return tradeGoods(this.s.character.household, this.s.economy.counties[this.s.character.location]!, good, qty);
+  }
+
   /** Chợ quận đang đứng. */
   market(): MarketView {
     return marketView(this.s.economy, this.s.character.location);
@@ -475,13 +553,97 @@ export class Life {
   socialLock(slot: PlanSlot): string | null {
     const c = this.s.character, d = actionDef(slot.action);
     if (!d || d.group !== 'social' || slot.person === undefined) return 'lock.action';
-    return actionLock(d, c, this.s.tick, this.logic.settlementKind[c.location]!, this.s.economy.counties[c.location]!) ?? this.socialHooks().lock(slot, c);
+    return actionLock(d, c, this.s.tick, this.logic.settlementKind[c.location]!, this.s.economy.counties[c.location]!, this.s.career) ?? this.socialHooks().lock(slot, c);
   }
 
-  /** Xã giao của người chơi (v0.5 S4): khóa theo người được nhắm tới, tác dụng lên kho quan hệ. */
+  /**
+   * Xã giao của người chơi (v0.5 S4): khóa theo người được nhắm tới, tác dụng lên kho quan hệ. Học việc (v0.7 S1) cũng
+   * nhắm vào một người nhưng tác dụng lên thân phận nghề; ô làm xong tính vào năm làm nghề.
+   */
+  /** Bộ móc xã giao dựng một lần mỗi tick (S9: bảng chọn người gọi khóa cho từng người, từng việc mỗi tuần). */
+  private hooks: { tick: Tick; hooks: SocialHooks } | null = null;
   private socialHooks(): SocialHooks {
+    if (this.hooks?.tick !== this.s.tick) this.hooks = { tick: this.s.tick, hooks: this.buildSocialHooks() };
+    return this.hooks.hooks;
+  }
+  private buildSocialHooks(): SocialHooks {
     const w: SocialWorld = { npcs: this.s.npcs, bonds: this.s.bonds, rng: this.streams.get('social'), tick: this.s.tick, logic: this.logic, reputation: this.s.reputation };
-    return { lock: (slot, c) => socialLock(slot, c, w), act: (slot, c, log) => socialAct(slot, c, w, log) };
+    const s = this.s;
+    const trade = (): ApprenticeWorld => ({ career: s.career, careers: s.careers, npcs: s.npcs, bonds: s.bonds, reputation: s.reputation, tick: s.tick, rng: w.rng });
+    const guild = (): GuildJoinWorld => ({ npcs: s.npcs, bonds: s.bonds, factions: s.factions, reputation: s.reputation, career: s.career, tick: s.tick, rng: w.rng });
+    const office = (): EnlistWorld => ({ career: s.career, careers: s.careers, factions: s.factions, npcs: s.npcs, bonds: s.bonds, logic: this.logic, tick: s.tick });
+    const own = (): OwnWorld => ({ career: s.career, careers: s.careers, npcs: s.npcs, bonds: s.bonds, logic: this.logic, tick: s.tick });
+    return {
+      lock: (slot, c) => (slot.action === 'action.apprentice' ? apprenticeLock(slot, c, trade()) : slot.action === 'action.join_guild' ? joinGuildLock(slot, c, guild()) : socialLock(slot, c, w)),
+      act: (slot, c, log) => {
+        if (slot.action === 'action.join_guild') { joinGuild(slot, c, guild(), log); return; }
+        if (slot.action !== 'action.apprentice') { socialAct(slot, c, w, log); return; }
+        // Vào nghề, đổi nghề thay cả thân phận: chép lại vào snapshot
+        const x = trade();
+        apprenticeAct(slot, c, x, log);
+        s.career = x.career;
+      },
+      worked: (action) => careerWorked(s, action),
+      // Đi buôn chuyến (S3): khóa lúc khởi hành theo lộ trình thật, chuyến buôn trên luồng `actions`
+      haulLock: (slot, c) => {
+        const p = slot.target === undefined ? null : previewTravel(this.logic, c.location, slot.target);
+        return p ? haulLock(c, s.economy, p.route, this.logic, slot.cargo) : 'lock.route';
+      },
+      haul: (slot, preview, c, log) => { haulTrip(c, preview, { eco: s.economy, logic: this.logic, factions: s.factions, roads: this.roads(), career: s.career, rng: this.streams.get('actions') }, log, slot.cargo); },
+      // Ứng tuyển sai dịch (S4): cùng luật tuyển sai dịch NPC, không rút RNG
+      enlistLock: (c) => enlistLock(c, office()),
+      enlist: (c, log) => { const x = office(); enlist(c, x, log); s.career = x.career; },
+      // Bỏ quê, dựng lều (S6): tự vào nghề, không rút RNG
+      ownLock: (action, c) => ownLock(action, c, own()),
+      own: (action, c, log) => { const x = own(); ownEnter(action, c, x, log); s.career = x.career; },
+    };
+  }
+
+  /** Rời nghề lúc này mất gì ngoài bậc và lòng thầy (F2): cùng luật với lệnh LEAVE_CAREER dưới đây. */
+  private leaveView(): CareerLeaveView {
+    const k = this.s.career;
+    if (!k) return {};
+    const angers = leaveAngers(k);
+    return {
+      ...(angers ? { angers } : {}),
+      ...(k.id === 'outlaw' ? { outlaw: { way: canAtone(this.s.character, this.s.factions) ? 'atone' as const : 'desert' as const, fee: ATONE_FEE } } : {}),
+    };
+  }
+
+  /**
+   * Bảng chọn nghề ở quận đang đứng (v0.7 F2), đủ chín nghề theo thứ tự `CAREERS`: nghề qua thầy kèm từng thầy ở đây (lễ
+   * nhập môn, khóa của ô học việc như khi ô chạy); nghề qua thế lực, tự vào lấy khóa của việc vào nghề trong bảng chọn
+   * việc; theo cướp chỉ vào qua sự kiện. Không rút RNG.
+   */
+  careerBoard(actions: ActionOption[] = this.actions()): CareerEntryView[] {
+    const c = this.s.character;
+    const here = peopleAt(this.s.npcs, c.location);
+    return CAREERS.map((id): CareerEntryView => {
+      const entry = CAREER_DEFS[id].entry;
+      if (entry === 'mentor') {
+        const mentors = here.filter((n) => mentorCareer(n, this.s.tick) === id)
+          .map((n) => ({ id: n.id, gift: entryGift(c, n), locked: this.socialLock({ action: 'action.apprentice', person: n.id }) }));
+        return { career: id, way: 'mentor', action: 'action.apprentice', mentors, locked: mentors.length ? null : 'lock.no_mentor_here' };
+      }
+      const action = id === 'soldier' ? 'action.enlist' : id === 'drifter' ? 'action.drift' : id === 'recluse' ? 'action.build_hut' : null;
+      if (!action) return { career: id, way: 'event', action: null, mentors: [], locked: null };
+      const option = actions.find((a) => a.id === action);
+      return { career: id, way: entry, action, mentors: [], locked: option ? option.locked : 'lock.action' };
+    });
+  }
+
+  /** Lệnh LEAVE_CAREER (v0.7 S1): rời nghề, mất bậc, thầy phật lòng. Trả lý do từ chối hoặc null. */
+  leaveCareer(): string | null {
+    if (!this.alive) return 'đã chết';
+    // Bỏ nha môn, bỏ hội (S7): thế lực phật lòng
+    const angers = this.s.career ? leaveAngers(this.s.career) : null;
+    if (angers) shiftAttitude(this.s.factions.list.find((f) => f.id === angers), LEAVE_ATTITUDE);
+    // Ra băng (S6, Q8): chuộc tội với quan phủ, không đủ tiền thì trốn
+    if (this.s.career?.id === 'outlaw') this.push({ tick: this.displayTick, key: leaveBand(this.s.character, this.s.factions, this.s), params: { coin: ATONE_FEE }, importance: 'major' });
+    const old = leaveCareer(this.s, this.s.bonds, this.s.npcs);
+    if (!old) return 'chưa vào nghề nào';
+    this.push({ tick: this.displayTick, key: 'log.career.leave', params: { career: `career.${old.id}` }, importance: 'major' });
+    return null;
   }
 
   private viewOf(n: NpcState, members: ReadonlyMap<string, string>): NpcView {
@@ -614,6 +776,8 @@ export class Life {
         reputation: reputationBand(repAt(this.s.reputation, c.home)),
         // Thế sự một đời (v0.6 F4): thế lực đã thấy thịnh, suy, mất
         factions: legacyFactions(this.s.factionsSeen),
+        // Một đời làm nghề (v0.7 S1): các nghề đã rời rồi nghề đang làm
+        careers: legacyCareers(this.s),
       },
       digest: this.digest(),
     };

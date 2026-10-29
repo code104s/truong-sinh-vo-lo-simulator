@@ -2,7 +2,7 @@
 // không ruộng, nghèo; mỗi quý cướp kho quận sào huyệt và quận kề, chia cho người trong đảng; năm khó dụ thêm người, năm
 // thường người bỏ về nghề cũ; dưới 3 người thì tan. Người theo cướp đổi nghề `bandit`, cùng luật sống chết với mọi người.
 // Chưa chiếm quận (cát cứ, tiễu phỉ ở S5); rủi ro đường cho người chơi ở S6. Thuần, tất định, số nguyên; RNG luồng `factions`.
-import { ageYearsAt, type Tick } from '@tsvl/shared';
+import { ageYearsAt, GRAIN_PER_DOU, type LogEntry, type Tick } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { idiv } from '../core/math';
 import type { Rng } from '../core/rng';
@@ -10,6 +10,7 @@ import { supplyOf, type CountyEconomy, type EconomyState } from '../economy/mark
 import { COMING_OF_AGE, RATION_ADULT } from '../life/household';
 import { baseOccupation } from '../npc/lifecycle';
 import type { NpcState, NpcWorldState } from '../npc/state';
+import type { CharacterState } from '../life/character';
 import { governmentSeat } from './government';
 import type { FactionState, FactionWorldState } from './state';
 
@@ -40,6 +41,12 @@ export const BANDIT_RAID_PERMILLE = 50;
 export const MOUNTAIN_TERRAIN_PCT = 200;
 /** Thế mỗi người (văn tương đương, cùng thang uy thế gia tộc). */
 const PERSON_VALUE = 2_000;
+
+/**
+ * Người chơi theo cướp (v0.7 S6, Q8): được chia như một người trong đảng, góp thế, nhưng không tính vào số người để lập,
+ * tan đảng (như hội viên thương hội, S3). Đảng tan thì nhận phần chia như mọi người.
+ */
+export interface BanditPlayer { character: CharacterState; band: string; log: (e: Omit<LogEntry, 'tick'>) => void }
 
 /** Quận năm khó: đói kém, khan lương, hay năm có tai họa (Q6). */
 export const hardCounty = (ce: CountyEconomy): boolean => ce.disaster !== null || supplyOf(ce) === 'famine' || supplyOf(ce) === 'scarce';
@@ -81,13 +88,14 @@ function leave(n: NpcState, logic: RegionLogic): void {
 }
 
 /** Tan: người còn lại về nghề cũ, kho chia đều cho họ, phần lẻ (hay cả kho khi không còn ai) về quận sào huyệt. */
-function disband(f: FactionState, eco: EconomyState, byId: ReadonlyMap<string, NpcState>, logic: RegionLogic, t: Tick): void {
+function disband(f: FactionState, eco: EconomyState, byId: ReadonlyMap<string, NpcState>, logic: RegionLogic, t: Tick, mine: BanditPlayer | null): void {
   const members = f.members.map((id) => byId.get(id)!);
   for (const n of members) leave(n, logic);
-  if (members.length > 0) {
-    const money = idiv(f.money, members.length), grain = idiv(f.grain, members.length);
-    for (const n of members) { n.character.household.money += money; n.character.household.grain += grain; }
-    f.money -= money * members.length; f.grain -= grain * members.length;
+  const purses = [...members.map((n) => n.character.household), ...(mine ? [mine.character.household] : [])];
+  if (purses.length > 0) {
+    const money = idiv(f.money, purses.length), grain = idiv(f.grain, purses.length);
+    for (const h of purses) { h.money += money; h.grain += grain; }
+    f.money -= money * purses.length; f.grain -= grain * purses.length;
   }
   const lair = eco.counties[f.seat]!;
   lair.money += f.money; lair.grain += f.grain;
@@ -100,7 +108,7 @@ function disband(f: FactionState, eco: EconomyState, byId: ReadonlyMap<string, N
  * Băng cướp mỗi quý, sau thương hội: người (bỏ người mất), cướp kho, chia cho người trong đảng, bỏ đi hay dụ thêm, tan,
  * lập mới. Rút RNG theo thứ tự id người, rồi theo chỉ số quận.
  */
-export function banditsQuarter(fw: FactionWorldState, eco: EconomyState, npcs: NpcWorldState, logic: RegionLogic, t: Tick, rng: Rng): void {
+export function banditsQuarter(fw: FactionWorldState, eco: EconomyState, npcs: NpcWorldState, logic: RegionLogic, t: Tick, rng: Rng, player: BanditPlayer | null = null): void {
   const byId = new Map(npcs.people.map((n) => [n.id, n]));
   const bands = () => fw.list.filter((f) => f.kind === 'bandits' && f.ended === null);
   const taken = new Set<string>();
@@ -116,8 +124,10 @@ export function banditsQuarter(fw: FactionWorldState, eco: EconomyState, npcs: N
 
   for (const f of bands()) {
     const reach = reachOf(logic, f.seat);
+    const mine = player && player.band === f.id && player.character.alive ? player : null;
+    const heads = () => f.members.length + (mine ? 1 : 0);
     // 1 Cướp kho làng: đủ ăn một quý và tiêu vặt cho cả đảng, mỗi quận không quá 50‰ kho, quỹ
-    let wantGrain = f.members.length * BANDIT_GRAIN_PER_MEMBER, wantMoney = f.members.length * BANDIT_MONEY_PER_MEMBER;
+    let wantGrain = heads() * BANDIT_GRAIN_PER_MEMBER, wantMoney = heads() * BANDIT_MONEY_PER_MEMBER;
     for (const c of reach) {
       const ce = eco.counties[c]!;
       // Họ đứng đầu quận giữ làng (Q8): đọ uy thế với thế cướp; giữ được thì quận ấy không mất gì, đảng mất một người
@@ -131,11 +141,15 @@ export function banditsQuarter(fw: FactionWorldState, eco: EconomyState, npcs: N
       ce.grain -= g; f.grain += g; wantGrain -= g;
       ce.money -= m; f.money += m; wantMoney -= m;
     }
-    // 2 Chia: hết lương, nửa tiền, đều cho mỗi người
-    if (f.members.length > 0) {
-      const grain = idiv(f.grain, f.members.length), money = idiv(idiv(f.money, 2), f.members.length);
+    // 2 Chia: hết lương, nửa tiền, đều cho mỗi người (cả người chơi trong đảng)
+    if (heads() > 0) {
+      const grain = idiv(f.grain, heads()), money = idiv(idiv(f.money, 2), heads());
       for (const id of f.members) { const h = byId.get(id)!.character.household; h.grain += grain; h.money += money; }
-      f.grain -= grain * f.members.length; f.money -= money * f.members.length;
+      if (mine) {
+        mine.character.household.grain += grain; mine.character.household.money += money;
+        mine.log({ key: 'log.outlaw.share', params: { dou: idiv(grain, GRAIN_PER_DOU), coin: money }, importance: 'minor' });
+      }
+      f.grain -= grain * heads(); f.money -= money * heads();
     }
     // 3 Năm khó dụ thêm người quanh sào huyệt; năm thường người bỏ về nghề cũ
     if (hardCounty(eco.counties[f.seat]!)) {
@@ -145,11 +159,11 @@ export function banditsQuarter(fw: FactionWorldState, eco: EconomyState, npcs: N
       f.members = f.members.filter((id) => { if (rng.int(0, 999) >= BANDIT_LEAVE_PERMILLE) return true; leave(byId.get(id)!, logic); return false; });
     }
     // 4 Tan khi dưới ngưỡng người
-    if (f.members.length < BANDIT_MIN_MEMBERS) { disband(f, eco, byId, logic, t); continue; }
+    if (f.members.length < BANDIT_MIN_MEMBERS) { disband(f, eco, byId, logic, t, mine); continue; }
     // 5 Đầu đảng: người võ nghệ cao nhất (bằng nhau: id nhỏ); thế = kho + mỗi người (giá một người + võ nghệ)
     const members = f.members.map((id) => byId.get(id)!);
     f.leader = members.reduce((best, n) => (n.character.skillXp.martial > best.character.skillXp.martial ? n : best)).id;
-    f.power = f.money + members.reduce((s, n) => s + PERSON_VALUE + n.character.skillXp.martial, 0);
+    f.power = f.money + members.reduce((s, n) => s + PERSON_VALUE + n.character.skillXp.martial, 0) + (mine ? PERSON_VALUE + mine.character.skillXp.martial : 0);
   }
 
   // 6 Lập: quận năm khó, hợp làm sào huyệt, chưa có băng (kể cả băng vừa tan còn trong danh sách một năm), đủ người theo

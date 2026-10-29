@@ -1,8 +1,9 @@
 import { EVENTS_VI } from './events.vi';
+import { EVENTS_CAREERS_VI } from './events.careers.vi';
 import { VI as BASE_VI } from './vi';
 
-/** Mọi chuỗi: giao diện, nhật ký (vi.ts) và sự kiện (events.vi.ts). */
-const VI: Readonly<Record<string, string>> = { ...BASE_VI, ...EVENTS_VI };
+/** Mọi chuỗi: giao diện, nhật ký (vi.ts) và sự kiện (events.vi.ts; v0.7 S8: events.careers.vi.ts). */
+const VI: Readonly<Record<string, string>> = { ...BASE_VI, ...EVENTS_VI, ...EVENTS_CAREERS_VI };
 
 export type Params = Readonly<Record<string, string | number>>;
 

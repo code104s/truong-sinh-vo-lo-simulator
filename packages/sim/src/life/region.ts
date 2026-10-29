@@ -30,7 +30,8 @@ export function checkSavedLogic(logic: RegionLogic, save: SaveFile, snap: LifeSn
   }
   const c = snap.character;
   const bp = save.region.birthplaces.find((p) => p.id === snap.config.birthplaceId);
-  if (!bp || bp.county !== c.home || c.location >= n || c.home >= n || snap.tick <= c.birthTick || c.alive !== (snap.death === null)) return 'trạng thái nhân vật không khớp vùng';
+  // Quê nhà không còn buộc là quận nơi sinh: dựng lều ẩn cư dời quê sang quận có núi (v0.7 S6; sửa ở F5)
+  if (!bp || c.location >= n || c.home >= n || snap.tick <= c.birthTick || c.alive !== (snap.death === null)) return 'trạng thái nhân vật không khớp vùng';
   if (STREAMS.some((name) => !snap.rng.streams[name])) return 'thiếu luồng RNG';
   if (snap.economy.counties.length !== n) return 'chợ quận không khớp vùng';
   if (snap.events.pending && !EVENTS.some((d) => d.id === snap.events.pending!.eventId)) return 'sự kiện chờ không có trong tuyển tập';
@@ -38,9 +39,11 @@ export function checkSavedLogic(logic: RegionLogic, save: SaveFile, snap: LifeSn
   if (snap.active) {
     const a = snap.active;
     if (a.remaining > a.total) return 'tiến độ hành động không hợp lệ';
-    if (a.slot.action === 'action.travel') {
+    if (a.slot.action === 'action.travel' || a.slot.action === 'action.haul') {
       const actual = previewTravel(logic, c.location, a.slot.target ?? -1);
-      if (!actual || canonical(actual) !== canonical(a.preview) || actual.slots !== a.total) return 'chuyến đi lưu không khớp đường';
+      // Chuyến buôn đi về (v0.7 S3): gấp đôi số ô đường
+      const slots = a.slot.action === 'action.haul' ? (actual?.slots ?? 0) * 2 : actual?.slots;
+      if (!actual || canonical(actual) !== canonical(a.preview) || slots !== a.total) return 'chuyến đi lưu không khớp đường';
     } else if (!actionDef(a.slot.action)?.hidden) return 'hành động một ô không được lưu dở';
   }
   if (!save.commandLog.length || save.commandLog[0]!.cmd.type !== 'NEW_LIFE') return 'thiếu lệnh bắt đầu đời';

@@ -1,15 +1,19 @@
 // Thế lực (v0.6, ADR 0019): trạng thái, kho, người giữ quận, pha quý. S1: quan phủ (`government.ts`); S2: gia tộc
 // (`clans.ts`); S3: thương hội (`guilds.ts`); S4: băng cướp (`bandits.ts`). Thuần, tất định, số nguyên.
-import { isQuarterStart, TICKS_PER_YEAR, type FactionId, type FactionKind, type FactionName, type FactionView, type StrengthBand, type Tick } from '@tsvl/shared';
+import { isQuarterStart, TICKS_PER_YEAR, type FactionId, type FactionKind, type FactionName, type FactionView, type LogEntry, type StrengthBand, type Tick } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { idiv } from '../core/math';
 import type { Rng } from '../core/rng';
 import type { EconomyState } from '../economy/market';
 import type { NpcWorldState } from '../npc/state';
+import type { CharacterState } from '../life/character';
+import type { CareerState } from '../life/career';
+import type { DeathContext } from '../npc/lifecycle';
 import { governmentRule, governmentTaxes, setTaxRates, type GovernmentReport } from './government';
 import { clansQuarter } from './clans';
 import { guildsQuarter } from './guilds';
 import { banditsQuarter } from './bandits';
+import { attitudeBand, attitudeOf, attitudeQuarter } from './attitude';
 
 export interface FactionState {
   id: FactionId;
@@ -39,6 +43,10 @@ export interface FactionState {
   termEnds: Tick;
   /** Thái độ với thế lực khác, thưa (chỉ cặp đã có chuyện), theo id; −100 thù … 100 thân. S1 chưa có. */
   relations: { other: FactionId; attitude: number }[];
+  /** Quan phủ (v0.7 S4): lương còn nợ từng sai dịch (id NPC, người chơi `n0`), theo id; không ai bị nợ thì bỏ trống. */
+  owed?: { id: string; coin: number }[];
+  /** Thái độ với người chơi (v0.7 S7, Q9), −100 ghét … 100 thân; không có là 0 (thế giới không người chơi không ghi). */
+  playerAttitude?: number;
   /** Kho riêng (quan phủ, thương hội, băng cướp; gia tộc không có kho chung, Q4): vào sổ cái. */
   money: number;
   grain: number;
@@ -55,6 +63,17 @@ export interface FactionWorldState {
 }
 
 export const newFactionWorld = (): FactionWorldState => ({ nextId: 1, list: [] });
+
+/**
+ * Người chơi trong pha Thế lực (v0.7): thân phận nghề — hội viên thương hội nhận chia lãi (S3), sai dịch lĩnh lương, theo
+ * trận tiễu phỉ (S4); nhật ký của đời; người thừa kế khi NPC tử trận.
+ */
+export interface FactionPlayer {
+  character: CharacterState;
+  career: CareerState | null;
+  log: (e: Omit<LogEntry, 'tick'>) => void;
+  deaths?: DeathContext | null;
+}
 
 /** Tổng tiền trong kho mọi thế lực (sổ cái: quỹ quận + túi người chơi + túi NPC + kho thế lực). */
 export const factionMoney = (fw: FactionWorldState): number => fw.list.reduce((s, f) => s + f.money, 0);
@@ -97,6 +116,7 @@ export function factionViews(fw: FactionWorldState, logic: RegionLogic): Faction
     id: f.id, kind: f.kind, name: { key: f.name.key, params: { ...f.name.params } }, seat: f.seat, counties: [...f.counties],
     ...(f.roads.length ? { roads: f.roads.map((k): [number, number] => [logic.adjacency[k]![0], logic.adjacency[k]![1]]) } : {}),
     strength: strengthBand(f, fw, logic.counties.length), members: f.members.length, ...(f.leader !== null ? { leader: f.leader } : {}),
+    attitude: attitudeBand(attitudeOf(f)),
   }));
 }
 
@@ -105,18 +125,24 @@ export function factionViews(fw: FactionWorldState, logic: RegionLogic): Faction
  * người giữ đất, nghề NPC, mức thuế (Q2). Luồng RNG riêng `factions`. Thứ tự: quan phủ thu thuế; gia tộc; thương hội; băng cướp; quan phủ cai trị (quan, sai dịch, phát chẩn, tiễu phỉ,
  * cát cứ, chi nha môn — S5).
  */
-export function factionPhase(fw: FactionWorldState, eco: EconomyState, npcs: NpcWorldState, logic: RegionLogic, tick: Tick, rng: Rng): GovernmentReport | null {
+export function factionPhase(fw: FactionWorldState, eco: EconomyState, npcs: NpcWorldState, logic: RegionLogic, tick: Tick, rng: Rng, player: FactionPlayer | null = null): GovernmentReport | null {
   if (!isQuarterStart(tick)) return null;
   // Thế lực tàn quá một năm thì dọn khỏi snapshot
   fw.list = fw.list.filter((f) => f.ended === null || tick - f.ended < TICKS_PER_YEAR);
   const gov = fw.list.find((f) => f.ended === null && f.kind === 'government') ?? null;
   if (gov) governmentTaxes(gov, eco, tick);
   clansQuarter(fw, npcs, logic, tick);
-  guildsQuarter(fw, eco, npcs, logic, tick);
-  banditsQuarter(fw, eco, npcs, logic, tick, rng);
-  const report = gov ? governmentRule(gov, fw, eco, npcs, logic, tick, rng) : null;
+  // Hội người chơi đã vào (S3): còn sống thì nhận phần chia
+  const guild = player?.career?.id === 'merchant' ? player.career.faction : null;
+  guildsQuarter(fw, eco, npcs, logic, tick, player ? { household: player.character.household, guild } : null);
+  // Băng người chơi theo (v0.7 S6): chia của cho người chơi như người trong đảng
+  const band = player?.career?.id === 'outlaw' ? player.career.faction : null;
+  banditsQuarter(fw, eco, npcs, logic, tick, rng, player && band ? { character: player.character, band, log: player.log } : null);
+  const report = gov ? governmentRule(gov, fw, eco, npcs, logic, tick, rng, player, player?.deaths ?? null) : null;
   // Mức thuế cho quý tới theo người giữ quận (S6)
   setTaxRates(gov, eco);
+  // Người chơi ở trong thế lực thì thân dần; theo cướp thì quan phủ ghét dần (v0.7 S7)
+  attitudeQuarter(fw, player?.career ?? null);
   // Lời buôn ghi trong quý đã chia xong (đường không ai giữ thì lời ấy không ai lấy, như v0.5)
   for (const m of eco.tradeMargin) m[0] = m[1] = 0;
   // Thuế ghi trong quý đã chia xong (quận không ai giữ thì quỹ quận giữ cả)

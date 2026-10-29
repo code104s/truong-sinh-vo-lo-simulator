@@ -204,5 +204,7 @@ export function toView(c: CharacterState, tick: Tick, buyPricePerDou: number): C
     household: householdView(c, tick, buyPricePerDou),
     // Tiếng tăm theo quận, vợ/chồng: có từ S4–S6 v0.5 (ADR 0017, 0018)
     reputation: 'unknown',
+    // Thân phận nghề của người chơi nằm ở snapshot đời (v0.7, ADR 0020); NPC có nghề riêng (`NpcState.occupation`)
+    career: null,
   };
 }

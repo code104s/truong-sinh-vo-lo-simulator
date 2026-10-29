@@ -6,8 +6,8 @@ import { arr, lit, nat, nonEmpty, obj, parseWith, unknownValue, type Result } fr
 import { vBirthplace, vRegionMapData, vRegionSummary, vWorldSeed, type Birthplace, type RegionMapData, type RegionSummary, type WorldSeed } from './world';
 
 export const SAVE_FORMAT = 'tsvl-save';
-/** 5: v0.5 — quan hệ, gia đình, tiếng tăm (ADR 0017, 0018). 4: v0.4 — snapshot có NPC (ADR 0015). Save cũ hơn bị từ chối (ADR 0004, v0.5 Q11). */
-export const SAVE_VERSION = 6;
+/** 7: v0.7 — nghề (ADR 0020). 6: v0.6 — thế lực (ADR 0019). 5: v0.5 — quan hệ, gia đình, tiếng tăm (ADR 0017, 0018). 4: v0.4 — snapshot có NPC (ADR 0015). Save cũ hơn bị từ chối (ADR 0004, v0.5 Q11). */
+export const SAVE_VERSION = 7;
 
 export interface SaveRegion {
   summary: RegionSummary;

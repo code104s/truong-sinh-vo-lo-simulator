@@ -1,7 +1,7 @@
 import { decodeSave, encodeSave, parseWorkerMessage, type Command, type SaveFile, type WorkerMessage } from '@tsvl/shared';
 import { buildRegion, type RegionBundle } from '@tsvl/worldgen';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { HANDLED_LIMIT, SimHost, replaySave, Rng } from '../src/index';
+import { digestOf, HANDLED_LIMIT, SimHost, replaySave, Rng } from '../src/index';
 import { hostAdvance } from './auto';
 
 let region: RegionBundle;
@@ -45,7 +45,7 @@ describe('SimHost', () => {
   it('READY rồi luồng chuẩn: GEN_WORLD → WORLD, NEW_LIFE → LOG + STATE', () => {
     const { h, out, send } = host();
     h.ready();
-    expect(out[0]).toMatchObject({ type: 'READY', protocolVersion: 6 });
+    expect(out[0]).toMatchObject({ type: 'READY', protocolVersion: 7 });
     const w = send({ type: 'GEN_WORLD', worldSeed: 'tsvl-01' });
     expect(w.map((m) => m.type)).toEqual(['PROGRESS', 'PROGRESS', 'WORLD']);
     const n = send({ type: 'NEW_LIFE', config: { worldSeed: 'tsvl-01', regionId: region.summary.id, birthplaceId: region.birthplaces[0]!.id } });
@@ -105,6 +105,25 @@ describe('SimHost', () => {
     expect(summary!.deathTick).toBe(whole.deathTick);
   });
 
+  it('v0.7 F5: quê nhà khác quận nơi sinh (dựng lều ẩn cư dời quê) vẫn tải được; quê ngoài vùng thì bị từ chối', () => {
+    const a = host();
+    newLife(a.send, 5);
+    a.send({ type: 'ADVANCE', mode: 'year' });
+    const saved = (a.send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>).save;
+    const load = (home: number) => {
+      const moved = JSON.parse(encodeSave(saved));
+      moved.sim.character.home = home;
+      moved.digest = digestOf(moved.sim);
+      const out: WorkerMessage[] = [];
+      new SimHost((m) => out.push(m)).handle({ type: 'LOAD', reqId: 1, save: (decodeSave(JSON.stringify(moved)) as { value: SaveFile }).value });
+      return out.map((m) => (m.type === 'ERROR' ? m.code : m.type));
+    };
+    const n = saved.region.map.counties.length;
+    const other = ((saved.sim as { character: { home: number } }).character.home + 1) % n;
+    expect(load(other)).toEqual(['WORLD', 'LOG', 'STATE']);
+    expect(load(n)).toEqual(['BAD_SAVE']);
+  });
+
   it('save bị sửa thì bị từ chối', () => {
     const a = host();
     newLife(a.send, 4);
@@ -131,7 +150,7 @@ describe('SimHost — v0.2', () => {
     expect(send({ type: 'PREVIEW_TRAVEL', county })).toMatchObject([{ type: 'TRAVEL_PREVIEW' }]);
     const after = send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>;
     expect(after.save.digest).toBe(before.save.digest);
-    expect(after.save.version).toBe(6);
+    expect(after.save.version).toBe(7);
     expect(after.save.commandLog).toEqual(before.save.commandLog);
     expect(after.save.commandLog[0]!.cmd.type).toBe('NEW_LIFE');
   });
@@ -182,8 +201,8 @@ describe('SimHost — v0.2', () => {
   });
 
   // v0.3 mục 6: chiến lược có seed gồm TRADE và CHOOSE; 200 tuần từ 12 tuổi để đi qua cả lập thân (S7)
-  it('10 seed: kế hoạch ngẫu nhiên có seed, mua bán, sự kiện, lưu/tải giữa tháng, phát lại cùng digest', () => {
-    let cameOfAge = 0;
+  it('10 seed: kế hoạch ngẫu nhiên có seed, mua bán, sự kiện, rời nghề, lưu/tải giữa tháng, phát lại cùng digest', () => {
+    let cameOfAge = 0, careers = 0;
     for (let i = 0; i < 10; i++) {
       const worldSeed = `replay-${i}`;
       const local = { ...region, worldSeed };
@@ -195,15 +214,18 @@ describe('SimHost — v0.2', () => {
       call({ type: 'NEW_LIFE', config: { worldSeed, regionId: local.summary.id, birthplaceId: local.birthplaces[0]!.id, lifeSeed: i } });
       while (a.current.life!.alive && !a.current.life!.view().canAct) hostAdvance(call, 'year');
       const rng = Rng.fromSeed(i);
-      let trades = 0;
+      let trades = 0, leaves = 0;
       for (let k = 0; k < 200 && a.current.life!.alive; k++) {
         const life = a.current.life!;
         const choices = life.actions().filter((x) => !x.locked && x.id !== 'action.travel');
-        // Xã giao (v0.5 S4) nhắm vào một người ở quận đang đứng
+        // Xã giao (v0.5 S4), học việc (v0.7 S1) nhắm vào một người ở quận đang đứng
         const people = life.people();
         const slot = () => {
           const id = choices[rng.int(0, choices.length - 1)]!.id;
-          const social = id === 'action.visit' || id === 'action.ask_help' || id === 'action.propose';
+          const group = choices.find((x) => x.id === id)!.group;
+          // Đi buôn chuyến (v0.7 S3) nhắm vào một quận như di chuyển
+          if (group === 'travel') { const to = life.travel(); return to.length ? { action: id, target: to[rng.int(0, to.length - 1)]!.county } : { action: 'action.rest' }; }
+          const social = group === 'social';
           return social && people.length ? { action: id, person: people[rng.int(0, people.length - 1)]!.id } : { action: social ? 'action.rest' : id };
         };
         call({ type: 'SET_PLAN', plan: { slots: [slot(), slot(), slot()] } });
@@ -213,10 +235,14 @@ describe('SimHost — v0.2', () => {
           if (h.grain >= 10 && m.maxSell >= 10) { call({ type: 'TRADE', grain: -10 }); trades++; }
           else if (h.money >= m.buyPrice + 1 && m.maxBuy >= 10) { call({ type: 'TRADE', grain: 10 }); trades++; }
         }
+        // Rời nghề (v0.7 S1) thỉnh thoảng, khi đang có nghề
+        if (life.view().career && rng.int(0, 9) === 0) { call({ type: 'LEAVE_CAREER' }); leaves++; }
         hostAdvance(call, 'week');
       }
+      if (a.current.life!.snapshot().careers.length || a.current.life!.view().career) careers++;
       const saved = a.save(); expect(replaySave(saved)).toBe(saved.digest);
       expect(saved.commandLog.filter((r) => r.cmd.type === 'TRADE')).toHaveLength(trades);
+      expect(saved.commandLog.filter((r) => r.cmd.type === 'LEAVE_CAREER')).toHaveLength(leaves);
       if (a.current.life!.log.some((e) => e.key.startsWith('event.coming_of_age.result'))) cameOfAge++;
       const decoded = decodeSave(encodeSave(saved)); if (!decoded.ok) throw new Error(decoded.error);
       const b = new SimHost(() => {}); b.load(decoded.value);
@@ -226,6 +252,8 @@ describe('SimHost — v0.2', () => {
       expect(() => b.load(broken)).toThrow(/thứ tự/);
     }
     expect(cameOfAge).toBeGreaterThan(0);
+    // Kế hoạch ngẫu nhiên có xin học việc: ít nhất một đời đã vào nghề
+    expect(careers).toBeGreaterThan(0);
   });
 });
 
@@ -279,6 +307,35 @@ describe('SimHost — v0.3 S4: lệnh TRADE', () => {
     const save = (send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>).save;
     expect(save.commandLog.at(-1)!.cmd).toEqual({ type: 'TRADE', grain: amount });
     expect(save.digest).not.toBe(before.digest);
+    expect(replaySave(save)).toBe(save.digest);
+  });
+});
+
+describe('SimHost — v0.7 S3b: lệnh TRADE_GOODS', () => {
+  it('mua bán hàng được ghi vào nhật ký lệnh, phát lại cùng digest; lệnh bị từ chối không ghi', () => {
+    const { h, send } = host();
+    newLife(send, 3);
+    while (!h.current.life!.view().canAct) hostAdvance(send, 'year');
+    const kind = region.logic.settlementKind[h.current.life!.character.location];
+    // Làng: đi săn để có da trong túi; trấn: làm thuê để có tiền mua
+    const work = kind === 'village' ? 'action.hunt' : 'action.hire';
+    send({ type: 'SET_PLAN', plan: { slots: [{ action: work }, { action: work }, { action: work }] } });
+    for (let i = 0; i < 4; i++) hostAdvance(send, 'month');
+    const before = (send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>).save;
+    expect(send({ type: 'TRADE_GOODS', good: 'wares', qty: -1 })[0]).toMatchObject({ type: 'ERROR', code: 'BAD_COMMAND' });
+    expect((send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>).save.commandLog).toEqual(before.commandLog);
+    const hides = h.current.life!.view().household.goods.find((x) => x.id === 'hide')?.qty ?? 0;
+    const first = hides >= 10 ? -10 : 10;
+    const ok = send({ type: 'TRADE_GOODS', good: 'hide', qty: first });
+    expect(ok.map((m) => m.type)).toEqual(['STATE']);
+    const state = ok[0] as Extract<WorkerMessage, { type: 'STATE' }>;
+    expect(state.character.household.goods.find((x) => x.id === 'hide')?.qty ?? 0).toBe(hides + first);
+    expect(state.market!.goods).toHaveLength(3);
+    // Mua lại một phân bằng tiền vừa bán (giá mua đắt hơn giá bán nên không mua lại đủ 10 phân được)
+    const second = first < 0 ? 1 : -first;
+    expect(send({ type: 'TRADE_GOODS', good: 'hide', qty: second }).map((m) => m.type)).toEqual(['STATE']);
+    const save = (send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>).save;
+    expect(save.commandLog.slice(-2).map((r) => r.cmd)).toEqual([{ type: 'TRADE_GOODS', good: 'hide', qty: first }, { type: 'TRADE_GOODS', good: 'hide', qty: second }]);
     expect(replaySave(save)).toBe(save.digest);
   });
 });

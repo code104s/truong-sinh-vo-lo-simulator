@@ -47,9 +47,17 @@ export const sampleBirthplace: Birthplace = {
 
 export const sampleHousehold: HouseholdView = {
   independent: true, money: 320, grain: 140, landMu: 6, tenure: 'owner', hungerBand: 'fed', foodWeeksBand: 'season', grainWeeks: 14, foodWeeks: 14,
+  goods: [{ id: 'hide', qty: 25 }], goodsCap: 1000,
 };
 
-export const sampleMarket: MarketView = { county: 0, buyPrice: 46, sellPrice: 34, supply: 'normal', trend: 'rising', maxBuy: 5000, maxSell: 800 };
+export const sampleMarket: MarketView = {
+  county: 0, buyPrice: 46, sellPrice: 34, supply: 'normal', trend: 'rising', maxBuy: 5000, maxSell: 800,
+  goods: [
+    { id: 'hide', buyPrice: 23, sellPrice: 17, supply: 'plenty', trend: 'steady', maxBuy: 900, maxSell: 4000 },
+    { id: 'wares', buyPrice: 80, sellPrice: 59, supply: 'normal', trend: 'falling', maxBuy: 300, maxSell: 1200 },
+    { id: 'herb', buyPrice: 18, sellPrice: 13, supply: 'scarce', trend: 'rising', maxBuy: 40, maxSell: 5000 },
+  ],
+};
 
 export const samplePending: PendingEvent = {
   instance: 4,
@@ -86,6 +94,7 @@ export const sampleCharacter: CharacterView = {
   canAct: true,
   household: sampleHousehold,
   reputation: 'unknown',
+  career: null,
 };
 
 export const sampleNpc: NpcView = {
@@ -114,15 +123,15 @@ export const sampleLife: LifeSummary = {
   milestones: [{ ...sampleLog, importance: 'major' }],
   estate: { money: 1200, grain: 340, landMu: 6, tenure: 'owner' },
   hungerYears: 3,
-  legacy: { spouse: { name: 'Lý Thị Hoa', alive: false }, children: [{ name: 'Trần Văn Bình', alive: true }], friends: 2, enemies: 1, reputation: 'respected', factions: [{ name: { key: 'faction.clan.name', params: { surname: 'Lương', place: 'Vị Kinh' } }, kind: 'clan', fate: 'rose' }] },
+  legacy: { spouse: { name: 'Lý Thị Hoa', alive: false }, children: [{ name: 'Trần Văn Bình', alive: true }], friends: 2, enemies: 1, reputation: 'respected', factions: [{ name: { key: 'faction.clan.name', params: { surname: 'Lương', place: 'Vị Kinh' } }, kind: 'clan', fate: 'rose' }], careers: [{ id: 'farmer', rank: 'journeyman', years: 22 }] },
   digest: '0123456789abcdef',
 };
 
 export function sampleSave(): SaveFile {
   return {
     format: 'tsvl-save',
-    version: 6,
-    protocolVersion: 6,
+    version: 7,
+    protocolVersion: 7,
     simVersion: '0.1.0',
     worldSeed: 'tsvl-01',
     region: { summary: sampleSummary, map: sampleMap(), birthplaces: [sampleBirthplace], logic: { adjacency: [[0, 1]] } },

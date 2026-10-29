@@ -92,7 +92,7 @@ export class SimHost {
       return;
     }
     const cmd = parsed.value;
-    const mutates = cmd.type === 'NEW_LIFE' || cmd.type === 'SET_PLAN' || cmd.type === 'ADVANCE' || cmd.type === 'TRADE' || cmd.type === 'CHOOSE';
+    const mutates = cmd.type === 'NEW_LIFE' || cmd.type === 'SET_PLAN' || cmd.type === 'ADVANCE' || cmd.type === 'TRADE' || cmd.type === 'CHOOSE' || cmd.type === 'LEAVE_CAREER' || cmd.type === 'TRADE_GOODS';
     const key = mutates ? canonical(cmd) : '';
     const cached = mutates ? this.handled.get(cmd.reqId) : undefined;
     if (cached) {
@@ -174,6 +174,14 @@ export class SimHost {
         this.record({ type: 'TRADE', grain: cmd.grain });
         this.emitState(cmd.reqId); return;
       }
+      case 'TRADE_GOODS': {
+        const life = this.requireLife();
+        if (!life.alive) throw new HostError('DEAD', 'nhân vật đã chết');
+        const refused = life.tradeGoods(cmd.good, cmd.qty);
+        if (refused) throw new HostError('BAD_COMMAND', refused);
+        this.record({ type: 'TRADE_GOODS', good: cmd.good, qty: cmd.qty });
+        this.emitState(cmd.reqId); return;
+      }
       case 'CHOOSE': {
         const life = this.requireLife();
         if (!life.alive) throw new HostError('DEAD', 'nhân vật đã chết');
@@ -181,6 +189,16 @@ export class SimHost {
         const refused = life.choose(cmd.instance, cmd.choice);
         if (refused) throw new HostError('BAD_COMMAND', refused);
         this.record({ type: 'CHOOSE', instance: cmd.instance, choice: cmd.choice });
+        this.emit({ type: 'LOG', reqId: cmd.reqId, entries: life.log.slice(from) });
+        this.emitState(cmd.reqId); return;
+      }
+      case 'LEAVE_CAREER': {
+        const life = this.requireLife();
+        if (!life.alive) throw new HostError('DEAD', 'nhân vật đã chết');
+        const from = life.log.length;
+        const refused = life.leaveCareer();
+        if (refused) throw new HostError('BAD_COMMAND', refused);
+        this.record({ type: 'LEAVE_CAREER' });
         this.emit({ type: 'LOG', reqId: cmd.reqId, entries: life.log.slice(from) });
         this.emitState(cmd.reqId); return;
       }
@@ -214,10 +232,13 @@ export class SimHost {
   private emitState(reqId: number): void {
     const life = this.requireLife();
     const a = life.active;
+    const canAct = life.view().canAct;
+    const actions = canAct ? life.actions() : [];
     this.emit({ type: 'STATE', reqId, date: calendarOf(life.displayTick), character: life.view(), running: false, plan: life.plan,
       active: a ? { action: a.slot.action, remaining: a.remaining, total: a.total, ...(a.slot.target === undefined ? {} : { target: a.slot.target }) } : null,
-      slotIndex: calendarOf(life.displayTick).tenDay, actions: life.view().canAct ? life.actions() : [], travel: life.view().canAct ? life.travel() : [],
-      market: life.market(), pending: life.pendingEvent(), people: life.people(), circle: life.circle(), factions: life.factions(), control: life.control() });
+      slotIndex: calendarOf(life.displayTick).tenDay, actions, travel: canAct ? life.travel() : [],
+      market: life.market(), pending: life.pendingEvent(), people: life.people(), circle: life.circle(), factions: life.factions(), control: life.control(),
+      careers: canAct ? life.careerBoard(actions) : [], hauls: canAct ? life.hauls(actions) : [] });
   }
 
   save(): SaveFile {

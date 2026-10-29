@@ -1,4 +1,4 @@
-import { type ActionOption, type CalendarDate, type CharacterView, type EventCostTag, type MarketView, type MonthPlan, type NpcView, type PendingEvent, type PlanSlot, type SettlementKind, type TravelOption } from '@tsvl/shared';
+import { type ActionOption, type CalendarDate, type CharacterView, type EventCostTag, type FactionView, type GoodId, type MarketView, type MonthPlan, type NpcView, type PendingEvent, type PlanSlot, type SettlementKind, type TravelOption } from '@tsvl/shared';
 import { earnPlan, foodWeeks as brainFoodWeeks, GRAIN_RESERVE, hash32, MONEY_RESERVE, Rng, tradeDecision, weakPlan, workChoice, type BrainInput } from '@tsvl/sim';
 
 export const POLICIES = ['lazy', 'balanced', 'overwork', 'scholar', 'wanderer', 'family'] as const;
@@ -13,6 +13,9 @@ export interface PolicyContext {
    * không có thì không xã giao. Hàm, để chỉ dựng khi cần (v0.6 Bước 0: người đã có vợ/chồng mà không túng thì không hỏi).
    */
   people?: () => readonly NpcView[];
+  /** Người chơi máy theo nghề (v0.7 S9): thế lực của vùng (trị sở quan phủ), quận có đường núi (dựng lều ẩn dật). */
+  factions?: () => readonly FactionView[];
+  mountain?: readonly boolean[];
 }
 
 /**
@@ -125,6 +128,18 @@ function familySlot(c: PolicyContext): PlanSlot | null {
 /** Mua bán lương thực đầu tháng (lệnh TRADE, không tốn ô). "Lười" không mua bán. */
 export function policyTrade(name: PolicyName, c: PolicyContext): number {
   return name === 'lazy' ? 0 : tradeDecision(brainInput(c));
+}
+
+/**
+ * Bán hàng đầu tháng (lệnh TRADE_GOODS, v0.7 S3b): như NPC, người chơi máy không đầu cơ — bán hết da, đồ, thuốc trong túi
+ * ở chợ đang đứng, trong giới hạn quỹ quận. "Lười" không mua bán. Trả các lệnh bán (số phân âm).
+ */
+export function policyGoods(name: PolicyName, c: PolicyContext): { good: GoodId; qty: number }[] {
+  if (name === 'lazy' || !c.market) return [];
+  return household(c).goods.flatMap((g) => {
+    const n = Math.min(g.qty, c.market!.goods.find((m) => m.id === g.id)?.maxSell ?? 0);
+    return n > 0 ? [{ good: g.id, qty: -n }] : [];
+  });
 }
 
 /** Cái giá của một lựa chọn, theo hoàn cảnh lúc này: thứ đang thiếu thì đắt. */

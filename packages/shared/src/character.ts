@@ -3,6 +3,7 @@ import type { Tick } from './calendar';
 import { STAMINA_BANDS, vSkillView, type CountyIndex, type SkillView, type StaminaBand } from './actions';
 import { vContentId, vNpcId, type ContentId, type NpcId } from './contentId';
 import { FACTION_FATES, FACTION_KINDS, vFactionName, type FactionFate, type FactionKind, type FactionName } from './factions';
+import { CAREERS, vCareerRecord, vCareerView, type CareerId, type CareerRecord, type CareerView } from './careers';
 import { TENURES, vHouseholdView, type Coin, type Grain, type HouseholdView, type Tenure } from './economy';
 import { arr, bool, int, intRange, nat, nonEmpty, nullable, obj, oneOf, opt, record, str, union } from './schema';
 import { vBirthplaceId, vNewLifeConfig, type BirthplaceId, type NewLifeConfig } from './world';
@@ -68,6 +69,8 @@ export interface CharacterView {
   reputation: ReputationBand;
   /** Vợ/chồng còn sống (v0.5, ADR 0018). */
   spouse?: NpcId;
+  /** Thân phận nghề (v0.7, ADR 0020); null khi chưa vào nghề nào (sống bằng việc tự do). */
+  career: CareerView | null;
 }
 
 /** Khóa không bao giờ được xuất hiện trong CharacterView (test ở shared và sim). */
@@ -79,6 +82,8 @@ export interface LogEntry {
   key: string;
   params: Record<string, string | number>;
   importance: 'minor' | 'major';
+  /** Kết quả sự kiện riêng của một nghề (v0.7 F3): biên niên lọc "Nghề" theo trường này. */
+  career?: CareerId;
 }
 
 export const DEATH_CAUSES = ['old_age', 'illness', 'accident', 'starvation', 'violence', 'disaster'] as const;
@@ -113,6 +118,8 @@ export interface Legacy {
   reputation: ReputationBand;
   /** Thế lực đã thấy thịnh, suy, mất trong đời (v0.6, F4). */
   factions: { name: FactionName; kind: FactionKind; fate: FactionFate }[];
+  /** Các nghề đã làm trong đời: bậc cao nhất, số năm (v0.7, F4). */
+  careers: CareerRecord[];
 }
 
 export const vCharacterView = obj<CharacterView>({
@@ -138,6 +145,7 @@ export const vCharacterView = obj<CharacterView>({
   household: vHouseholdView,
   reputation: oneOf(REPUTATION_BANDS),
   spouse: opt(vNpcId),
+  career: nullable(vCareerView),
 });
 
 export const vLogEntry = obj<LogEntry>({
@@ -145,6 +153,7 @@ export const vLogEntry = obj<LogEntry>({
   key: vContentId,
   params: record(union(str, int)),
   importance: oneOf(['minor', 'major'] as const),
+  career: opt(oneOf(CAREERS)),
 });
 
 export const vLifeSummary = obj<LifeSummary>({
@@ -164,6 +173,7 @@ export const vLifeSummary = obj<LifeSummary>({
     children: arr(obj<{ name: string; alive: boolean }>({ name: nonEmpty, alive: bool })),
     friends: nat, enemies: nat, reputation: oneOf(REPUTATION_BANDS),
     factions: arr(obj<{ name: FactionName; kind: FactionKind; fate: FactionFate }>({ name: vFactionName, kind: oneOf(FACTION_KINDS), fate: oneOf(FACTION_FATES) })),
+    careers: arr(vCareerRecord),
   }),
   digest: nonEmpty,
 });

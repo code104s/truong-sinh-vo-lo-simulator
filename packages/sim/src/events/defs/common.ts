@@ -25,7 +25,8 @@ export const personality = (ctx: EventContext, ...p: string[]) => p.includes(ctx
 
 /** Việc đã xếp cho tuần này (khi không dở hành động dài). */
 export const doingNow = (ctx: EventContext): string | null => (ctx.player.active ? ctx.player.active.slot.action : ctx.player.plan?.slots[ctx.tick % 3]?.action ?? null);
-export const traveling = (ctx: EventContext) => ctx.player.active?.slot.action === 'action.travel';
+/** Đang đi đường: di chuyển hay đi buôn chuyến (v0.7 S3). */
+export const traveling = (ctx: EventContext) => ctx.player.active?.slot.action === 'action.travel' || ctx.player.active?.slot.action === 'action.haul';
 /** Chuyến đi đang dở có qua núi (hệ số địa hình ≥ 200%). */
 export const roughRoad = (ctx: EventContext) => !!ctx.player.active?.preview && routeTerrainPct(ctx.logic, ctx.player.active.preview.route) >= 200;
 /**

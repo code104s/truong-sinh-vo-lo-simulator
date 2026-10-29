@@ -173,11 +173,23 @@ describe('tất định và lưu/tải (nghiệm thu Sim)', () => {
     // người lớn, thương hội từ 2 thương nhân → digest đổi; đời 1 chết đói 49 → 51, đời 2, 3 giữ tuổi; cùng nguyên nhân.
     // v0.6 F4: snapshot thêm thế lực đã thấy (`factionsSeen`) → digest đổi; tuổi, nguyên nhân giữ.
     // Đóng v0.6: SIM_VERSION 0.6.0 → 0.6.1 → digest đổi; tuổi, nguyên nhân giữ.
+    // v0.7 Bước 0: SIM_VERSION 0.7.0, thân phận nghề (null) trong snapshot, kỹ năng y thuật (0) → digest đổi; tuổi, nguyên nhân giữ.
+    // v0.7 S1: snapshot thêm các nghề đã rời (`careers`, rỗng khi chưa vào nghề) → digest đổi; tuổi, nguyên nhân giữ.
+    // v0.7 S2: chợ quận thêm số mẫu dân nền đã bán trong năm (`landSold`) → digest đổi; tuổi, nguyên nhân giữ.
+    // v0.7 S3b: kho đồ (ADR 0021) — da săn, thuốc hái vào túi đồ thay vì tiền ngay; đời mẫu không bao giờ bán hàng nên
+    // mất phần tiền da: đời 1, 2 chết đói sớm hai năm (51 → 49, 53 → 51). Chợ hàng, lái buôn chở hàng đổi dòng tiền giữa
+    // các quận nên giá lương lệch; đời 3 (chỉ nghỉ) giữ 41. Cùng nguyên nhân.
+    // v0.7 S7: thái độ thế lực với người chơi ghi vào thế lực (`playerAttitude`) khi chọn trong sự kiện thế lực → đời 2
+    // đổi digest; tuổi, nguyên nhân giữ.
+    // v0.7 S8: 51 sự kiện mới (năm sự kiện mỗi nghề, sáu sự kiện chung). Đời mẫu chọn lựa chọn đầu, ở sự kiện chung mới
+    // thường là chi tiền, góp gạo (quà chợ phiên, lễ cơm mới, góp làm cầu, đò ngang): đời 3 (chỉ nghỉ, sống bằng của để
+    // dành) cạn sớm, chết đói 41 → 38; đời 1 49 → 50. Cùng nguyên nhân.
+    // Đóng v0.7: SIM_VERSION 0.7.0 → 0.7.1 → digest đổi; tuổi, nguyên nhân giữ.
     expect(out).toMatchInlineSnapshot(`
       [
-        "51 starvation e0146614fbe82fae",
-        "53 starvation 509dfcbaddf074e0",
-        "41 starvation b26dd646ab84055c",
+        "50 starvation 5e7ff33d719688e1",
+        "51 starvation b1e453dcab002859",
+        "38 starvation acb9089cab2ca9cb",
       ]
     `);
   });

@@ -7,6 +7,13 @@ import { idiv, mulDiv } from '../core/math';
 import type { EconomyState } from '../economy/market';
 import type { NpcState, NpcWorldState } from '../npc/state';
 import type { FactionState, FactionWorldState } from './state';
+import type { HouseholdState } from '../life/household';
+
+/**
+ * Người chơi là hội viên (v0.7 S3): nhận phần chia lãi, phần chia khi hội tan như hội viên NPC. Không tính vào số hội viên
+ * để lập, tan hội (luật v0.6 chỉ đếm thương nhân NPC).
+ */
+export interface GuildPlayer { household: HouseholdState; guild: string | null }
 
 /**
  * Lập: từng ấy thương nhân còn sống có quận nhà ở trấn, thành chưa có thương hội. S8 (chủ dự án chọn): 3 → 2, bằng ngưỡng
@@ -51,11 +58,12 @@ function merchantsByCounty(npcs: NpcWorldState): Map<number, NpcState[]> {
 }
 
 /** Tan: kho chia đều cho hội viên còn lại, phần lẻ (hay cả kho khi không còn ai) vào quỹ quận trị sở. */
-function dissolve(f: FactionState, eco: EconomyState, byId: ReadonlyMap<string, NpcState>, t: Tick): void {
-  const members = f.members.flatMap((id) => { const n = byId.get(id); return n ? [n] : []; });
+function dissolve(f: FactionState, eco: EconomyState, byId: ReadonlyMap<string, NpcState>, t: Tick, player: GuildPlayer | null): void {
+  const members = f.members.flatMap((id) => { const n = byId.get(id); return n ? [n.character.household] : []; });
+  if (player?.guild === f.id) members.push(player.household);
   if (members.length > 0) {
     const each = idiv(f.money, members.length);
-    for (const n of members) n.character.household.money += each;
+    for (const h of members) h.money += each;
     f.money -= each * members.length;
   }
   eco.counties[f.seat]!.money += f.money;
@@ -71,7 +79,7 @@ function dissolve(f: FactionState, eco: EconomyState, byId: ReadonlyMap<string, 
  * Thương hội mỗi quý, sau gia tộc: hội viên, đường giữ (mọi đường chạm trị sở; nối hai trị sở thì chia đôi), thu
  * phần lời đã ghi trong quý (`EconomyState.tradeMargin`), trả phí, chia lãi, tan, lập.
  */
-export function guildsQuarter(fw: FactionWorldState, eco: EconomyState, npcs: NpcWorldState, logic: RegionLogic, t: Tick): void {
+export function guildsQuarter(fw: FactionWorldState, eco: EconomyState, npcs: NpcWorldState, logic: RegionLogic, t: Tick, player: GuildPlayer | null = null): void {
   const byId = new Map(npcs.people.map((n) => [n.id, n]));
   const guilds = () => fw.list.filter((f) => f.kind === 'guild' && f.ended === null);
   const merchants = merchantsByCounty(npcs);
@@ -109,14 +117,17 @@ export function guildsQuarter(fw: FactionWorldState, eco: EconomyState, npcs: Np
     f.money -= upkeep; seat.money += upkeep;
     const reserve = GUILD_RESERVE_QUARTERS * GUILD_UPKEEP;
     f.losses = income < GUILD_UPKEEP && f.money < reserve ? f.losses + 1 : 0;
-    // 5 Chia lãi: nửa phần vượt mức giữ lại, chia đều hội viên
+    // 5 Chia lãi: nửa phần vượt mức giữ lại, chia đều hội viên (cả người chơi nếu là hội viên, v0.7 S3)
+    const mine = player?.guild === f.id;
+    const shares = f.members.length + (mine ? 1 : 0);
     if (f.money > reserve && f.members.length > 0) {
-      const each = idiv(idiv(f.money - reserve, 2), f.members.length);
+      const each = idiv(idiv(f.money - reserve, 2), shares);
       for (const id of f.members) byId.get(id)!.character.household.money += each;
-      f.money -= each * f.members.length;
+      if (mine) player.household.money += each;
+      f.money -= each * shares;
     }
     // 6 Tan: hết hội viên, hay lỗ kéo dài mà kho không đủ một quý phí
-    if (f.members.length < GUILD_END_MEMBERS || (f.losses >= GUILD_LOSS_QUARTERS && f.money < GUILD_UPKEEP)) dissolve(f, eco, byId, t);
+    if (f.members.length < GUILD_END_MEMBERS || (f.losses >= GUILD_LOSS_QUARTERS && f.money < GUILD_UPKEEP)) dissolve(f, eco, byId, t, player);
   }
 
   // 7 Lập: trấn, thành chưa có thương hội, đủ thương nhân

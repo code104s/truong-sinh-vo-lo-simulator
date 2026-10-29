@@ -10,6 +10,10 @@ import { headTaxOf, GIFT_BY_BACKGROUND } from '../../economy/income';
 import { supplyOf } from '../../economy/market';
 import { baseOccupation } from '../../npc/lifecycle';
 import type { NpcState } from '../../npc/state';
+import type { CareerWorld } from '../../life/career';
+import type { PlayerState } from '../../life/player';
+import { joinBand } from '../../life/wayward';
+import { isHostile } from '../../factions/attitude';
 import { addFlag, giveLandTo, moveGrain, moveGrainFaction, occupy, payFaction, payNpc, payTo, receiveFromFaction, spendStamina, wound } from '../effects';
 import type { EventContext, EventDef } from '../engine';
 import { matchCandidates } from './relations';
@@ -36,6 +40,9 @@ const CORVEE_MONTHS: readonly number[] = [11, 12, 1, 2];
 const corveeFee = (ctx: EventContext) => CORVEE_FEE_X * headTaxOf(ctx.eco.counties[ctx.c.home]!);
 export const corveeLevy: EventDef = {
   id: 'event.corvee_levy',
+  factions: (ctx) => ({ government: government(ctx) }),
+  tone: { government: 'grudge' },
+  attitude: { pay_off: { government: 3 }, bribe_failed: { government: -10 }, go: { government: 5 } },
   category: 'economy',
   // Mùa khô sau gặt, quan phủ bắt đinh đắp đê, sửa thành: chỉ quận quan phủ giữ; đang dở chuyến đi hay việc dài thì thoát.
   // Quan càng tham, thuế càng nặng, càng hay bắt
@@ -75,6 +82,9 @@ export const corveeLevy: EventDef = {
 const levyOf = (ctx: EventContext) => Math.max(30, Math.min(500, idiv(ctx.c.household.money * 50, 1000)));
 export const greedyLevy: EventDef = {
   id: 'event.greedy_levy',
+  factions: (ctx) => ({ government: government(ctx) }),
+  tone: { government: 'grudge' },
+  attitude: { pay: { government: 3 }, plead_ok: { government: -2 }, refuse_beaten: { government: -15 }, refuse_left: { government: -10 } },
   category: 'economy',
   // Chỉ dưới quan tham, ở quận quan phủ giữ; nhà có của mới bị để ý
   weight: (ctx) => {
@@ -114,6 +124,9 @@ export const RELIEF_BRIBE = 30;
 export const RELIEF_BRIBE_GRAIN = 150;
 export const reliefLine: EventDef = {
   id: 'event.relief_line',
+  factions: (ctx) => ({ government: government(ctx) }),
+  tone: { government: 'favor' },
+  attitude: { queue: { government: 2 }, bribe_clerk: { government: -3 } },
   category: 'economy',
   // Quận đang đứng đói kém, quan phủ giữ và không tham: lương chẩn đổ về kho quận, sân đình phát gạo
   weight: (ctx) => {
@@ -150,11 +163,16 @@ const lured = (ctx: EventContext) => {
 };
 export const banditLure: EventDef = {
   id: 'event.bandit_lure',
+  factions: (ctx) => ({ bandits: bandNear(ctx), government: government(ctx) }),
+  tone: { bandits: 'favor' },
+  attitude: {
+    take_share: { bandits: 15, government: -5 }, tip_off: { bandits: -30, government: 10 }, tip_off_found: { bandits: -40, government: 10 }, refuse: { bandits: -5 },
+  },
   category: 'daily',
   weight: (ctx) => (lured(ctx) && bandNear(ctx) ? 30_000 : 0),
   cooldownTicks: 108,
-  reputation: { take_share: -10, tip_off: 5 },
-  bonds: { take_share: { closeness: 10, trust: 10 }, tip_off: { hostility: 40 }, tip_off_found: { hostility: 60 }, refuse: { closeness: -5 } },
+  reputation: { take_share: -10, tip_off: 5, join: -20 },
+  bonds: { take_share: { closeness: 10, trust: 10 }, tip_off: { hostility: 40 }, tip_off_found: { hostility: 60 }, join: { closeness: 15, trust: 15 }, refuse: { closeness: -5 } },
   // Người thật: một người trong băng
   cast: (ctx, rng) => pickOne(membersOf(ctx, bandNear(ctx)), rng),
   variant: named,
@@ -177,6 +195,20 @@ export const banditLure: EventDef = {
         return { result: 'tip_off', params: { got, reward } };
       },
     },
+    {
+      // Theo họ lên núi (v0.7 S6, Q8): vào băng thật, sống bằng chia của; tiếng xấu, người thân xa lánh
+      id: 'join', costs: ['risk', 'opportunity'],
+      available: (ctx) => (!bandNear(ctx) || !('careers' in ctx.player) ? 'lock.no_band' : ctx.player.career?.id === 'outlaw' ? 'lock.member' : isHostile(bandNear(ctx)) ? 'lock.hostile' : null),
+      apply: (ctx) => {
+        const band = bandNear(ctx)!;
+        // Thân phận nghề nằm trong snapshot đời (ctx.player): đổi qua một bản tạm rồi chép lại, không thêm trường vào snapshot
+        const p = ctx.player as PlayerState & CareerWorld;
+        const w = { career: p.career ?? null, careers: p.careers, bonds: ctx.bonds, npcs: ctx.npcs, tick: ctx.tick, factions: ctx.factions };
+        joinBand(ctx.c, band, w);
+        p.career = w.career;
+        return { result: 'join', params: { place: ctx.logic.counties[band.seat]!.name ?? 'place.unknown' } };
+      },
+    },
     { id: 'refuse', costs: ['opportunity'], apply: () => ({ result: 'refuse' }) },
   ],
 };
@@ -188,6 +220,9 @@ export const HIDE_PCT = 5;
 const CLAN_DEFENSE_PPM = 200_000;
 export const banditRaid: EventDef = {
   id: 'event.bandit_raid',
+  factions: (ctx) => ({ bandits: bandNear(ctx) }),
+  tone: { bandits: 'grudge' },
+  attitude: { defend_won: { bandits: -20 }, defend_lost: { bandits: -10 }, hand_over: { bandits: 5 } },
   category: 'disaster',
   weight: (ctx) => (ctx.age >= 14 && ctx.c.household.grain >= 300 && bandNear(ctx) ? 15_000 : 0),
   cooldownTicks: 72,
@@ -225,6 +260,9 @@ const REPORT_CATCH_PPM = 500_000;
 const REPORT_REVENGE_PPM = 250_000;
 export const reportBandits: EventDef = {
   id: 'event.report_bandits',
+  factions: (ctx) => ({ government: government(ctx), bandits: bandNear(ctx) }),
+  tone: { government: 'favor' },
+  attitude: { report_caught: { government: 15, bandits: -30 }, report_missed: { government: 5, bandits: -20 }, report_hurt: { government: 5, bandits: -20 } },
   category: 'daily',
   weight: (ctx) => (ctx.age >= 16 && government(ctx) && bandNear(ctx) ? 8_000 : 0),
   cooldownTicks: 108,
@@ -262,6 +300,9 @@ export const CARAVAN_WEEKS = 3;
 const AMBUSH_PPM = 250_000;
 export const joinCaravan: EventDef = {
   id: 'event.join_caravan',
+  factions: (ctx) => ({ guild: guildAt(ctx, ctx.c.location) }),
+  tone: { guild: 'favor' },
+  attitude: { porter: { guild: 5 }, escort: { guild: 10 }, escort_hurt: { guild: 10 }, decline: { guild: -2 } },
   category: 'opportunity',
   // Ở trấn có thương hội đủ kho trả công; rảnh tay (không dở việc dài)
   weight: (ctx) => {
@@ -309,6 +350,9 @@ const disputable = (ctx: EventContext) => {
 };
 export const landSuit: EventDef = {
   id: 'event.land_suit',
+  factions: (ctx) => ({ clan: leadClan(ctx, ctx.c.home) }),
+  tone: { clan: 'grudge' },
+  attitude: { sue_won: { clan: -20 }, sue_lost: { clan: -10 }, settle: { clan: 5 }, yield: { clan: 10 } },
   category: 'economy',
   weight: (ctx) => (disputable(ctx) && leadClan(ctx, ctx.c.home) ? 6_000 : 0),
   cooldownTicks: 216,
@@ -348,6 +392,9 @@ const clanMatches = (ctx: EventContext): NpcState[] => {
 };
 export const clanMatch: EventDef = {
   id: 'event.clan_match',
+  factions: (ctx) => ({ clan: leadClan(ctx, ctx.c.location) }),
+  tone: { clan: 'favor' },
+  attitude: { meet: { clan: 10 }, decline: { clan: -3 } },
   category: 'daily',
   weight: (ctx) => (ctx.age >= 18 && leadClan(ctx, ctx.c.location) && clanMatches(ctx).length ? 8_000 : 0),
   cooldownTicks: 108,

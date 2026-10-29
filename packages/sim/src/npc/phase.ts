@@ -7,7 +7,7 @@ import type { RegionLogic } from '@tsvl/worldgen';
 import { idiv, mulDiv } from '../core/math';
 import { Rng } from '../core/rng';
 import { harvestPlayer } from '../economy/farming';
-import { headTax, tradeGrain, yearlySpending } from '../economy/income';
+import { headTax, sellAllGoods, spoilGoods, tradeGrain, yearlySpending } from '../economy/income';
 import { epidemicAt, marketView, supplyOf, type EconomyState } from '../economy/market';
 import { ACTION_MIN_AGE, actionDef, actionLock } from '../life/actions';
 import { hasCondition, type CharacterState } from '../life/character';
@@ -21,7 +21,7 @@ import { HEALTH_FULL } from '../life/params';
 import { ambitionPlan, needsPlan, tradeDecision, weakPlan, workChoice, type BrainInput } from './brain';
 import { baseOccupation, comeOfAge, die, npcYearStart, type DeathContext, type Inheritance } from './lifecycle';
 export { die } from './lifecycle';
-import type { NpcState, NpcWorldState, Occupation } from './state';
+import type { NpcState, NpcWorldState, Occupation, PlayerDoctor } from './state';
 
 /**
  * Việc của nghề: thầy đồ, thầy thuốc chưa có hành động nghề riêng (v0.7), tạm làm thuê như người ở trấn. Người theo cướp
@@ -46,6 +46,7 @@ function occupationAction(n: NpcState): string | undefined {
 function noLog(): void {}
 
 const NO_DEPENDENTS: ReadonlyMap<string, number> = new Map();
+const hasGoods = (h: CharacterState['household']) => h.goods[0]! > 0 || h.goods[1]! > 0 || h.goods[2]! > 0;
 
 /** Đầu tháng: người đang đói được người thân cùng quận chia lương (Q6, cùng luật với người chơi). */
 function helpHungry(world: NpcWorldState, tick: Tick, me: NpcState | null): void {
@@ -102,7 +103,7 @@ export interface NpcPhaseOptions {
    * Người chơi (đời đang chơi): nhận thừa kế khi cha, mẹ, vợ/chồng mất (v0.5 S3), phần nhận ghi vào `inherited`; nuôi
    * con, nhận con, giúp người thân khi đói như mọi người (S5). Sinh khó khi là mẹ thì ghi vào `death`.
    */
-  player?: { c: CharacterState; inherited: Inheritance[]; death?: Death | null };
+  player?: { c: CharacterState; inherited: Inheritance[]; death?: Death | null; doctor?: PlayerDoctor | null };
 }
 
 /**
@@ -137,7 +138,7 @@ export function npcBrainInput(n: NpcState, eco: EconomyState, logic: RegionLogic
     independent: c.household.independent, money: c.household.money, grain: c.household.grain, month: monthOf(tick),
     // Mỗi lần xếp kế hoạch hỏi lại vài hành động nhiều lần: nhớ kết quả trong lần gọi này (khóa không đổi trong lúc xếp)
     usable: memo((id) => { const d = actionDef(id); return !!d && actionLock(d, c, tick, kind, market) === null; }),
-    market: marketView(eco, c.location),
+    market: marketView(eco, c.location, false),
     need,
   };
 }
@@ -147,11 +148,12 @@ export function planMonth(n: NpcState, eco: EconomyState, logic: RegionLogic, ti
   const c = n.character;
   if (ageYearsAt(c.birthTick, tick) < ACTION_MIN_AGE || n.active) return;
   comeOfAge(n, eco, logic, tick, r);
+  spoilGoods(c.household);
   // Một đầu vào cho cả tháng: mua bán xong thì cập nhật túi, kho, chợ (khóa tiền của hành động xét sau khi mua bán)
   const b = npcBrainInput(n, eco, logic, tick, rationOf(c, tick) + (dependents.get(n.id) ?? 0));
   const grain = tradeDecision(b);
   if (grain !== 0 && tradeGrain(c.household, eco.counties[c.location]!, grain) === null) {
-    b.money = c.household.money; b.grain = c.household.grain; b.market = marketView(eco, c.location);
+    b.money = c.household.money; b.grain = c.household.grain; b.market = marketView(eco, c.location, false);
   }
   const w = workChoice(b, occupationAction(n));
   n.plan = weakPlan(b, w) ?? (b.independent ? ambitionPlan(b, w, AMBITION_ACTION[c.personality] ?? null) : null) ?? needsPlan(b, w);
@@ -185,7 +187,7 @@ function stepL0(n: NpcState, world: NpcWorldState, eco: EconomyState, logic: Reg
   const market = eco.counties[c.location]!;
   const epidemic = epidemicAt(market, t) && !(c.household.shieldUntil > t);
   let death: Death | null = eventsPhase(c, t, rng, rng, noLog, epidemic);
-  const action = death ? { death, carePct: 0 } : playerPhase(n, c, t, logic, eco, one, noLog, world);
+  const action = death ? { death, carePct: 0 } : playerPhase(n, c, t, logic, eco, one, noLog, world, null, null, deaths.player?.doctor ?? null);
   death = action.death;
   if (!death) {
     feedPhase(c, t, supplyOf(eco.counties[c.home]!), rng, noLog, market, parentFeed(n, world, eco, deaths.me ?? null));
@@ -193,6 +195,8 @@ function stepL0(n: NpcState, world: NpcWorldState, eco: EconomyState, logic: Reg
     death = consequencesPhase(c, t, rng, noLog, action.carePct);
   }
   if (death) die(n, death, eco, deaths);
+  // NPC không đầu cơ: bán hết hàng ở chợ đang đứng cuối lượt (v0.7 S3b, Q15); phần lớn NPC không có hàng
+  else if (hasGoods(c.household)) sellAllGoods(c.household, eco.counties[c.location]!);
   n.rng = rng.state();
 }
 
@@ -232,7 +236,7 @@ function stepL1(n: NpcState, world: NpcWorldState, eco: EconomyState, logic: Reg
     else {
       const def = actionDef(n.plan?.slots[k]?.action ?? 'action.rest')!;
       const d = actionLock(def, c, tk, kind, market) ? REST : def;
-      const slot = slotEffects(d, null, c, tk, logic, market, one, noLog, world);
+      const slot = slotEffects(d, null, c, tk, logic, market, one, noLog, world, null, null, deaths.player?.doctor ?? null);
       care = slot.carePct;
       death = d.riskPpm > 0 ? slotMishap(c, tk, slot.ppm, 'accident.action', rng, noLog, age) : null;
       if (death) break;
@@ -243,6 +247,7 @@ function stepL1(n: NpcState, world: NpcWorldState, eco: EconomyState, logic: Reg
     death = consequencesPhase(c, tk, rng, noLog, care);
   }
   if (death) die(n, death, eco, deaths);
+  else if (hasGoods(c.household)) sellAllGoods(c.household, eco.counties[c.location]!);
   n.rng = rng.state();
 }
 

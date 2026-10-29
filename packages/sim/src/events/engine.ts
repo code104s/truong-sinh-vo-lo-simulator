@@ -1,7 +1,8 @@
 // Khung sự kiện có lựa chọn (ADR 0014): kích hoạt theo trạng thái, chờ người chơi chọn, áp hậu quả có sổ cái.
 // Tất định: duyệt định nghĩa theo id đã sắp, mọi ngẫu nhiên trên luồng `events`.
-import { ageYearsAt, MAX_CHOICES, MIN_CHOICES, type ContentId, type EventCostTag, type EventFigure, type LogEntry, type PendingEvent, type Tick } from '@tsvl/shared';
+import { ageYearsAt, MAX_CHOICES, MIN_CHOICES, type CareerId, type ContentId, type FactionKind, type EventCostTag, type EventFigure, type LogEntry, type PendingEvent, type Tick } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
+import { mulDiv } from '../core/math';
 import type { Rng } from '../core/rng';
 import type { CharacterState } from '../life/character';
 import type { PlayerState } from '../life/player';
@@ -10,7 +11,8 @@ import { newNpcWorld, type NpcState, type NpcWorldState } from '../npc/state';
 import type { Bond } from '../social/bonds';
 import { shiftBond } from '../social/actions';
 import { addReputation, repAt } from '../social/reputation';
-import { newFactionWorld, type FactionWorldState } from '../factions/state';
+import { newFactionWorld, type FactionState, type FactionWorldState } from '../factions/state';
+import { shiftAttitude, toneOf, type EventTone } from '../factions/attitude';
 
 /** Mọi thứ một sự kiện được đọc và (qua hàm có sổ cái ở effects.ts) được đổi. */
 export interface EventContext {
@@ -51,6 +53,15 @@ export interface ChoiceDef {
 
 export const EVENT_CATEGORIES = ['daily', 'economy', 'disaster', 'road', 'health', 'opportunity'] as const;
 
+/**
+ * Nghề đổi nhịp sự kiện (v0.7 S6, Q7), % trọng số theo loại: người lưu lạc gặp chuyện đường xá và cơ duyên gấp đôi; người
+ * ẩn dật cơ duyên gấp đôi, chuyện thường ngày, chợ búa còn một nửa.
+ */
+export const CAREER_EVENT_PCT: Readonly<Partial<Record<CareerId, Partial<Record<(typeof EVENT_CATEGORIES)[number], number>>>>> = {
+  drifter: { road: 200, opportunity: 200 },
+  recluse: { opportunity: 200, daily: 50, economy: 50 },
+};
+
 export interface EventDef {
   id: string;
   category: (typeof EVENT_CATEGORIES)[number];
@@ -69,6 +80,15 @@ export interface EventDef {
   cast?: (ctx: EventContext, rng: Rng) => NpcState | null;
   /** Kết quả → tiếng tăm ở quận đang đứng (v0.5 S6, Q9): cứu người, giúp làng (+); trốn thuế, gây gổ, bỏ mặc (−). */
   reputation?: Readonly<Record<string, number>>;
+  /**
+   * Thế lực trong chuyện (v0.7 S7, Q9): `factions` chỉ ra thế lực thật theo loại; `tone` — chuyện có lợi (`favor`) hay
+   * gây khó (`grudge`) với người chơi, trọng số theo thái độ thế lực ấy; `attitude` — kết quả → đổi thái độ theo loại.
+   */
+  factions?: (ctx: EventContext) => Partial<Record<FactionKind, FactionState | null>>;
+  /** Sự kiện riêng của một nghề (v0.7 S8): chỉ xét trọng số khi người chơi đang làm nghề ấy (S9: bỏ qua sớm cho nhanh). */
+  career?: CareerId;
+  tone?: Partial<Record<FactionKind, EventTone>>;
+  attitude?: Readonly<Record<string, Partial<Record<FactionKind, number>>>>;
   /** Kết quả → đổi quan hệ với người thật trong chuyện (v0.5 S4, ADR 0017); người vô danh thì không có gì. */
   bonds?: Readonly<Record<string, Partial<Omit<Bond, 'id'>>>>;
   /** 2–4 lựa chọn; lựa chọn cuối là lối ra, không bao giờ bị khóa. */
@@ -132,9 +152,17 @@ export function rollEvent(state: EventsState, catalog: readonly EventDef[], ctx:
   let total = 0;
   for (const def of catalog) {
     if (def.oncePerLife && state.once.includes(def.id)) continue;
+    if (def.career && ctx.player.career?.id !== def.career) continue;
     const last = state.lastFired[def.id];
     if (last !== undefined && ctx.tick - last < def.cooldownTicks) continue;
-    const w = Math.max(0, Math.min(PPM, def.weight(ctx)));
+    const k = ctx.player.career?.id;
+    let w = mulDiv(def.weight(ctx), (k ? CAREER_EVENT_PCT[k]?.[def.category] : undefined) ?? 100, 100);
+    // Thái độ thế lực trong chuyện (S7): chỉ xét khi chuyện có thể xảy ra
+    if (w > 0 && def.tone) {
+      const fs = def.factions?.(ctx) ?? {};
+      for (const [kind, tone] of Object.entries(def.tone) as [FactionKind, EventTone][]) w = mulDiv(w, toneOf(fs[kind], tone), 100);
+    }
+    w = Math.max(0, Math.min(PPM, w));
     if (w > 0) { candidates.push([def, w]); total += w; }
   }
   if (!candidates.length) return null;
@@ -180,6 +208,7 @@ export function pendingView(state: EventsState, catalog: readonly EventDef[], ct
   return {
     instance: p.instance, eventId: p.eventId, variant: p.variant, params: { ...p.params }, figure: p.figure ? { ...p.figure } : null,
     choices: def.choices.map((ch) => ({ id: ch.id, costs: [...ch.costs], locked: ch.available?.(ctx) ?? null })),
+    ...(def.career ? { career: def.career } : {}),
   };
 }
 
@@ -200,8 +229,13 @@ export function choose(state: EventsState, catalog: readonly EventDef[], ctx: Ev
   const shift = def.bonds?.[out.result];
   if (shift && ctx.npc && !ctx.npc.death) shiftBond(ctx.bonds, ctx.npc.id, shift, repAt(ctx.reputation, ctx.c.location));
   addReputation(ctx.reputation, ctx.c.location, def.reputation?.[out.result] ?? 0);
+  const att = def.attitude?.[out.result];
+  if (att) {
+    const fs = def.factions?.(ctx) ?? {};
+    for (const [kind, d] of Object.entries(att) as [FactionKind, number][]) shiftAttitude(fs[kind], d);
+  }
   state.pending = null;
-  log({ key: `${def.id}.result.${out.result}`, params: { ...p.params, ...out.params }, importance: 'major' });
+  log({ key: `${def.id}.result.${out.result}`, params: { ...p.params, ...out.params }, importance: 'major', ...(def.career ? { career: def.career } : {}) });
   return null;
 }
 

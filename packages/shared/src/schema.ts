@@ -32,7 +32,7 @@ export const intRange = (lo: number, hi: number): Validator<number> =>
 export const brand = <B extends string>(re: RegExp): Validator<B> =>
   v((u, p) => (typeof u === 'string' && re.test(u) ? null : `${p}: sai định dạng ${re}`));
 
-export const lit = <L extends string | number>(value: L): Validator<L> =>
+export const lit = <L extends string | number | boolean>(value: L): Validator<L> =>
   v((u, p) => (u === value ? null : `${p}: cần ${JSON.stringify(value)}`));
 
 export const oneOf = <const L extends readonly (string | number)[]>(values: L): Validator<L[number]> =>

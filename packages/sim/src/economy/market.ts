@@ -1,6 +1,6 @@
 // Chợ quận: dân nền tổng hợp, kho lương, quỹ tiền, giá theo tháng, buôn giữa quận kề (ADR 0012).
 // Toàn số nguyên. Lương thực: thăng; tiền: văn; giá: văn/đấu (1 đấu = 10 thăng).
-import { calendarOf, GRAIN_PER_DOU, HARVEST_MONTH, type MarketView, type SupplyBand, type Tick } from '@tsvl/shared';
+import { calendarOf, GOOD_UNITS_PER_PART, GOODS, GRAIN_PER_DOU, HARVEST_MONTH, type MarketGoodView, type MarketView, type PriceTrend, type SettlementKind, type SupplyBand, type Tick } from '@tsvl/shared';
 
 /** Tháng gặt nằm ở lịch chung (shared), xuất lại cho mã sim cũ. */
 export { HARVEST_MONTH };
@@ -38,6 +38,17 @@ export interface CountyEconomy {
    */
   wagePct: number;
   wageBonus: number;
+  /** Ruộng (mẫu) dân nền đã bán năm nay (v0.7 S2); đầu năm về 0. */
+  landSold: number;
+  /** Chợ hàng (v0.7 S3b, ADR 0021): mỗi món theo thứ tự `GOODS`. */
+  goods: CountyGood[];
+}
+
+/** Kho (phân) và giá niêm yết tháng này, tháng trước (văn/phần) của một món ở chợ quận. */
+export interface CountyGood {
+  stock: number;
+  price: number;
+  prevPrice: number;
 }
 
 export const DISASTERS = ['drought', 'flood', 'locust'] as const;
@@ -89,6 +100,73 @@ export const TRANSPORT_PER_DOU_KM = 5;
  */
 export const MONEY_FLOW_PERMILLE = 50;
 
+/**
+ * Chợ hàng (v0.7 S3b, ADR 0021 Q13–Q14), mảng theo thứ tự `GOODS` (da, đồ thủ công, thảo dược). Hàng đếm bằng phân, giá
+ * văn/phần (10 phân). Dân nền làm ra và dùng hết mỗi tháng theo miệng ăn và loại trị sở: làng dư da, thuốc; trấn, thành dư
+ * đồ thủ công. Kho đầy thì dân nền làm ít đi, kho cạn thì làm nhiều lên (`GOOD_MAKE_BY_STOCK`), nên kho không phình mãi
+ * cũng không cạn mãi. Giá theo số tháng tồn như lương (`PRICE_BY_STOCK`); lái buôn quận kề cùng luật với lương. Hàng
+ * không nằm trong sổ cái tiền: mua bán chỉ chuyển tiền giữa túi người và quỹ quận.
+ */
+export const GOOD_BASE_PRICE: readonly number[] = [20, 60, 15];
+/** Hư hao mỗi tháng (‰) ở kho quận và trong túi người. */
+export const GOOD_SPOIL_PERMILLE: readonly number[] = [10, 0, 30];
+/** Dân nền dùng mỗi tháng (phân trên 1.000 miệng ăn) theo loại trị sở. */
+export const GOOD_USE: readonly Record<SettlementKind, number>[] = [
+  { village: 60, town: 120, city: 150 },
+  { village: 40, town: 50, city: 60 },
+  { village: 60, town: 60, city: 60 },
+];
+/**
+ * Dân nền làm ra lúc kho đủ 6 tháng (% phần dùng) theo loại trị sở. Da ở làng 90%: phần còn thiếu do thợ săn (NPC, người
+ * chơi) bán vào. Đo ở S3b (4 vùng × 60 năm): làng làm ra 120% thì giá bán da ở chợ làng 15,5 văn/phần (thợ săn mất gần một
+ * phần tư tiền da so với trả ngay 20 văn), 100% → 17,8, 90% → 20,8, 80% → 30,1.
+ */
+export const GOOD_MAKE_PCT: readonly Record<SettlementKind, number>[] = [
+  { village: 90, town: 90, city: 80 },
+  { village: 80, town: 120, city: 130 },
+  { village: 130, town: 90, city: 80 },
+];
+/** Làm ra (%) theo số tháng tồn × 1000. */
+export const GOOD_MAKE_BY_STOCK: readonly (readonly [number, number])[] = [[0, 140], [3000, 115], [6000, 100], [12000, 50]];
+/** Có dịch thì thuốc dùng gấp ba (%). */
+export const HERB_EPIDEMIC_USE_PCT = 300;
+/** Kho mỗi món lúc thế giới bắt đầu (tháng dùng). */
+export const GOOD_INITIAL_MONTHS = 4;
+
+/** Phân dân nền một quận dùng mỗi tháng (năm thường, không dịch). */
+export function goodUse(ce: CountyEconomy, g: number, kind: SettlementKind): number {
+  return Math.max(1, mulDiv(ce.mouths, GOOD_USE[g]![kind], 1000));
+}
+function goodPrice(g: number, stock: number, use: number): number {
+  return Math.max(1, mulDiv(GOOD_BASE_PRICE[g]!, lerpTable(PRICE_BY_STOCK, idiv(stock * 1000, use)), 100));
+}
+export const goodBuyPrice = (cg: CountyGood) => mulDiv(cg.price, BUY_PCT, 100);
+export const goodSellPrice = (cg: CountyGood) => mulDiv(cg.price, SELL_PCT, 100);
+/** Dải cung theo giá (giá đơn điệu theo số tháng tồn): dưới 1 tháng ⇔ trên 300%, dưới 3 ⇔ trên 150%, dưới 9 ⇔ trên 85%. */
+function goodSupply(g: number, cg: CountyGood): SupplyBand {
+  const pct = idiv(cg.price * 100, GOOD_BASE_PRICE[g]!);
+  return pct > 300 ? 'famine' : pct > 150 ? 'scarce' : pct > 85 ? 'normal' : 'plenty';
+}
+const trendOf = (price: number, prev: number): PriceTrend => (price * 100 > prev * 105 ? 'rising' : price * 100 < prev * 95 ? 'falling' : 'steady');
+
+function newCountyGoods(ce: CountyEconomy, kind: SettlementKind): CountyGood[] {
+  return GOODS.map((_, g) => {
+    const use = goodUse(ce, g, kind), stock = use * GOOD_INITIAL_MONTHS, price = goodPrice(g, stock, use);
+    return { stock, price, prevPrice: price };
+  });
+}
+
+/** Một tháng của chợ hàng một quận: dân nền làm ra, dùng, hư hao (trước khi lái buôn chở). */
+function goodsMonth(ce: CountyEconomy, kind: SettlementKind, epidemic: boolean): void {
+  ce.goods.forEach((cg, g) => {
+    const use = goodUse(ce, g, kind);
+    const make = mulDiv(mulDiv(use, GOOD_MAKE_PCT[g]![kind], 100), lerpTable(GOOD_MAKE_BY_STOCK, idiv(cg.stock * 1000, use)), 100);
+    const used = epidemic && GOODS[g] === 'herb' ? mulDiv(use, HERB_EPIDEMIC_USE_PCT, 100) : use;
+    cg.stock = Math.max(0, cg.stock + make - used);
+    cg.stock -= idiv(cg.stock * GOOD_SPOIL_PERMILLE[g]!, 1000);
+  });
+}
+
 /** Mức thời tiết năm của vùng và trọng số: mất mùa, kém, thường, khá, được mùa. */
 export const WEATHER_LEVELS = [50, 80, 100, 110, 120] as const;
 export const WEATHER_WEIGHTS = [6, 14, 50, 20, 10] as const;
@@ -126,9 +204,10 @@ export function createEconomy(logic: RegionLogic, tick: Tick): EconomyState {
     const mouths = Math.max(1, mulDiv(county.area * MOUTHS_PER_CELL[logic.settlementKind[i]!], logic.fertilityPct[i]!, 100));
     const ce: CountyEconomy = {
       mouths, grain: mouths * MONTHLY_NEED_PER_MOUTH * (INITIAL_RESERVE_MONTHS + untilHarvest), money: mouths * MONEY_PER_MOUTH, weatherPct: 100, price: 0, prevPrice: 0,
-      disaster: null, disasterMonth: 0, epidemicFrom: -1, epidemicUntil: -1, taxMoney: 0, taxGrain: 0, taxPct: 100, wagePct: 100, wageBonus: 0,
+      disaster: null, disasterMonth: 0, epidemicFrom: -1, epidemicUntil: -1, taxMoney: 0, taxGrain: 0, taxPct: 100, wagePct: 100, wageBonus: 0, landSold: 0, goods: [],
     };
     ce.price = ce.prevPrice = priceOf(ce);
+    ce.goods = newCountyGoods(ce, logic.settlementKind[i]!);
     return ce;
   });
   return { regionWeatherPct: 100, counties, tradeMargin: logic.adjacency.map((): [number, number] => [0, 0]) };
@@ -170,18 +249,20 @@ export const epidemicAt = (ce: CountyEconomy, tick: Tick) => ce.epidemicFrom <= 
  */
 /** Pha Thế giới đầu năm, dùng chung cho đời người chơi và thế giới tự chạy: thời tiết năm, rồi gọi tên tai họa (G3). */
 export function worldYearStart(eco: EconomyState, rng: Rng, yearStart: Tick): void {
+  for (const ce of eco.counties) ce.landSold = 0;
   rollWeather(eco, rng);
   labelDisasters(eco, rng, yearStart);
 }
 
 export function economyMonth(eco: EconomyState, logic: RegionLogic, tick: Tick): void {
   const harvest = calendarOf(tick).month === HARVEST_MONTH;
-  for (const ce of eco.counties) {
+  eco.counties.forEach((ce, i) => {
     const need = monthlyNeed(ce);
     if (harvest) ce.grain += mulDiv(mulDiv(need * 12, BASE_YIELD_PCT, 100), ce.weatherPct, 100);
     ce.grain = Math.max(0, ce.grain - need);
     ce.grain -= idiv(ce.grain * SPOILAGE_PERMILLE, 1000);
-  }
+    goodsMonth(ce, logic.settlementKind[i]!, epidemicAt(ce, tick));
+  });
   // Cạnh đã sắp xếp (a < b) nên thứ tự buôn tất định
   logic.adjacency.forEach(([a, b], k) => {
     const A = eco.counties[a]!, B = eco.counties[b]!;
@@ -197,6 +278,23 @@ export function economyMonth(eco: EconomyState, logic: RegionLogic, tick: Tick):
     dear.money -= pay; cheap.money += pay;
     eco.tradeMargin[k]![dear === A ? 0 : 1] += idiv(amount * (pd - pc - transport), GRAIN_PER_DOU);
   });
+  // Lái buôn chở hàng (S3b): cùng luật, cùng phí chở mỗi phần như mỗi đấu lương, lời vào cùng sổ lời đường
+  logic.adjacency.forEach(([a, b], k) => {
+    const A = eco.counties[a]!, B = eco.counties[b]!;
+    const transport = idiv(logic.seatKm[a]![b]! * logic.terrainPct[k]! * TRANSPORT_PER_DOU_KM, 10_000);
+    for (let g = 0; g < GOODS.length; g++) {
+      const ga = A.goods[g]!, gb = B.goods[g]!;
+      const [cheap, dear, cg, dg] = ga.price <= gb.price ? [A, B, ga, gb] : [B, A, gb, ga];
+      const pc = cg.price, pd = dg.price;
+      if (pd - pc <= transport) continue;
+      const amount = Math.min(idiv(cg.stock * TRADE_SHARE_PERMILLE, 1000), idiv(dear.money * GOOD_UNITS_PER_PART, pc));
+      if (amount <= 0) continue;
+      const pay = idiv(amount * pc, GOOD_UNITS_PER_PART);
+      cg.stock -= amount; dg.stock += amount;
+      dear.money -= pay; cheap.money += pay;
+      eco.tradeMargin[k]![dear === A ? 0 : 1] += idiv(amount * (pd - pc - transport), GOOD_UNITS_PER_PART);
+    }
+  });
   logic.adjacency.forEach(([a, b]) => {
     const A = eco.counties[a]!, B = eco.counties[b]!;
     // x làm A.money/A.mouths = B.money/B.mouths; dương thì A giàu hơn
@@ -204,10 +302,12 @@ export function economyMonth(eco: EconomyState, logic: RegionLogic, tick: Tick):
     const flow = idiv(x * MONEY_FLOW_PERMILLE, 1000);
     A.money -= flow; B.money += flow;
   });
-  for (const ce of eco.counties) {
+  eco.counties.forEach((ce, i) => {
     ce.prevPrice = ce.price;
     ce.price = priceOf(ce);
-  }
+    const kind = logic.settlementKind[i]!;
+    ce.goods.forEach((cg, g) => { cg.prevPrice = cg.price; cg.price = goodPrice(g, cg.stock, goodUse(ce, g, kind)); });
+  });
 }
 
 /** Người mua `need` thăng ở chợ quận theo giá mua; trả số thăng mua được (giới hạn bởi kho và túi). */
@@ -222,13 +322,17 @@ export function buyGrain(ce: CountyEconomy, purse: { money: number; grain: numbe
   return n;
 }
 
-export function marketView(eco: EconomyState, county: number): MarketView {
+/** `goods`: false thì bỏ chợ hàng (mảng rỗng) — bộ não NPC chỉ đọc phần lương, mỗi NPC gọi mỗi tháng (S3b). */
+export function marketView(eco: EconomyState, county: number, goods = true): MarketView {
   const ce = eco.counties[county]!;
   const sell = sellPrice(ce);
-  const trend = ce.price * 100 > ce.prevPrice * 105 ? 'rising' : ce.price * 100 < ce.prevPrice * 95 ? 'falling' : 'steady';
   return {
-    county, buyPrice: buyPrice(ce), sellPrice: sell, supply: supplyOf(ce), trend,
+    county, buyPrice: buyPrice(ce), sellPrice: sell, supply: supplyOf(ce), trend: trendOf(ce.price, ce.prevPrice),
     maxBuy: ce.grain, maxSell: idiv(ce.money * GRAIN_PER_DOU, Math.max(1, sell)),
+    goods: !goods ? [] : ce.goods.map((cg, g): MarketGoodView => ({
+      id: GOODS[g]!, buyPrice: goodBuyPrice(cg), sellPrice: goodSellPrice(cg), supply: goodSupply(g, cg), trend: trendOf(cg.price, cg.prevPrice),
+      maxBuy: cg.stock, maxSell: idiv(ce.money * GOOD_UNITS_PER_PART, Math.max(1, goodSellPrice(cg))),
+    })),
   };
 }
 

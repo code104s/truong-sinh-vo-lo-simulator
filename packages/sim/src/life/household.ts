@@ -1,5 +1,5 @@
 // Hộ, khẩu phần tuần, đói (ADR 0013). Toàn số nguyên; lương thực tính bằng thăng, tiền bằng văn.
-import { ageYearsAt, GRAIN_PER_DOU, type FoodWeeksBand, type HouseholdView, type HungerBand, type LogEntry, type SupplyBand, type Tenure, type Tick } from '@tsvl/shared';
+import { ageYearsAt, GOODS, GRAIN_PER_DOU, type FoodWeeksBand, type HouseholdView, type HungerBand, type LogEntry, type SupplyBand, type Tenure, type Tick } from '@tsvl/shared';
 import { mulDiv } from '../core/math';
 import type { Rng } from '../core/rng';
 import { buyGrain, type CountyEconomy } from '../economy/market';
@@ -35,7 +35,13 @@ export interface HouseholdState {
   /** Số năm tuổi có tuần ăn thiếu, và năm tuổi gần nhất đã đếm (−1 = chưa) — cho màn tổng kết (F5). */
   hungerYears: number;
   lastHungerYear: number;
+  /** Túi đồ (v0.7 S3b, ADR 0021): phân mỗi món theo thứ tự `GOODS`. */
+  goods: number[];
 }
+
+/** Sức gánh tối đa (phân, tổng mọi món): 100 phần (ADR 0021 Q17). */
+export const GOODS_CAP = 1_000;
+export const goodsTotal = (h: HouseholdState): number => h.goods.reduce((s, q) => s + q, 0);
 
 /** Khẩu phần một tuần (thăng): người lớn 1 đấu, dưới 12 tuổi nửa đấu. */
 export const RATION_ADULT = 10;
@@ -67,7 +73,7 @@ type Log = (e: Omit<LogEntry, 'tick'>) => void;
 
 export function newHousehold(): HouseholdState {
   return { independent: false, money: 0, grain: 0, landMu: 0, tenure: 'none', hunger: 0, farmWeeks: 0, farmCounty: -1, taxDebt: 0,
-    loan: 0, loanDue: -1, lender: null, reliefPct: 0, rentHikePct: 0, shieldUntil: -1, stayUntil: 0, hungerYears: 0, lastHungerYear: -1 };
+    loan: 0, loanDue: -1, lender: null, reliefPct: 0, rentHikePct: 0, shieldUntil: -1, stayUntil: 0, hungerYears: 0, lastHungerYear: -1, goods: GOODS.map(() => 0) };
 }
 
 export function hungerBand(hunger: number): HungerBand {
@@ -206,6 +212,7 @@ export function householdView(c: CharacterState, tick: Tick, buyPricePerDou: num
     independent: h.independent, money: h.money, grain: h.grain, landMu: h.landMu, tenure: h.tenure,
     hungerBand: hungerBand(h.hunger), foodWeeksBand: foodWeeksBand(h, rationOf(c, tick), buyPricePerDou),
     grainWeeks: Math.floor(h.grain / rationOf(c, tick)), foodWeeks: foodWeeks(h, rationOf(c, tick), buyPricePerDou),
+    goods: GOODS.flatMap((id, g) => (h.goods[g]! > 0 ? [{ id, qty: h.goods[g]! }] : [])), goodsCap: GOODS_CAP,
   };
 }
 

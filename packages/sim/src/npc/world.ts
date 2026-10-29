@@ -4,7 +4,7 @@ import { ageYearsAt, isMonthStart, isQuarterStart, isYearStart, regionId, TICKS_
 import type { RegionLogic } from '@tsvl/worldgen';
 import { hash32 } from '../core/hash';
 import { RngStreams } from '../core/rng';
-import { countyMoney, createEconomy, economyMonth, MONEY_PER_MOUTH, PRICE_BASE, supplyOf, worldYearStart } from '../economy/market';
+import { countyMoney, createEconomy, economyMonth, GOOD_BASE_PRICE, goodSellPrice, MONEY_PER_MOUTH, PRICE_BASE, supplyOf, worldYearStart } from '../economy/market';
 import { STREAMS } from '../life/life';
 import { npcPhase, type NpcPhaseOptions } from './phase';
 import { npcQuota, seedPopulation } from './population';
@@ -59,6 +59,13 @@ export interface WorldRunStats {
   maxPricePct: number;
   minGrain: number;
   ledgerBreaks: number;
+  /**
+   * Chợ hàng (v0.7 S3b): tháng-quận-món có giá sát trần (≥ 400% giá gốc) hay sát đáy (≤ 75%) (‰); giá bán da trung bình ở
+   * chợ làng (văn/phần, × 100); hàng NPC còn sống giữ lúc cuối (phân, phải là 0 khi quỹ quận đủ tiền mua).
+   */
+  goodsStuckPermille: number;
+  hideVillageSellX100: number;
+  npcGoodsEnd: number;
   /** Phần tiền NPC nắm trong tổng tiền vùng (‰), đo đầu mỗi năm: cao nhất và năm cuối (S3–S8 v0.5: tiền không dồn mãi). */
   npcMoneyPermilleMax: number;
   npcMoneyPermilleEnd: number;
@@ -170,10 +177,10 @@ export function simulateWorld(logic: RegionLogic, years: number, seed: string, o
   const money = () => countyMoney(eco) + npcMoney(npcs) + factionMoney(factions);
   const stats: WorldRunStats = { years, counties: eco.counties.length, ticks: years * TICKS_PER_YEAR, npcStart: alive(), npcEnd: 0, moneyStart: money(), moneyEnd: 0, deaths: {}, deathAgeSum: 0, starvationNormalYears: 0, minQuotaPct: Number.MAX_SAFE_INTEGER, maxQuotaPct: 0, childrenPermille: 0, yearsWithPhysician: 0, yearsWithMerchant: 0, maxPhysiciansPerCounty: 0, births: 0,
     birthsWithParents: 0, marriedPermille: 0, mothersOver45: 0, childrenOfMothersOver45: 0, wivesOver45: 0, childrenOfWivesOver45: 0,
-    famines: 0, lowMoneyMonthsPermille: 0, minPricePct: Number.MAX_SAFE_INTEGER, maxPricePct: 0, minGrain: Number.MAX_SAFE_INTEGER, ledgerBreaks: 0,
+    famines: 0, lowMoneyMonthsPermille: 0, minPricePct: Number.MAX_SAFE_INTEGER, maxPricePct: 0, minGrain: Number.MAX_SAFE_INTEGER, ledgerBreaks: 0, goodsStuckPermille: 0, hideVillageSellX100: 0, npcGoodsEnd: 0,
     npcMoneyPermilleMax: 0, npcMoneyPermilleEnd: 0, factionMoneyMax: 0, factionMoneyEnd: 0, factionGrainEnd: 0, clansMin: Number.MAX_SAFE_INTEGER, clansMax: 0, clansEnd: 0, clansFounded: 0, clansEnded: 0, clansSplit: 0, leaderChangedCounties: 0, guildsMin: Number.MAX_SAFE_INTEGER, guildsMax: 0, guildsEnd: 0, guildsFounded: 0, guildsEnded: 0, guildRoadsEnd: 0, guildMembersEnd: 0, guildMoneyEnd: 0, edges: logic.adjacency.length, banditsFounded: 0, banditsEnded: 0, banditMembersMax: 0, banditMembersAfterFamine: 0, yearsAfterFamine: 0, banditMembersNormal: 0, yearsNormal: 0, banditMembersGreedy: 0, yearsGreedy: 0, banditMembersHonest: 0, yearsHonest: 0, campaigns: 0, campaignWins: 0, reliefGrain: 0, officialsEnd: 0, govMoneyEnd: 0, controlChanges: 0, maxChangesPerDecade: 0, longestNonGovMajorityYears: 0, nonGovCountyYearsPermille: 0, yearly: [], at50: null as unknown as FactionTally };
   const inFamine = eco.counties.map((ce) => supplyOf(ce) === 'famine');
-  let lowMoneyMonths = 0, months = 0;
+  let lowMoneyMonths = 0, months = 0, goodsStuck = 0, hideSell = 0, villageMonths = 0;
   const firstId = npcs.nextId;
   const quota = npcQuota(logic);
   let childSum = 0, measured = 0, marriedSum = 0;
@@ -191,6 +198,8 @@ export function simulateWorld(logic: RegionLogic, years: number, seed: string, o
         const pct = Math.trunc((ce.price * 100) / PRICE_BASE);
         stats.minPricePct = Math.min(stats.minPricePct, pct); stats.maxPricePct = Math.max(stats.maxPricePct, pct);
         stats.minGrain = Math.min(stats.minGrain, ce.grain);
+        ce.goods.forEach((cg, g) => { const p = Math.trunc((cg.price * 100) / GOOD_BASE_PRICE[g]!); if (p >= 400 || p <= 75) goodsStuck++; });
+        if (logic.settlementKind[i] === 'village') { hideSell += goodSellPrice(ce.goods[0]!); villageMonths++; }
         months++;
       });
     }
@@ -302,6 +311,9 @@ export function simulateWorld(logic: RegionLogic, years: number, seed: string, o
     stats.deathAgeSum += ageYearsAt(n.character.birthTick, n.death!.tick);
   }
   stats.npcEnd = alive();
+  stats.goodsStuckPermille = Math.floor((1000 * goodsStuck) / Math.max(1, months * GOOD_BASE_PRICE.length));
+  stats.hideVillageSellX100 = Math.floor((100 * hideSell) / Math.max(1, villageMonths));
+  stats.npcGoodsEnd = npcs.people.reduce((x, n) => x + (n.death ? 0 : n.character.household.goods.reduce((a, q) => a + q, 0)), 0);
   stats.leaderChangedCounties = leaders.filter((l) => l.size >= 2).length;
   stats.at50 ??= tally(stats, stats.leaderChangedCounties);
   stats.nonGovCountyYearsPermille = Math.floor((1000 * nonGovCountyYears) / Math.max(1, (years - 1) * logic.counties.length));

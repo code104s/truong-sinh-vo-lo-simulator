@@ -68,7 +68,7 @@ describe('tiền trong hành động (ADR 0012)', () => {
     expect(actionLock(ACTIONS.find((a) => a.id === 'action.travel')!, poor, tick, 'village', market())).toBeNull();
   });
 
-  it('hái lượm cho cái ăn theo mùa (đông ít); săn cho thịt và da bán được', () => {
+  it('hái lượm cho cái ăn theo mùa (đông ít); săn cho thịt, da vào túi đồ (v0.7 S3b)', () => {
     const c = state();
     settleAction('action.forage', c, tick, market(), Rng.fromSeed(1));
     expect(c.household.grain).toBe(FORAGE_BY_SEASON.spring);
@@ -76,7 +76,7 @@ describe('tiền trong hành động (ADR 0012)', () => {
     expect(c.household.grain).toBe(FORAGE_BY_SEASON.spring + FORAGE_BY_SEASON.winter);
     const h = state(), m = market();
     settleAction('action.hunt', h, tick, m, Rng.fromSeed(1));
-    expect([h.household.grain, h.household.money, m.money]).toEqual([HUNT_MEAT, HUNT_HIDE, 1_000_000 - HUNT_HIDE]);
+    expect([h.household.grain, h.household.goods[0], h.household.money, m.money]).toEqual([HUNT_MEAT, HUNT_HIDE, 0, 1_000_000]);
   });
 
   it('buôn bán nhỏ: có lãi có lỗ; kỳ vọng dương, người thạo lãi nhiều và ít lỗ hơn; tiền đi về quỹ quận, không mất', () => {

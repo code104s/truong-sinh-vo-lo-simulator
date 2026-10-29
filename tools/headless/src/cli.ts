@@ -16,12 +16,12 @@ import { calendarOf, decodeSave, encodeSave, type Birthplace, type Command, type
 import { digestOf, replaySave, SimHost, simulateEconomy, simulateWorld, type WorldRunStats } from '@tsvl/sim';
 import { buildRegion, regionIdentity, type RegionLogic } from '@tsvl/worldgen';
 import { runLife, runPolicyBatch, sequentialRunner, type BatchRegion, type LifeResult, type LifeRunner, type TravelCache } from './batch';
-import type { PolicyName } from './policies';
+import type { Strategy } from './batch';
 
 // —— Luồng phụ: sinh vùng, chạy đời trong batch ——
 interface RegionJob { kind?: 'region'; seed: string }
 /** Một đoạn đời [from, to) của một chiến lược; vùng gửi kèm (nhỏ: logic số nguyên và nơi sinh). */
-interface LivesJob { kind: 'lives'; regions: BatchRegion[]; policy: PolicyName; from: number; to: number }
+interface LivesJob { kind: 'lives'; regions: BatchRegion[]; policy: Strategy; from: number; to: number }
 /** Mỗi luồng giữ bộ đệm đích đi được riêng (thuần nên không đổi kết quả). */
 const workerTravelCache: TravelCache = new Map();
 function livesJob(j: LivesJob): LifeResult[] {
@@ -425,6 +425,7 @@ async function worldCmd(n: number, years: number, threads: number, allL0: boolea
   const regions = await regionPool(seeds.map((seed) => ({ seed })), threads);
   let ledgerBad = 0, ticks = 0, ms = 0, deathAges = 0, starvedNormal = 0, minQ = Number.MAX_SAFE_INTEGER, maxQ = 0, kids = 0, physYears = 0, merchYears = 0, births = 0, withParents = 0, married = 0, mothers = 0, motherKids = 0, wives = 0, wifeKids = 0;
   let famines = 0, countyYears = 0, lowMoney = 0, minPrice = Number.MAX_SAFE_INTEGER, maxPrice = 0, negative = 0;
+  let goodsStuck = 0, hideSell = 0, npcGoods = 0;
   // Phần tiền NPC nắm (‰): năm cuối thấp/cao nhất giữa các vùng, và cao nhất mọi năm (v0.5 S8: chi dùng chặn tiền dồn)
   let npcEndMin = Number.MAX_SAFE_INTEGER, npcEndMax = 0, npcPeak = 0;
   // Kho thế lực (v0.6 S1): tiền (văn), lương (thăng) năm cuối thấp/cao nhất giữa các vùng; tiền so với tổng tiền vùng (‱)
@@ -450,6 +451,7 @@ async function worldCmd(n: number, years: number, threads: number, allL0: boolea
     if (s.moneyStart !== s.moneyEnd || s.ledgerBreaks > 0) ledgerBad++;
     famines += s.famines; countyYears += s.counties * years; lowMoney += s.lowMoneyMonthsPermille * s.counties;
     minPrice = Math.min(minPrice, s.minPricePct); maxPrice = Math.max(maxPrice, s.maxPricePct); if (s.minGrain < 0) negative++;
+    goodsStuck += s.goodsStuckPermille * s.counties; hideSell += s.hideVillageSellX100; npcGoods += s.npcGoodsEnd;
     for (const [k, v] of Object.entries(s.deaths)) deaths[k] = (deaths[k] ?? 0) + v;
     deathAges += s.deathAgeSum; starvedNormal += s.starvationNormalYears;
     minQ = Math.min(minQ, s.minQuotaPct); maxQ = Math.max(maxQ, s.maxQuotaPct); kids += s.childrenPermille; physYears += s.yearsWithPhysician; merchYears += s.yearsWithMerchant;
@@ -479,6 +481,8 @@ async function worldCmd(n: number, years: number, threads: number, allL0: boolea
   const every = famines ? countyYears / famines : Infinity;
   const lowMoneyPct = lowMoney / (countyYears / years) / 10;
   console.log(`Kinh tế có NPC: đói kém mỗi quận 1 lần / ${every.toFixed(1)} năm (mục tiêu 8–15) · giá ${minPrice}–${maxPrice}% (70–500) · tháng-quận quỹ cạn ${lowMoneyPct.toFixed(1)}% (≤ 5) · kho âm ${negative} vùng`);
+  const goodsStuckPct = goodsStuck / Math.max(1, countiesAll) / 10;
+  console.log(`Chợ hàng (S3b): tháng-quận-món giá sát trần/đáy ${goodsStuckPct.toFixed(1)}% (≤ 20) · giá bán da ở chợ làng trung bình ${(hideSell / regions.length / 100).toFixed(1)} văn/phần (trước S3b trả ngay 20) · hàng NPC còn giữ cuối ${npcGoods} phân`);
   console.log(`Sổ cái lệch (kiểm từng tick): ${ledgerBad} vùng · NPC nắm ${npcEndMin / 10}–${npcEndMax / 10}% tổng tiền năm cuối (cao nhất mọi năm ${npcPeak / 10}%)`);
   console.log(`Gia tộc: còn sống ${clanMin}–${clanMax} mỗi vùng (mục tiêu 2–10) · lập sau năm đầu ${clanFounded}, tàn ${clanEnded} (gồm nhập), chi tách ${clanSplit} · vùng có cả lập lẫn tàn ${regionsFoundEnd}/${regions.length} · quận đổi họ đứng đầu ${(100 * leaderChanged / Math.max(1, countiesAll)).toFixed(0)}% (≥ 30)`);
   for (const row of clanRows) console.log(`  ${row}`);
@@ -495,6 +499,7 @@ async function worldCmd(n: number, years: number, threads: number, allL0: boolea
   const meanDeathAge = deathAges / Math.max(1, died), under16Pct = kids / regions.length / 10;
   const yearsPct = (k: number) => (100 * k) / (regions.length * (years - 1));
   const failed: string[] = [];
+  if (goodsStuckPct > 20) failed.push(`giá hàng sát trần/đáy ${goodsStuckPct.toFixed(1)}% tháng-quận-món > 20%`);
   if (minQ < WORLD_QUOTA_PCT[0] || maxQ > WORLD_QUOTA_PCT[1]) failed.push(`dân số mỗi quận ${minQ}–${maxQ}% ngoài ${WORLD_QUOTA_PCT.join('–')}%`);
   if (meanDeathAge < WORLD_DEATH_AGE[0] || meanDeathAge > WORLD_DEATH_AGE[1]) failed.push(`tuổi trung bình lúc mất ${meanDeathAge.toFixed(1)} ngoài ${WORLD_DEATH_AGE.join('–')}`);
   const noCause = WORLD_CAUSES.filter((k) => !deaths[k]);

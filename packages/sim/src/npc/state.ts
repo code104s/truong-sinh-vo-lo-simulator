@@ -89,6 +89,12 @@ export function npcViews(world: NpcWorldState, county: number, tick: Tick): NpcV
 }
 
 /** Thầy thuốc NPC còn sống đang ở quận (người có id nhỏ nhất); null nếu không có (v0.5 S3: phí chữa bệnh vào túi người này). */
+/**
+ * Người chơi là thầy thuốc từ bậc làm được (v0.7 S5, Q6): quận đang đứng và túi tiền. Người bệnh NPC trong quận ấy trả
+ * phí chữa bệnh cho người chơi thay vì thầy thuốc NPC. Pha NPC nhận từ đời người chơi mỗi tick, không lưu.
+ */
+export interface PlayerDoctor { county: number; purse: { money: number } }
+
 export function physicianIn(world: NpcWorldState, county: number): NpcState | null {
   for (const n of world.people) if (n.death === null && n.occupation === 'physician' && n.character.location === county) return n;
   return null;

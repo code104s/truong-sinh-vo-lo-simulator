@@ -3,7 +3,7 @@ import { ageYearsAt, birthplaceId, regionId, vPendingEvent, type WorkerMessage }
 import type { RegionLogic } from '@tsvl/worldgen';
 import { Life, Rng, SimHost, replaySave } from '../src/index';
 import { autoAdvance, lastChoice, pastComingOfAge } from './auto';
-import { EVENTS, WANDERING_PHYSICIAN_FEE } from '../src/events/catalog';
+import { CAREER_EVENT_IDS, CAREER_EVENTS_OF, EVENTS, WANDERING_PHYSICIAN_FEE } from '../src/events/catalog';
 import { checkCatalog, makeContext, newEventsState, rollEvent, type EventDef } from '../src/events/engine';
 import type { CharacterState } from '../src/life/character';
 import type { LifeSnapshot } from '../src/life/life';
@@ -43,6 +43,15 @@ describe('tuyển tập sự kiện (ADR 0014)', () => {
     expect(checkCatalog([bad])).toContain('2–4');
   });
 
+  it('v0.7 S8: khoảng 100 sự kiện; sự kiện nghề không đến với người chưa vào nghề', () => {
+    expect(EVENTS.length).toBeGreaterThanOrEqual(95);
+    expect(CAREER_EVENT_IDS.length).toBeGreaterThanOrEqual(44);
+    for (const onRoad of [false, true]) for (const p of PERSONALITIES_TRY) {
+      const s = richSnap(p, onRoad);
+      for (const id of CAREER_EVENT_IDS) expect(EVENTS.find((d) => d.id === id)!.weight(ctxOf(s)), id).toBe(0);
+    }
+  });
+
   it('mỗi lựa chọn có giá thật: đổi trạng thái hoặc rút một lần rủi ro; nếu không thì giá khai báo là "mất cơ hội"', () => {
     for (const def of EVENTS) {
       for (const choice of def.choices) {
@@ -66,7 +75,8 @@ describe('tuyển tập sự kiện (ADR 0014)', () => {
 function richSnap(personalityId: string, onRoad: boolean): LifeSnapshot {
   return snap((c, s) => {
     c.personality = personalityId;
-    c.household = { ...c.household, independent: true, money: 5_000, grain: 500, taxDebt: 200, farmWeeks: 10, farmCounty: 0, tenure: 'tenant' };
+    // v0.7 S8: có hàng trong túi (thuốc cho lựa chọn chữa trâu, gửi thuốc), có ruộng
+    c.household = { ...c.household, independent: true, money: 5_000, grain: 500, taxDebt: 200, farmWeeks: 10, farmCounty: 0, tenure: 'tenant', goods: [50, 50, 100] };
     c.conditions = [{ id: 'illness.fever', kind: 'illness', severity: 'serious', weeksLeft: 4 }];
     c.skillXp.martial = 2_000; c.skillXp.literacy = 500; c.skillXp.hunting = 500;
     if (onRoad) s.active = { slot: { action: 'action.travel', target: 1 }, total: 2, remaining: 2, preview: { county: 1, route: [0, 1], days: 6, slots: 2, risk: 'risk.low' } };
@@ -275,7 +285,7 @@ describe('văn bản sự kiện', () => {
         expect(t(`${d.id}.choice.${ch.id}`, d.params?.(ctxOf(s)) ?? {}), `${d.id}/${ch.id}`).not.toMatch(MISSING);
         // Kết quả: chạy trên nhiều seed để gặp đủ nhánh
         for (let i = 0; i < 40; i++) {
-          const f = openFixture(d.id, ch.id)!;
+          const f = openFixture(d.id, ch.id); if (!f) throw new Error(`không có trạng thái mẫu mở ${d.id}/${ch.id}`);
           const ctx = ctxOf(f.s);
           const params = d.params?.(ctx) ?? {};
           const out = ch.apply(ctx, Rng.fromSeed(i));
@@ -347,20 +357,25 @@ describe('người thật trong sự kiện (v0.4 S6)', () => {
       n.character.household.independent = true;
       s.factions.list.find((f) => f.kind === 'clan')!.members.push(n.id);
     }
+    // Sự kiện nghề (v0.7 S8): lão nông 60 tuổi, thương nhân, đứa trẻ 14 tuổi cùng quận; người thân (mẹ) cho tin nhà, lên núi tìm
+    if (eventId === 'event.farm_old_hand') { n.occupation = 'farmer'; n.character.birthTick = s.tick - 60 * 36; }
+    if (eventId === 'event.merchant_partner') n.occupation = 'merchant';
+    if (eventId === 'event.craft_pupil_asks') n.character.birthTick = s.tick - 14 * 36;
     const ctx = ctxOf(s);
     ctx.npc = def.cast!(ctx, Rng.fromSeed(1));
     return { s, ctx, def };
   }
   const NAMED = [
-    'event.bandit_lure', 'event.bandit_raid', 'event.beggar', 'event.child_ill', 'event.clan_match', 'event.corvee_levy', 'event.debt_called', 'event.enemy_revenge',
-    'event.estate_dispute', 'event.friend_brings_rice', 'event.friend_in_need', 'event.grain_broker', 'event.granary_theft', 'event.greedy_levy', 'event.highway_robbers',
-    'event.join_caravan', 'event.kin_funeral', 'event.land_suit', 'event.market_brawl', 'event.matchmaker', 'event.neighbor_harvest', 'event.parent_ill', 'event.rent_hike',
+    'event.bandit_lure', 'event.bandit_raid', 'event.beggar', 'event.child_ill', 'event.clan_match', 'event.corvee_levy', 'event.craft_pupil_asks', 'event.debt_called', 'event.enemy_revenge',
+    'event.estate_dispute', 'event.farm_old_hand', 'event.friend_brings_rice', 'event.friend_in_need', 'event.grain_broker', 'event.granary_theft', 'event.greedy_levy', 'event.highway_robbers',
+    'event.hunt_trap_victim', 'event.join_caravan', 'event.kin_funeral', 'event.land_suit', 'event.market_brawl', 'event.matchmaker', 'event.merchant_partner', 'event.neighbor_harvest',
+    'event.outlaw_kin_news', 'event.parent_ill', 'event.recluse_visitor', 'event.rent_hike',
     'event.report_bandits', 'event.spouse_quarrel', 'event.tax_collector', 'event.village_festival', 'event.village_funeral', 'event.village_wedding', 'event.wandering_physician',
   ];
   /** Biến thể có tên khác "named" ở trạng thái mẫu: họ Trần đứng đầu làng (S7). */
   const NAMED_VARIANT: Record<string, string> = { 'event.bandit_raid': 'named_clan', 'event.village_festival': 'clan' };
 
-  it('ba mươi sự kiện gọi người thật (v0.5 S5 cha mẹ ốm, tang; S7 chín sự kiện quan hệ; v0.6 S7 sự kiện thế lực và sáu sự kiện cũ nối vào thế lực): biến thể có tên, thẻ là người ấy, mọi khóa văn bản đủ', async () => {
+  it('ba mươi sáu sự kiện gọi người thật (v0.5 S5 cha mẹ ốm, tang; S7 chín sự kiện quan hệ; v0.6 S7 sự kiện thế lực và sáu sự kiện cũ nối vào thế lực; v0.7 S8 sáu sự kiện nghề): biến thể có tên, thẻ là người ấy, mọi khóa văn bản đủ', async () => {
     const { t } = await import('@tsvl/content');
     const MISSING = /⟨|\{\w+\}/;
     expect(EVENTS.filter((d) => d.cast).map((d) => d.id)).toEqual(NAMED);
@@ -534,5 +549,24 @@ describe('sự kiện thế lực (v0.6 S7, Q10)', () => {
     expect([after.character.household.loan, after.character.household.lender]).toEqual([0, null]);
     expect(after.factions.list.find((f) => f.id === guild.id)!.money - m1).toBe(300 * 136 / 100);
     expect(l.totalMoney()).toBe(total);
+  });
+});
+
+describe('sự kiện riêng của nghề trên giao diện (v0.7 F3)', () => {
+  it('sự kiện chờ và dòng kết quả mang nghề; sự kiện chung thì không', () => {
+    const id = CAREER_EVENTS_OF.farmer![0]!;
+    const l = pendingLife(id, (_c, s) => { s.career = { id: 'farmer', rank: 'journeyman', since: 0, faction: null, mentor: null, years: 3, weeks: 0, idle: 0 }; });
+    const p = l.pendingEvent()!;
+    expect(p.career).toBe('farmer');
+    expect(vPendingEvent.check(JSON.parse(JSON.stringify(p)), '$')).toBeNull();
+    expect(l.choose(p.instance, p.choices.at(-1)!.id)).toBeNull();
+    const result = l.log.at(-1)!;
+    expect(result.key.startsWith(`${id}.result.`)).toBe(true);
+    expect(result.career).toBe('farmer');
+    const plain = pendingLife('event.tax_collector');
+    const q = plain.pendingEvent()!;
+    expect('career' in q).toBe(false);
+    plain.choose(q.instance, q.choices.at(-1)!.id);
+    expect(plain.log.filter((e) => e.key.startsWith('event.tax_collector.result.')).every((e) => e.career === undefined)).toBe(true);
   });
 });

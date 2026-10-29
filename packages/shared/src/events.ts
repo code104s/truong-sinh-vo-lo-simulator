@@ -1,4 +1,5 @@
 // Sự kiện đang chờ người chơi chọn (ADR 0014). Chỉ kiểu và validate, không có luật.
+import { CAREERS, type CareerId } from './careers';
 import { GENDERS, type Gender } from './character';
 import { vChoiceId, vContentId, vNpcId, type ChoiceId, type ContentId, type NpcId } from './contentId';
 import { arr, brand, int, nat, nonEmpty, nullable, obj, oneOf, opt, record, str, union, type Validator } from './schema';
@@ -44,6 +45,8 @@ export interface PendingEvent {
   params: Record<string, string | number>;
   choices: EventChoiceView[];
   figure: EventFigure | null;
+  /** Sự kiện riêng của một nghề (v0.7 F3): thẻ sự kiện đóng triện nghề ấy. */
+  career?: CareerId;
 }
 
 const vEventId = brand<EventId>(EVENT_ID_RE);
@@ -74,4 +77,5 @@ export const vPendingEvent: Validator<PendingEvent> = obj<PendingEvent>({
   params: record(union(str, int)),
   choices: vChoices,
   figure: nullable(obj<EventFigure>({ gender: oneOf(GENDERS), ageBand: oneOf(FIGURE_AGES), class: oneOf(FIGURE_CLASSES), npcId: opt(vNpcId) })),
+  career: opt(oneOf(CAREERS)),
 });

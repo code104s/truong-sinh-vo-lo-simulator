@@ -439,10 +439,12 @@ export const EVENTS_VI: Readonly<Record<string, string>> = {
   'event.bandit_lure.body.named': '{name} ngồi xổm ở đầu ngõ, ống quần dính đất đỏ. Bảo trên núi có gạo ăn; chỉ cần chỉ đường vào làng, sẽ được {dou} đấu.',
   'event.bandit_lure.choice.take_share': 'Nhận gạo, chỉ đường cho họ',
   'event.bandit_lure.choice.tip_off': 'Nhận gạo rồi lên báo quan',
+  'event.bandit_lure.choice.join': 'Theo họ lên núi',
   'event.bandit_lure.choice.refuse': 'Lắc đầu, đóng cửa',
   'event.bandit_lure.result.take_share': 'Nhận {got} đấu gạo, chỉ lối vào làng. Từ đó đi đâu cũng thấy người ta nhìn.',
   'event.bandit_lure.result.tip_off': 'Nhận {got} đấu gạo rồi lên báo quan, được thưởng {reward} văn.',
   'event.bandit_lure.result.tip_off_found': 'Nhận {got} đấu gạo, báo quan được thưởng {reward} văn. Mấy hôm sau bị đón đánh giữa đường.',
+  'event.bandit_lure.result.join': 'Gói vội mấy bộ áo, theo họ lên núi ở {place}. Sáng ra cả xóm đã biết.',
   'event.bandit_lure.result.refuse': 'Lắc đầu, đóng cửa. Đêm ấy chó sủa mãi ở đầu ngõ.',
 
   'event.bandit_raid.title': 'Cướp về làng',

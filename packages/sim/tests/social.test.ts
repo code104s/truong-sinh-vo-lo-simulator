@@ -146,7 +146,8 @@ describe('khóa xã giao gửi kèm người trong quận (v0.5 F2)', () => {
     const { s, other } = adult('f2');
     const l = Life.restore(s, [], region);
     const view = l.people().find((p) => p.id === other.id)!;
-    expect(view.social!.map((o) => o.action)).toEqual(['action.visit', 'action.ask_help', 'action.propose']);
+    // v0.7 S1: học việc cũng nhắm vào một người
+    expect(view.social!.map((o) => o.action)).toEqual(['action.visit', 'action.ask_help', 'action.propose', 'action.apprentice', 'action.join_guild']);
     for (const o of view.social!) expect(o.locked).toBe(l.socialLock({ action: o.action, person: other.id }));
     expect(view.social!.find((o) => o.action === 'action.ask_help')!.locked).toBe('lock.stranger');
     expect(view.social!.find((o) => o.action === 'action.visit')!.locked).toBeNull();
@@ -154,6 +155,6 @@ describe('khóa xã giao gửi kèm người trong quận (v0.5 F2)', () => {
     expect(l.circle().every((p) => p.social === undefined)).toBe(true);
     // Hồi quy (F2): việc xã giao không được gắn nhãn "Đổi nơi ở" (nhãn mặc định của việc không có kỹ năng)
     const gains = Object.fromEntries(l.actions().filter((a) => a.group === 'social').map((a) => [a.id, a.gains]));
-    expect(gains).toEqual({ 'action.visit': ['gain.bond'], 'action.ask_help': ['gain.food', 'gain.money'], 'action.propose': ['gain.family'] });
+    expect(gains).toEqual({ 'action.visit': ['gain.bond'], 'action.ask_help': ['gain.food', 'gain.money'], 'action.propose': ['gain.family'], 'action.apprentice': ['gain.career'], 'action.join_guild': ['gain.guild'] });
   });
 });

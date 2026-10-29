@@ -48,7 +48,7 @@ describe('quan phủ: lập (v0.6 S1, Q7)', () => {
     expect(g).toMatchObject({ id: 'f1', kind: 'government', seat: 1, counties: [0, 1, 2], members: [], money: 0, grain: 0, ended: null });
     expect(g.name).toEqual({ key: 'faction.government.name', params: { place: 'Quận 1' } });
     expect(controlOf(fw, 3)).toEqual(['f1', 'f1', 'f1']);
-    expect(factionViews(fw, region)).toEqual([{ id: 'f1', kind: 'government', name: g.name, seat: 1, counties: [0, 1, 2], strength: 'dominant', members: 0 }]);
+    expect(factionViews(fw, region)).toEqual([{ id: 'f1', kind: 'government', name: g.name, seat: 1, counties: [0, 1, 2], strength: 'dominant', members: 0, attitude: 'neutral' }]);
   });
 
   it('vùng không có thành: trị sở ở trấn đầu tiên, không có trấn thì quận 0', () => {
@@ -516,7 +516,8 @@ describe('băng cướp: tăng năm khó, tan năm thường', () => {
 // —— Quan phủ sống (v0.6 S5, Q7, Q8) ——
 /** Rng giả theo hàng đợi: mỗi lần rút lấy số kế (0 = trúng, 1 = trượt), tính trong [lo, hi]; hết hàng thì trúng. */
 function scripted(seq: number[]): Rng {
-  return { int: (lo: number, hi: number) => (seq.shift() ?? 0) === 0 ? lo : hi } as unknown as Rng;
+  // Thương vong trận (v0.7 S4) rút bằng `chance`: ở đây không ai bị thương
+  return { int: (lo: number, hi: number) => (seq.shift() ?? 0) === 0 ? lo : hi, chance: () => false } as unknown as Rng;
 }
 function govWorld(people: NpcState[] = [], logic: RegionLogic = hills) {
   const npcs = newNpcWorld(1, regionId('r0'));
@@ -563,8 +564,9 @@ describe('quan phủ: sai dịch, phát chẩn', () => {
     expect(people[1]!.character.household.money).toBe(1_000 + OFFICIAL_WAGE);
     g.money = OFFICIAL_WAGE + 10;
     governmentRule(g, fw, eco, npcs, hills, T + 9, scripted([]));
-    expect(g.members).toEqual(['n1']);
-    expect(people[1]!.occupation).not.toBe('official');
+    // Người kém nhất nghỉ trước (v0.7 S4)
+    expect(g.members).toEqual(['n2']);
+    expect(people[0]!.occupation).not.toBe('official');
   });
 
   it('quận đói kém được quan phủ mua lương ở quận rẻ nhất chở sang; tiền, lương không sinh không mất; quan càng tham chẩn càng ít', () => {
