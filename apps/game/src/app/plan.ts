@@ -7,7 +7,7 @@ export const isSocial = (actions: readonly ActionOption[], id: string): boolean 
 
 export function planInvalid(plan: MonthPlan, actions: readonly ActionOption[], travel: readonly TravelOption[]): boolean {
   return plan.slots.some((s) => !actions.some((a) => a.id === s.action)
-    || (s.action === 'action.travel' && !travel.some((p) => p.county === s.target))
+    || ((s.action === 'action.travel' || s.action === 'action.haul') && !travel.some((p) => p.county === s.target))
     || isSocial(actions, s.action) !== (s.person !== undefined));
 }
 
@@ -16,7 +16,7 @@ export const defaultPlan = (): MonthPlan => ({ slots: [{ action: 'action.rest' }
 /** Bản nháp khác kế hoạch đang áp dụng (chưa có kế hoạch thì so với ba ô nghỉ). */
 export function planDirty(draft: MonthPlan, plan: MonthPlan | null): boolean {
   const base = plan ?? defaultPlan();
-  return draft.slots.some((s, i) => s.action !== base.slots[i]!.action || s.target !== base.slots[i]!.target || s.person !== base.slots[i]!.person);
+  return draft.slots.some((s, i) => s.action !== base.slots[i]!.action || s.target !== base.slots[i]!.target || s.person !== base.slots[i]!.person || s.cargo !== base.slots[i]!.cargo);
 }
 
 /**

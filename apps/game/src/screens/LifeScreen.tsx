@@ -1,7 +1,8 @@
 import { t } from '@tsvl/content';
-import type { AdvanceMode, CalendarDate, CharacterView, FactionId, FactionView, LogEntry, MarketView, MonthPlan, ActionOption, ActionProgress, NpcView, PendingEvent, TravelOption, TravelPreview } from '@tsvl/shared';
+import type { AdvanceMode, CalendarDate, CareerEntryView, CharacterView, GoodId, HaulOption, FactionId, FactionView, LogEntry, MarketView, MonthPlan, ActionOption, ActionProgress, NpcView, PlanSlot, PendingEvent, TravelOption, TravelPreview } from '@tsvl/shared';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
+import { placeEntry } from '../app/career';
 import { logText } from '../app/format';
 import { hungerAlert } from '../app/hunger';
 import { defaultPlan, planDirty, planInvalid } from '../app/plan';
@@ -9,10 +10,11 @@ import type { WorldInfo } from '../app/state';
 import { KIND_CHAR } from '../ui/icons';
 import { InkLandscape, Scroll, Seal } from '../ui/ink';
 import { ActionPlanner } from './ActionPlanner';
+import { CareerDialog, CareerPanel, LeaveDialog } from './Career';
 import { Chronicle } from './Chronicle';
 import { EventCard } from './EventCard';
 import { FactionMapDialog } from './FactionMap';
-import { MarketDialog, MarketPanel } from './Market';
+import { MarketDialog, MarketPanel, PackPanel } from './Market';
 import { CirclePanel, PeoplePanel } from './People';
 import { FactionPanel } from './Factions';
 import { StatusBar } from './StatusBar';
@@ -36,8 +38,8 @@ interface Props {
   onPlan: (plan: MonthPlan) => void; onPreview: (county: number) => void;
   /** Sự kiện chờ chọn (ADR 0014): thời gian dừng, mọi nút tua khóa tới khi chọn. */
   pending: PendingEvent | null; onChoose: (instance: number, choice: string) => void;
-  /** Chợ quận đang đứng (F2); mua bán bằng lệnh TRADE, không tốn ô. */
-  market: MarketView | null; onTrade: (grain: number) => void;
+  /** Chợ quận đang đứng (F2); mua bán bằng lệnh TRADE, không tốn ô. Hàng (v0.7 F3b) bằng lệnh TRADE_GOODS. */
+  market: MarketView | null; onTrade: (grain: number) => void; onTradeGoods: (good: GoodId, qty: number) => void;
   /** Người có tên ở quận đang đứng (v0.4 F1). */
   people: NpcView[];
   /** Người thân, người quen ở mọi quận (v0.5 F1). */
@@ -45,6 +47,10 @@ interface Props {
   /** Thế lực còn sống và người giữ mỗi quận (v0.6 F1: bản đồ thế lực). */
   factions: FactionView[];
   control: (FactionId | null)[];
+  /** Bảng chọn nghề ở quận đang đứng (v0.7 F2); rời nghề bằng lệnh LEAVE_CAREER, không tốn ô. */
+  careers: CareerEntryView[]; onLeaveCareer: () => void;
+  /** Chuyến buôn đi được từ đây (v0.7 F3b). */
+  hauls: HaulOption[];
 }
 
 const copyPlan = (p: MonthPlan | null): MonthPlan => (p ? { slots: p.slots.map((s) => ({ ...s })) as MonthPlan['slots'] } : defaultPlan());
@@ -63,7 +69,9 @@ function HungerBanner({ c, actions, locked, onMarket }: { c: CharacterView; acti
 }
 
 /** Thân thế: những gì không đổi hoặc ít đổi. Đặt bên phải để thanh trạng thái và biên niên được chỗ (đề xuất P0). */
-function Dossier({ c, world, children }: { c: CharacterView; world: WorldInfo | null; children?: ComponentChildren }) {
+function Dossier({ c, world, factions, actions, locked, onCareers, onLeave, children }: {
+  c: CharacterView; world: WorldInfo | null; factions: FactionView[]; actions: ActionOption[]; locked: boolean; onCareers: () => void; onLeave: () => void; children?: ComponentChildren;
+}) {
   const place = world?.birthplaces.find((b) => b.id === c.birthplaceId);
   return (
     <aside class="dossier">
@@ -78,6 +86,8 @@ function Dossier({ c, world, children }: { c: CharacterView; world: WorldInfo | 
         <dt>{t('ui.life.traits')}</dt>
         <dd>{c.traits.length ? c.traits.map((x) => t(x)).join(' · ') : <span class="muted">{t('ui.life.traits_none')}</span>}</dd>
       </dl>
+      {c.canAct && <CareerPanel career={c.career} factions={factions} actions={actions} locked={locked} onOpen={onCareers} onLeave={onLeave} />}
+      {c.canAct && <PackPanel household={c.household} />}
       <div class="dossier-block">
         <span class="dossier-k">{t('ui.life.skills')}</span>
         {c.skills.length ? <ul class="skill-list">{c.skills.map((s) => <li key={s.id}><span>{t(s.id)}</span><span class="muted">{t(s.rank)}</span></li>)}</ul> : <p class="muted small">{t('ui.life.skills_none')}</p>}
@@ -92,10 +102,12 @@ function Dossier({ c, world, children }: { c: CharacterView; world: WorldInfo | 
   );
 }
 
-export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview, pending, onChoose, market, onTrade, people, circle, factions, control }: Props) {
+export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview, pending, onChoose, market, onTrade, onTradeGoods, people, circle, factions, control, careers, onLeaveCareer, hauls }: Props) {
   const [travelOpen, setTravelOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);
+  const [careersOpen, setCareersOpen] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
   const place = world?.map.counties[c.location]?.name ?? '';
   const [draft, setDraft] = useState<MonthPlan>(copyPlan(plan));
   // Mỗi STATE mang một object kế hoạch mới; chỉ đặt lại bản nháp khi kế hoạch thật sự đổi.
@@ -106,6 +118,11 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
   const applicable = dirty && !planInvalid(draft, actions, travel);
   /** Bấm tua khi đang sửa dở: áp dụng bản nháp trước (worker xử lý lệnh theo thứ tự). */
   const withDraft = (go: () => void) => () => { if (applicable) onPlan(draft); go(); };
+  /** Bảng chọn nghề (F2): xếp việc vào nghề vào tuần sắp chạy, ô xin vào nghề khác đổi theo; áp dụng ngay như chọn nơi đi. */
+  const pickCareer = (slot: PlanSlot) => {
+    const next = placeEntry(draft, date.tenDay, slot);
+    setDraft(next); onPlan(next); setCareersOpen(false);
+  };
 
   return (
     <div class="screen ink-screen full">
@@ -118,7 +135,7 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
             <main class="chronicle">
               {c.canAct
                 ? <ActionPlanner plan={plan} draft={draft} active={active} slotIndex={date.tenDay} actions={actions} travel={travel} world={world} locked={lock}
-                    household={c.household} tick={date.tick} people={people} circle={circle}
+                    household={c.household} tick={date.tick} people={people} circle={circle} career={c.career} hauls={hauls}
                     onDraft={setDraft} onApply={() => onPlan(draft)} onUndo={() => setDraft(copyPlan(plan))} />
                 : <p class="hint childhood-hint">{t('ui.plan.childhood')}</p>}
               {interrupt && (
@@ -138,7 +155,7 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
                 {running && <span class="muted running">{t('ui.ctrl.running')}</span>}
               </footer>
             </main>
-            <Dossier c={c} world={world}>
+            <Dossier c={c} world={world} factions={factions} actions={actions} locked={lock} onCareers={() => setCareersOpen(true)} onLeave={() => setLeaveOpen(true)}>
               {market && <MarketPanel market={market} place={place} locked={lock} onOpen={() => setMarketOpen(true)} />}
               <FactionPanel factions={factions} control={control} location={c.location} place={place} countyName={(i) => world?.map.counties[i]?.name ?? ''} people={people} circle={circle} />
               <CirclePanel circle={circle} people={people} place={place} factions={factions} />
@@ -148,8 +165,10 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
         </div>
       </Scroll>
       {pending && <EventCard pending={pending} date={date} busy={busy} onChoose={(choice) => onChoose(pending.instance, choice)} />}
-      {marketOpen && market && !pending && <MarketDialog market={market} household={c.household} place={place} canAct={c.canAct} busy={busy || running} onTrade={onTrade} onClose={() => setMarketOpen(false)} />}
+      {marketOpen && market && !pending && <MarketDialog market={market} household={c.household} place={place} canAct={c.canAct} busy={busy || running} onTrade={onTrade} onTradeGoods={onTradeGoods} onClose={() => setMarketOpen(false)} />}
       {travelOpen && world && <TravelDialog world={world} location={c.location} slotIndex={date.tenDay} plan={plan} options={travel} preview={travelPreview} onPreview={onPreview} onPlan={onPlan} onClose={() => setTravelOpen(false)} factions={factions} control={control} />}
+      {careersOpen && c.canAct && !pending && <CareerDialog board={careers} career={c.career} people={people} place={place} week={date.tenDay} busy={!!active || busy || running} onPick={pickCareer} onClose={() => setCareersOpen(false)} />}
+      {leaveOpen && c.career && !pending && <LeaveDialog career={c.career} factions={factions} busy={busy || running} onConfirm={() => { onLeaveCareer(); setLeaveOpen(false); }} onClose={() => setLeaveOpen(false)} />}
       {mapOpen && world && !pending && <FactionMapDialog world={world} location={c.location} factions={factions} control={control} onClose={() => setMapOpen(false)} />}
     </div>
   );

@@ -33,8 +33,17 @@ export function groupByYear(log: readonly LogEntry[], birthTick: Tick): YearGrou
   return groups;
 }
 
-export type ChronicleFilter = 'all' | 'major' | 'people' | 'affairs';
-export const CHRONICLE_FILTERS: readonly ChronicleFilter[] = ['all', 'major', 'people', 'affairs'];
+export type ChronicleFilter = 'all' | 'major' | 'career' | 'people' | 'affairs';
+export const CHRONICLE_FILTERS: readonly ChronicleFilter[] = ['all', 'major', 'career', 'people', 'affairs'];
+/** Lọc có dòng "chưa có gì" riêng khi trống. */
+export const FILTERS_WITH_EMPTY: readonly ChronicleFilter[] = ['career', 'people', 'affairs'];
+
+/**
+ * Nghề (v0.7 F3): vào, lên bậc, rời nghề; lương, trận của sai dịch; chuyến buôn, thương hội; theo cướp; và kết quả các
+ * sự kiện riêng của nghề (sim ghi `career` trên dòng kết quả).
+ */
+const CAREER_PREFIXES = ['log.career.', 'log.soldier.', 'log.outlaw.', 'log.haul.', 'log.guild.'] as const;
+export const isCareerNews = (e: LogEntry): boolean => e.career !== undefined || CAREER_PREFIXES.some((p) => e.key.startsWith(p));
 
 /**
  * Thế sự (v0.6 F3): tin thế lực ở quận đang đứng, tin đồn thế lực từ quận kề, quan mới nhậm chức, và kết quả các sự kiện
@@ -58,12 +67,14 @@ const isNeighbourNews = (e: LogEntry): boolean => e.importance === 'minor' && e.
 /**
  * Những dòng hiện cho một năm:
  * - "Chuyện lớn": chỉ việc lớn;
+ * - "Nghề" (v0.7 F3): chỉ việc nghề, không gập;
  * - "Người quanh mình": chỉ tin về người có tên, không gập;
  * - "Thế sự" (v0.6 F3): chỉ tin thế lực, không gập;
  * - "Tất cả": năm mới nhất hiện đủ, trừ tin sinh, mất của người chưa quen (F2); năm cũ gập mọi việc thường ngày. Người
  *   chơi mở năm nào thì năm đó hiện đủ.
  */
 export function visibleItems(g: YearGroup, filter: ChronicleFilter, latest: boolean, unfolded: boolean): { items: ChronicleItem[]; folded: number } {
+  if (filter === 'career') return { items: g.items.filter((it) => isCareerNews(it.entry)), folded: 0 };
   if (filter === 'people') return { items: g.items.filter((it) => isPeopleNews(it.entry)), folded: 0 };
   if (filter === 'affairs') return { items: g.items.filter((it) => isAffairsNews(it.entry)), folded: 0 };
   if (filter === 'major') return { items: g.items.filter((it) => it.entry.importance === 'major'), folded: 0 };

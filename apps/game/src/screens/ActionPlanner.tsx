@@ -1,7 +1,9 @@
 import { t } from '@tsvl/content';
-import { ACTION_GROUPS, type ActionOption, type ActionProgress, type HouseholdView, type MonthPlan, type NpcView, type PlanSlot, type Tick, type TravelOption } from '@tsvl/shared';
+import { ACTION_GROUPS, type ActionOption, type ActionProgress, type Cargo, type CareerView, type HaulOption, type HouseholdView, type MonthPlan, type NpcView, type PlanSlot, type Tick, type TravelOption } from '@tsvl/shared';
 import { useEffect, useState } from 'preact/hooks';
+import { paletteSplit } from '../app/career';
 import { foodForecast } from '../app/forecast';
+import { haulRows } from '../app/goods';
 import { inlineDate } from '../app/format';
 import { isSocial, planDirty, planInvalid, socialCandidates, socialLockOf } from '../app/plan';
 import { relationKeys } from '../app/people';
@@ -17,6 +19,10 @@ interface Props {
   household: HouseholdView; tick: Tick;
   /** Người trong quận (kèm khóa xã giao) và người thân, người quen ở mọi quận — cho ô xã giao (v0.5 F2). */
   people: NpcView[]; circle: NpcView[];
+  /** Nghề đang làm (v0.7 F1): việc của nghề lên đầu, việc riêng nghề khác gom một dòng. */
+  career: CareerView | null;
+  /** Chuyến buôn đi được từ đây (v0.7 F3b), chỉ khi là thương nhân. */
+  hauls: HaulOption[];
   onDraft: (plan: MonthPlan) => void; onApply: () => void; onUndo: () => void;
 }
 
@@ -31,6 +37,7 @@ function CostChips({ option, risk, slots }: { option: ActionOption; risk?: strin
       {r !== 'risk.none' && <span class={`chip${r === 'risk.high' ? ' hi' : ''}`}>{t(r)}</span>}
       <span class={`chip${option.cost.money === 'money.none' ? ' ok' : ' hi'}`}>{t(option.cost.money)}</span>
       {(slots ?? option.slots) > 1 && <span class="chip">{t('ui.plan.slots', { count: slots ?? option.slots })}</span>}
+      {option.careerWork && <span class="chip career" title={t('ui.plan.career_work_hint')}>{t('ui.plan.career_work')}</span>}
     </span>
   );
 }
@@ -58,7 +65,7 @@ function FoodForecastLine({ household, tick, farming }: { household: HouseholdVi
  * (hành động không có, đi mà không có đích); khóa của lúc này chỉ cảnh báo vì sim xét lại từng ô khi chạy (ADR 0008).
  * Bản nháp do màn Đời người giữ, để bấm tua là áp dụng luôn.
  */
-export function ActionPlanner({ plan, draft, active, slotIndex, actions, travel, world, locked, household, tick, people, circle, onDraft, onApply, onUndo }: Props) {
+export function ActionPlanner({ plan, draft, active, slotIndex, actions, travel, world, locked, household, tick, people, circle, career, hauls, onDraft, onApply, onUndo }: Props) {
   const [picking, setPicking] = useState<number | null>(null);
   useEffect(() => { if (locked) setPicking(null); }, [locked]);
   const dirty = planDirty(draft, plan);
@@ -82,21 +89,25 @@ export function ActionPlanner({ plan, draft, active, slotIndex, actions, travel,
           const shown = occupied && active ? { action: active.action, target: active.target } : slot;
           const option = actions.find((a) => a.id === shown.action);
           const journey = shown.action === 'action.travel' ? travel.find((p) => p.county === shown.target) : null;
+          // Chuyến buôn (F3b): giá, rủi ro, số ô đi về và khóa theo quận đích, hàng chở
+          const cargo: Cargo = (shown as PlanSlot).cargo ?? 'grain';
+          const trip = shown.action === 'action.haul' ? hauls.find((h) => h.county === shown.target && h.cargo === cargo) ?? null : null;
           const seal = sealOf(shown.action);
           const social = !occupied && isSocial(actions, shown.action);
-          const why = social ? socialLockOf(slot, people) ?? option?.locked ?? null : option?.locked ?? null;
+          const why = social ? socialLockOf(slot, people) ?? option?.locked ?? null : trip ? trip.locked : option?.locked ?? null;
           const state = i < slotIndex ? 'past' : i === slotIndex ? 'now' : 'next';
           const disabled = locked || occupied;
           return (
             <button key={i} type="button" class={`week week-${state}${occupied ? ' occupied' : ''}`} disabled={disabled} onClick={() => setPicking(i)}
               aria-label={`${t(`tenday.${i}`)}: ${t(shown.action)}. ${t('ui.plan.change')}`}>
               <span class="week-t"><span>{t(`tenday.${i}`)}</span><span>{occupied ? t('ui.plan.occupied') : t(`ui.plan.week_${state}`)}</span></span>
-              <span class="week-a"><Seal char={seal.char} tone={seal.tone} />{t(shown.action)}{shown.action === 'action.travel' && shown.target !== undefined && <span class="week-to">{t('ui.plan.to', { place: name(shown.target) })}</span>}{social && slot.person !== undefined && <span class="week-to">{t('ui.plan.with', { name: personName(slot.person) })}</span>}</span>
-              {option && <CostChips option={option} risk={journey?.risk} slots={journey?.slots} />}
+              <span class="week-a"><Seal char={seal.char} tone={seal.tone} />{t(shown.action)}{(shown.action === 'action.travel' || shown.action === 'action.haul') && shown.target !== undefined && <span class="week-to">{t('ui.plan.to', { place: name(shown.target) })}</span>}{shown.action === 'action.haul' && <span class="week-to">{t('ui.haul.carry', { cargo: t(cargoKey(cargo)).toLowerCase() })}</span>}{social && slot.person !== undefined && <span class="week-to">{t('ui.plan.with', { name: personName(slot.person) })}</span>}</span>
+              {option && <CostChips option={option} risk={journey?.risk ?? trip?.risk} slots={journey?.slots ?? trip?.slots} />}
               {option && option.gains.length > 0 && <span class="week-gain">{option.gains.map((g) => t(g)).join(' · ')}</span>}
               {why && !occupied && <span class="week-warn">{t('ui.plan.locked_now', { reason: t(why) })}</span>}
               {social && slot.person === undefined && <span class="week-warn">{t('ui.social.no_person')}</span>}
               {shown.action === 'action.travel' && !journey && !occupied && <span class="week-warn">{t('lock.route')}</span>}
+              {shown.action === 'action.haul' && !trip && !occupied && <span class="week-warn">{t('lock.route')}</span>}
             </button>
           );
         })}
@@ -111,7 +122,7 @@ export function ActionPlanner({ plan, draft, active, slotIndex, actions, travel,
         </div>
       )}
       {picking !== null && (
-        <ActionPalette week={picking} current={draft.slots[picking]!} actions={actions} travel={travel} name={name} people={people}
+        <ActionPalette week={picking} current={draft.slots[picking]!} actions={actions} travel={travel} name={name} people={people} career={career} hauls={hauls}
           onPick={(slot) => choose(picking, slot)} onClose={() => setPicking(null)} />
       )}
     </section>
@@ -119,10 +130,13 @@ export function ActionPlanner({ plan, draft, active, slotIndex, actions, travel,
 }
 
 /** Bảng chọn hành động gom theo nhóm của GDD 3.2 E; đi lại thì chọn luôn điểm đến. */
-function ActionPalette({ week, current, actions, travel, name, people, onPick, onClose }: {
+function ActionPalette({ week, current, actions, travel, name, people, career, hauls, onPick, onClose }: {
   week: number; current: PlanSlot; actions: ActionOption[]; travel: TravelOption[]; name: (c: number) => string; people: NpcView[];
-  onPick: (slot: PlanSlot) => void; onClose: () => void;
+  career: CareerView | null; hauls: HaulOption[]; onPick: (slot: PlanSlot) => void; onClose: () => void;
 }) {
+  // Chuyến buôn (F3b): chọn việc trước, rồi chọn quận đích và hàng
+  const [trading, setTrading] = useState(false);
+  const { shown, foreign } = paletteSplit(actions, career);
   // Xã giao (v0.5 F2): chọn việc trước, rồi chọn người trong quận
   const [social, setSocial] = useState<ActionOption | null>(null);
   useEffect(() => {
@@ -137,23 +151,37 @@ function ActionPalette({ week, current, actions, travel, name, people, onPick, o
           <span class="section-title">{t('ui.plan.pick', { week: t(`tenday.${week}`) })}</span>
           <button class="close" type="button" onClick={onClose} aria-label={t('ui.close')} title={t('ui.close')}>✕</button>
         </div>
-        {social ? <PersonPicker action={social} current={current} people={people} onPick={onPick} onBack={() => setSocial(null)} /> : <>
+        {trading ? <HaulPicker hauls={hauls} current={current} name={name} onPick={onPick} onBack={() => setTrading(false)} />
+          : social ? <PersonPicker action={social} current={current} people={people} onPick={onPick} onBack={() => setSocial(null)} /> : <>
         <p class="small muted">{t('ui.plan.pick_hint')}</p>
         {ACTION_GROUPS.map((group) => {
-          const list = actions.filter((a) => a.group === group);
-          if (!list.length || (group === 'travel' && !travel.length)) return null;
+          const list = shown.filter((a) => a.group === group);
+          // Nhóm đi lại bày theo điểm đến, giá và khóa của việc đi đường (chuyến buôn chọn ở chợ, F3b)
+          const go = actions.find((a) => a.id === 'action.travel');
+          const haul = group === 'travel' && hauls.length ? list.find((a) => a.id === 'action.haul') : undefined;
+          if (!list.length || (group === 'travel' && (!travel.length || !go))) return null;
           return (
             <div key={group} class="palette-group">
               <span class="group-k">{t(`group.${group}`)}</span>
               <div class="tiles">
                 {group === 'travel'
-                  ? travel.map((p) => (
+                  ? <>
+                  {haul && (
+                    <button type="button" class={`tile${haul.locked ? ' locked' : ''}${current.action === 'action.haul' ? ' chosen' : ''}`} onClick={() => setTrading(true)}>
+                      <span class="tile-a"><Seal char={sealOf(haul.id).char} tone={sealOf(haul.id).tone} />{t(haul.id)}</span>
+                      <CostChips option={haul} />
+                      <span class="tile-gain">{t('ui.haul.pick_hint')}</span>
+                      {haul.locked && <span class="tile-why">{t(haul.locked)}</span>}
+                    </button>
+                  )}
+                  {travel.map((p) => (
                     <button key={p.county} type="button" class={`tile${current.action === 'action.travel' && current.target === p.county ? ' chosen' : ''}`} onClick={() => onPick({ action: 'action.travel', target: p.county })}>
                       <span class="tile-a"><Seal char="行" tone="red" />{name(p.county)}</span>
-                      <CostChips option={list[0]!} risk={p.risk} slots={p.slots} />
-                      {list[0]!.locked && <span class="tile-why">{t(list[0]!.locked)}</span>}
+                      <CostChips option={go!} risk={p.risk} slots={p.slots} />
+                      {go!.locked && <span class="tile-why">{t(go!.locked)}</span>}
                     </button>
-                  ))
+                  ))}
+                  </>
                   : list.map((a) => {
                     const seal = sealOf(a.id);
                     return (
@@ -169,6 +197,11 @@ function ActionPalette({ week, current, actions, travel, name, people, onPick, o
             </div>
           );
         })}
+        {foreign.length > 0 && (
+          <p class="small muted other-careers">
+            {t('ui.plan.other_careers')}: {foreign.map((a) => t('ui.plan.career_of', { action: t(a.id), career: `career.${a.career}` })).join(' · ')}
+          </p>
+        )}
         </>}
       </div>
     </div>
@@ -208,6 +241,54 @@ function PersonPicker({ action, current, people, onPick, onBack }: {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/** Khóa nội dung tên hàng chở: lương thực hay một món hàng. */
+const cargoKey = (cargo: Cargo) => (cargo === 'grain' ? 'ui.goods.grain' : `good.${cargo}`);
+
+/**
+ * Chọn chuyến buôn (v0.7 F3b): mỗi quận đích một dòng (quận lời nhất lên đầu), số ô đi về, rủi ro đường, băng giữ đường;
+ * mỗi hàng một ô: lời mỗi đấu, mỗi phần và lời cả chuyến nếu đường êm, theo giá niêm yết lúc này; hàng lỗ thì ghi lý do.
+ */
+function HaulPicker({ hauls, current, name, onPick, onBack }: {
+  hauls: HaulOption[]; current: PlanSlot; name: (c: number) => string; onPick: (slot: PlanSlot) => void; onBack: () => void;
+}) {
+  const rows = haulRows(hauls);
+  return (
+    <div class="haul-picker">
+      <div class="row picker-head">
+        <button type="button" class="btn ghost small-btn" onClick={onBack}>{t('ui.social.back')}</button>
+        <span class="group-k">{t('ui.haul.title')}</span>
+      </div>
+      <p class="small muted">{t('ui.haul.hint')}</p>
+      {rows.length === 0 ? <p class="small muted">{t('ui.haul.none')}</p> : rows.map((r) => {
+        const first = r.options[0]!;
+        return (
+          <div key={r.county} class="haul-row">
+            <div class="haul-head">
+              <span class="tile-a"><Seal char="販" tone="red" />{name(r.county)}</span>
+              <span class="chips">
+                <span class="chip">{t('ui.plan.slots', { count: first.slots })}</span>
+                {first.risk !== 'risk.none' && <span class={`chip${first.risk === 'risk.high' ? ' hi' : ''}`}>{t(first.risk)}</span>}
+                {first.danger && <span class="chip hi">{t('ui.haul.danger')}</span>}
+              </span>
+            </div>
+            <div class="tiles haul-cargos">
+              {r.options.map((h) => (
+                <button key={h.cargo} type="button" class={`tile${h.locked ? ' locked' : ''}${current.action === 'action.haul' && current.target === h.county && (current.cargo ?? 'grain') === h.cargo ? ' chosen' : ''}`}
+                  onClick={() => onPick({ action: 'action.haul', target: h.county, cargo: h.cargo })}>
+                  <span class="tile-a">{t(cargoKey(h.cargo))}</span>
+                  <span class={`small${h.margin > 0 ? ' tone-good' : ' tone-bad'}`}>{t(h.cargo === 'grain' ? 'ui.haul.margin_dou' : 'ui.haul.margin_part', { coin: h.margin })}</span>
+                  {h.profit > 0 && <span class="tile-gain">{t('ui.haul.profit', { coin: h.profit })}</span>}
+                  {h.locked && <span class="tile-why">{t(h.locked)}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -1,8 +1,8 @@
-import { t } from '@tsvl/content';
+import { hasKey, t } from '@tsvl/content';
 import { birthplaceId, regionId, type Birthplace, type LogEntry } from '@tsvl/shared';
 import { firstOpenChoice, Life } from '@tsvl/sim';
 import { describe, expect, it } from 'vitest';
-import { affairsRows, departedPeople, eventOf, legacyRows, turningPoints } from '../src/app/summary';
+import { affairsRows, careerRows, departedPeople, eventOf, legacyRows, lifeCareer, turningPoints } from '../src/app/summary';
 
 const MISSING = /⟨|\{\w+\}/;
 
@@ -72,7 +72,7 @@ describe('những người đã đi trước (v0.4 F4)', () => {
 });
 
 describe('di sản (v0.5 F4)', () => {
-  const base = { spouse: null, children: [], friends: 0, enemies: 0, reputation: 'unknown' as const, factions: [] };
+  const base = { spouse: null, children: [], friends: 0, enemies: 0, reputation: 'unknown' as const, factions: [], careers: [] };
   const text = (r: ReturnType<typeof legacyRows>[number]) => t(r.value, r.params);
 
   it('vợ/chồng gọi theo giới người chơi; đã mất thì ghi; chưa cưới thì "Không lập gia đình"', () => {
@@ -119,5 +119,28 @@ describe('thế sự một đời (v0.6 F4)', () => {
     const rows = affairsRows([f('government', 'endured', 'A'), f('bandits', 'gone', 'B'), f('clan', 'rose', 'C'), f('guild', 'gone', 'D'), f('clan', 'fell', 'E')]);
     expect(rows.map((r) => r.name.params.place)).toEqual(['B', 'D', 'C', 'E', 'A']);
     for (const k of ['ui.summary.affairs', 'ui.summary.affairs_count', 'ui.summary.affairs_none', 'faction.fate.rose', 'faction.fate.fell', 'faction.fate.gone', 'faction.fate.endured']) expect(hasKey(k), k).toBe(true);
+  });
+});
+
+describe('một đời làm nghề (v0.7 F4)', () => {
+  it('gộp các lần vào cùng nghề: bậc cao nhất, cộng năm, đếm số lần; nghề làm tới cuối đời ghi riêng; theo thứ tự vào nghề lần đầu', () => {
+    const rows = careerRows([
+      { id: 'farmer', rank: 'journeyman', years: 6 }, { id: 'hunter', rank: 'apprentice', years: 1 },
+      { id: 'farmer', rank: 'apprentice', years: 2 }, { id: 'merchant', rank: 'master', years: 8, current: true },
+    ]);
+    expect(rows).toEqual([
+      { id: 'farmer', rank: 'journeyman', years: 8, stints: 2, current: false },
+      { id: 'hunter', rank: 'apprentice', years: 1, stints: 1, current: false },
+      { id: 'merchant', rank: 'master', years: 8, stints: 1, current: true },
+    ]);
+    // Bằng năm thì nghề làm tới cuối đời
+    expect(lifeCareer(rows)!.id).toBe('merchant');
+    expect(lifeCareer(careerRows([{ id: 'farmer', rank: 'master', years: 30 }, { id: 'drifter', rank: 'apprentice', years: 2, current: true }]))!.id).toBe('farmer');
+    expect(lifeCareer([])).toBeNull();
+  });
+
+  it('chuỗi hiển thị có đủ', () => {
+    for (const k of ['ui.summary.careers', 'ui.summary.careers_none', 'ui.summary.career_rank', 'ui.summary.career_years', 'ui.summary.career_short', 'ui.summary.career_stints', 'ui.summary.career_current']) expect(hasKey(k), k).toBe(true);
+    expect(t('ui.summary.career_rank', { rank: 'career.rank.master' })).toBe('Bậc cao nhất: Có tiếng');
   });
 });

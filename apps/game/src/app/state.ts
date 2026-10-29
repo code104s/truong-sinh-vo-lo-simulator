@@ -2,7 +2,7 @@
 import { t } from '@tsvl/content';
 import type {
   Birthplace, BirthplaceId, CalendarDate, CharacterView, LifeSummary, LogEntry, RegionMapData, RegionSummary, WorkerMessage, WorldSeed, MonthPlan, ActionOption, ActionProgress, TravelOption, TravelPreview,
-  MarketView, NpcView, PendingEvent, FactionId, FactionView,
+  MarketView, NpcView, PendingEvent, FactionId, FactionView, CareerEntryView, HaulOption,
 } from '@tsvl/shared';
 
 export type Screen = 'menu' | 'settings' | 'loading' | 'birthplace' | 'life' | 'summary';
@@ -43,12 +43,16 @@ export interface AppState {
   /** Thế lực trong vùng và người giữ từng quận (v0.6, ADR 0019); rỗng tới S1. */
   factions: FactionView[];
   control: (FactionId | null)[];
+  /** Bảng chọn nghề ở quận đang đứng (v0.7 F2). */
+  careers: CareerEntryView[];
+  /** Chuyến buôn đi được từ quận đang đứng (v0.7 F3b). */
+  hauls: HaulOption[];
 }
 
 export const initialState: AppState = {
   screen: 'menu', ready: false, hasSave: false, loadingSave: false, progress: null, world: null, selected: null,
   date: null, character: null, log: [], interrupt: null, summary: null, running: false, error: null, seedInput: '',
-  plan: null, active: null, actions: [], travel: [], travelPreview: null, market: null, pending: null, people: [], circle: [], factions: [], control: [],
+  plan: null, active: null, actions: [], travel: [], travelPreview: null, market: null, pending: null, people: [], circle: [], factions: [], control: [], careers: [], hauls: [],
 };
 
 export type Action =
@@ -81,7 +85,7 @@ export function reduce(s: AppState, a: Action): AppState {
     case 'loadStart':
       return { ...s, screen: 'loading', progress: null, loadingSave: true, log: [], interrupt: null, summary: null, character: null, error: null };
     case 'newLifeStart':
-      return { ...s, log: [], interrupt: null, summary: null, character: null, running: false, plan: null, active: null, actions: [], travel: [], travelPreview: null, market: null, pending: null, people: [], circle: [], factions: [], control: [] };
+      return { ...s, log: [], interrupt: null, summary: null, character: null, running: false, plan: null, active: null, actions: [], travel: [], travelPreview: null, market: null, pending: null, people: [], circle: [], factions: [], control: [], careers: [], hauls: [] };
     case 'select':
       return { ...s, selected: a.id };
     case 'advanceStart':
@@ -116,7 +120,7 @@ function onMessage(s: AppState, m: WorkerMessage): AppState {
     }
     case 'STATE': {
       const toLife = s.screen === 'loading' || s.screen === 'birthplace';
-      return { ...s, date: m.date, character: m.character, plan: m.plan, active: m.active, actions: m.actions, travel: m.travel, travelPreview: null, market: m.market, pending: m.pending, people: m.people, circle: m.circle, factions: m.factions, control: m.control, loadingSave: false, screen: toLife ? 'life' : s.screen };
+      return { ...s, date: m.date, character: m.character, plan: m.plan, active: m.active, actions: m.actions, travel: m.travel, travelPreview: null, market: m.market, pending: m.pending, people: m.people, circle: m.circle, factions: m.factions, control: m.control, careers: m.careers, hauls: m.hauls, loadingSave: false, screen: toLife ? 'life' : s.screen };
     }
     case 'INTERRUPT':
       return { ...s, interrupt: m.entry, running: false };

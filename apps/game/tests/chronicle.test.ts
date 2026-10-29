@@ -1,8 +1,8 @@
-import type { LogEntry } from '@tsvl/shared';
+import { CAREERS, type LogEntry } from '@tsvl/shared';
 import { describe, expect, it } from 'vitest';
-import { CHRONICLE_FILTERS, groupByYear, isAffairsNews, isPeopleNews, visibleItems } from '../src/app/chronicle';
+import { CHRONICLE_FILTERS, FILTERS_WITH_EMPTY, groupByYear, isAffairsNews, isCareerNews, isPeopleNews, visibleItems } from '../src/app/chronicle';
 import { planDirty } from '../src/app/plan';
-import { logSeal } from '../src/ui/icons';
+import { CAREER_CHAR, logSeal } from '../src/ui/icons';
 
 const e = (tick: number, importance: LogEntry['importance'] = 'minor', key = 'log.child.help'): LogEntry => ({ tick, key, params: {}, importance });
 
@@ -107,5 +107,27 @@ describe('biểu tượng tin thế sự (v0.6 F3)', () => {
     expect(logSeal(e(1, 'major', 'log.faction.seized_bandits'))).toEqual({ char: '匪', tone: 'red' });
     expect(logSeal(e(1, 'minor', 'log.faction.campaign_lost'))).toEqual({ char: '官', tone: 'ink' });
     expect(logSeal(e(1, 'minor', 'log.faction.guild_founded'))).toEqual({ char: '勢', tone: 'ochre' });
+  });
+});
+
+describe('lọc "Nghề" và triện nghề (v0.7 F3)', () => {
+  const at = (key: string, career?: LogEntry['career']): LogEntry => ({ tick: 40, key, params: {}, importance: 'major', ...(career ? { career } : {}) });
+  it('chỉ việc nghề: vào, rời nghề, sai dịch, buôn chuyến, thương hội, theo cướp, kết quả sự kiện nghề; không gập', async () => {
+    const { hasKey } = await import('@tsvl/content');
+    const log = [at('log.career.enter'), at('log.soldier.wage'), at('log.haul.profit'), at('log.guild.join'), at('log.outlaw.atone'),
+      at('event.hunt_wolf.result.fight', 'hunter'), at('event.tax_collector.result.pay'), at('log.harvest.own')];
+    expect(log.map(isCareerNews)).toEqual([true, true, true, true, true, true, false, false]);
+    const [g] = groupByYear(log, 0);
+    expect(visibleItems(g!, 'career', false, false)).toMatchObject({ folded: 0 });
+    expect(visibleItems(g!, 'career', false, false).items).toHaveLength(6);
+    expect(CHRONICLE_FILTERS).toEqual(['all', 'major', 'career', 'people', 'affairs']);
+    for (const f of FILTERS_WITH_EMPTY) expect(hasKey(`ui.chron.${f}_empty`), f).toBe(true);
+    for (const f of CHRONICLE_FILTERS) expect(hasKey(`ui.chron.${f}`), f).toBe(true);
+  });
+
+  it('kết quả sự kiện nghề đóng triện nghề; theo cướp triện đỏ; mỗi nghề một chữ', () => {
+    expect(logSeal(at('event.hunt_wolf.result.fight', 'hunter'))).toEqual(CAREER_CHAR.hunter);
+    expect(logSeal(at('log.outlaw.desert'))).toEqual({ char: '匪', tone: 'red' });
+    expect(new Set(CAREERS.map((c) => CAREER_CHAR[c].char)).size).toBe(CAREERS.length);
   });
 });

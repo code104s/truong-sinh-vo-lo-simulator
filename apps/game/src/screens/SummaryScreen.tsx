@@ -5,7 +5,8 @@ import { useState } from 'preact/hooks';
 import { logText, shortDate } from '../app/format';
 import type { WorldInfo } from '../app/state';
 import { FACTION_CHAR } from '../app/factions';
-import { affairsRows, departedPeople, legacyRows, turningPoints } from '../app/summary';
+import { affairsRows, careerRows, departedPeople, legacyRows, lifeCareer, turningPoints } from '../app/summary';
+import { CAREER_CHAR } from '../ui/icons';
 import { BrushLabel, InkLandscape, Portrait, Scroll, Seal } from '../ui/ink';
 import { PORTRAIT_MIN_AGE, portraitOf } from '../ui/portraits';
 import { LogLine } from './LifeScreen';
@@ -28,6 +29,9 @@ export function SummaryScreen({ summary: s, character, world, onBack }: { summar
   const e = s.estate;
   const legacy = legacyRows(s.legacy, character?.gender ?? null);
   const affairs = affairsRows(s.legacy.factions);
+  // Một đời làm nghề (v0.7 F4)
+  const jobs = careerRows(s.legacy.careers);
+  const main = lifeCareer(jobs);
   const land = e.landMu > 0 ? `${t('ui.hud.mu', { mu: e.landMu })} · ${t(`tenure.${e.tenure}`)}` : e.tenure === 'tenant' ? t('tenure.tenant') : t('ui.hud.no_land');
   return (
     <div class="screen ink-screen full summary">
@@ -38,6 +42,7 @@ export function SummaryScreen({ summary: s, character, world, onBack }: { summar
             <Portrait src={character && s.ageYears >= PORTRAIT_MIN_AGE ? portraitOf(character) : null} alt={s.name} age={s.ageYears} />
             <h1 class="epitaph-name">{s.name}</h1>
             <p class="lived">{t('ui.summary.lived', { age: s.ageYears })} <Seal char="終" /></p>
+            {main && <p class="life-career"><Seal char={CAREER_CHAR[main.id].char} tone={CAREER_CHAR[main.id].tone} /> {t('ui.hud.career', { career: `career.${main.id}`, rank: `career.rank.${main.rank}` })}</p>}
             <p>{t('ui.summary.span', { from: shortDate(s.birthTick), to: shortDate(s.deathTick) })}</p>
             <p>{t('ui.summary.cause', { cause: `death.${s.cause}`, detail: s.causeDetail })}</p>
             {place && <p>{t('ui.summary.place', { place: `${place.name} (${t(`kind.${place.kind}`)})` })}</p>}
@@ -67,6 +72,23 @@ export function SummaryScreen({ summary: s, character, world, onBack }: { summar
                   </Fragment>
                 ))}
               </dl>
+            </div>
+            <div class="estate careers-life">
+              <span class="dossier-k">{t('ui.summary.careers')}</span>
+              {jobs.length === 0 ? <p class="muted small">{t('ui.summary.careers_none')}</p> : (
+                <ul class="career-life-list">
+                  {jobs.map((j) => (
+                    <li key={j.id}>
+                      <Seal char={CAREER_CHAR[j.id].char} tone={CAREER_CHAR[j.id].tone} />
+                      <span class="person-text">
+                        <strong>{t(`career.${j.id}`)}</strong>
+                        <span class="small">{t('ui.summary.career_rank', { rank: `career.rank.${j.rank}` })} · {j.years > 0 ? t('ui.summary.career_years', { count: j.years }) : t('ui.summary.career_short')}</span>
+                        {(j.stints > 1 || j.current) && <span class="small muted">{[j.stints > 1 ? t('ui.summary.career_stints', { count: j.stints }) : null, j.current ? t('ui.summary.career_current') : null].filter(Boolean).join(' · ')}</span>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             <p class="muted tiny">{t('ui.summary.digest', { digest: s.digest })}</p>
             <button class="btn primary" onClick={onBack}>{t('ui.back')}</button>
@@ -109,7 +131,7 @@ export function SummaryScreen({ summary: s, character, world, onBack }: { summar
                   ? turns.map((p, i) => (
                     <p key={i} class="entry major turn">
                       <span class="entry-date">{shortDate(p.entry.tick)}<br /><span class="muted small">{t('ui.summary.at_age', { age: p.age })}</span></span>
-                      <span class="entry-seal"><Seal char="變" /></span>
+                      <span class="entry-seal">{p.entry.career ? <Seal char={CAREER_CHAR[p.entry.career].char} tone={CAREER_CHAR[p.entry.career].tone} /> : <Seal char="變" />}</span>
                       <span><strong class="turn-title">{t(`${p.eventId}.title`, p.entry.params)}</strong> {logText(p.entry)}</span>
                     </p>
                   ))

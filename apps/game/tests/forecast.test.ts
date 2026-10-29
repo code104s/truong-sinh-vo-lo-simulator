@@ -5,7 +5,7 @@ import { foodForecast, LONG_WEEKS } from '../src/app/forecast';
 import { inlineDate } from '../src/app/format';
 
 const h = (grainWeeks: number, foodWeeks: number, independent = true): HouseholdView => ({
-  independent, money: 0, grain: grainWeeks * 10, landMu: 0, tenure: 'none', hungerBand: 'fed', foodWeeksBand: 'season', grainWeeks, foodWeeks,
+  independent, money: 0, grain: grainWeeks * 10, landMu: 0, tenure: 'none', hungerBand: 'fed', foodWeeksBand: 'season', grainWeeks, foodWeeks, goods: [], goodsCap: 1000,
 });
 const JAN = 36 * 16; // thượng tuần tháng Giêng năm 17: còn 24 tuần tới mùa gặt
 

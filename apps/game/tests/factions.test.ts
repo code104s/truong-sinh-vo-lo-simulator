@@ -1,8 +1,8 @@
 // Khối "Thế lực ở {nơi}" (v0.6 F2): thế lực ở quận đang đứng, vai, thứ tự; nhãn thế lực của một người; người cầm đầu.
 import { hasKey } from '@tsvl/content';
-import { FACTION_KINDS, type FactionView, type NpcView } from '@tsvl/shared';
+import { ATTITUDE_BANDS, FACTION_KINDS, type FactionView, type NpcView } from '@tsvl/shared';
 import { describe, expect, it } from 'vitest';
-import { factionsHere, leaderOf, memberLabel, roleKey, type FactionRole } from '../src/app/factions';
+import { attitudeTone, factionsHere, leaderOf, memberLabel, roleKey, type FactionRole } from '../src/app/factions';
 
 const faction = (id: string, kind: FactionView['kind'], o: Partial<FactionView> = {}): FactionView => ({
   id, kind, name: { key: `faction.${kind}.name`, params: { place: 'Vị Kinh', surname: 'Lương' } }, seat: 0, counties: [], strength: 'modest', members: 3, ...o,
@@ -54,5 +54,14 @@ describe('thế lực ở quận đang đứng (v0.6 F2)', () => {
     expect(leaderOf(f, [person('n1')], [person('n9')])?.id).toBe('n9');
     expect(leaderOf(f, [person('n1')], [])).toBeNull();
     expect(leaderOf(faction('f3', 'guild'), [person('n1')], [])).toBeNull();
+  });
+});
+
+describe('thái độ thế lực với mình (v0.7 F3)', () => {
+  it('ghét đỏ, dè chừng vàng đất, thân xanh, thường nhạt; mỗi dải có nhãn và lời giải thích', async () => {
+    const { hasKey } = await import('@tsvl/content');
+    expect(ATTITUDE_BANDS.map(attitudeTone)).toEqual(['bad', 'warn', 'plain', 'good']);
+    for (const b of ATTITUDE_BANDS) for (const k of [`faction.attitude.${b}`, `ui.factions.attitude_hint.${b}`]) expect(hasKey(k), k).toBe(true);
+    expect(hasKey('ui.factions.attitude_tag')).toBe(true);
   });
 });

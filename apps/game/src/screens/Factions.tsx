@@ -1,7 +1,7 @@
 import { t } from '@tsvl/content';
 import type { FactionId, FactionView, NpcView } from '@tsvl/shared';
 import { useEffect, useState } from 'preact/hooks';
-import { FACTION_CHAR, factionsHere, leaderOf, roleKey } from '../app/factions';
+import { attitudeTone, FACTION_CHAR, factionsHere, leaderOf, roleKey } from '../app/factions';
 import { Seal } from '../ui/ink';
 
 interface Props {
@@ -35,7 +35,11 @@ export function FactionPanel({ factions, control, location, place, countyName, p
                 <span class="person-text">
                   <strong>{t(f.name.key, f.name.params)}</strong>
                   {roles.length > 0 && <span class={`small${roles.includes('lost') || f.kind === 'bandits' ? ' tone-bad' : ''}`}>{roles.map((r) => t(roleKey(f, r))).join(' · ')}</span>}
-                  <span class="small muted">{t(`faction.kind.${f.kind}`)} · {t(`faction.strength.${f.strength}`)}</span>
+                  <span class="small muted">
+                    {t(`faction.kind.${f.kind}`)} · {t(`faction.strength.${f.strength}`)}
+                    {/* Thái độ với mình (v0.7 F3) */}
+                    {f.attitude && <>{' · '}<span class={`attitude tone-${attitudeTone(f.attitude)}`} title={t(`ui.factions.attitude_hint.${f.attitude}`)}>{t('ui.factions.attitude_tag', { band: `faction.attitude.${f.attitude}` })}</span></>}
+                  </span>
                 </span>
               </button>
             </li>
@@ -72,9 +76,10 @@ function FactionCard({ f, countyName, leader, onClose }: { f: FactionView; count
           {/* Thương hội không cai quản đất (quận của nó là quận hội quán): chỉ ghi trị sở, đường */}
           {f.kind !== 'guild' && <><dt>{t('ui.factions.land')}</dt><dd>{f.kind === 'clan' ? (f.counties.length ? t('ui.factions.land_lead', { place: f.counties.map(countyName).join(', ') }) : t('ui.factions.land_none')) : f.counties.length ? t('ui.factions.land_counties', { count: f.counties.length }) : t('ui.factions.land_none')}</dd></>}
           {roads > 0 && <><dt>{t('ui.factions.roads')}</dt><dd>{t('ui.factions.roads_n', { count: roads })}</dd></>}
-          <dt>{t('ui.factions.attitude')}</dt><dd>{f.attitude ? t(`faction.attitude.${f.attitude}`) : t('ui.factions.attitude_unknown')}</dd>
+          <dt>{t('ui.factions.attitude')}</dt><dd class={f.attitude ? `tone-${attitudeTone(f.attitude)}` : ''}>{f.attitude ? t(`faction.attitude.${f.attitude}`) : t('ui.factions.attitude_unknown')}</dd>
         </dl>
         <p class="small muted">{t(`ui.factions.about.${f.kind}`)}</p>
+        {f.attitude && <p class="small">{t(`ui.factions.attitude_hint.${f.attitude}`)}</p>}
       </div>
     </div>
   );

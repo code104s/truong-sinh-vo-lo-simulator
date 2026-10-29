@@ -1,6 +1,6 @@
 // Màn tổng kết (F5): rút các ngã rẽ từ những mốc lớn. Khóa kết quả sự kiện là `<id sự kiện>.result.<kết quả>`
 // (ADR 0014), nên tách được id sự kiện để ghi tựa. Không có luật game.
-import { ageYearsAt, type ContentId, type FactionFate, type Gender, type LifeSummary, type LogEntry, type Tick } from '@tsvl/shared';
+import { ageYearsAt, CAREER_RANKS, type CareerId, type CareerRank, type ContentId, type FactionFate, type Gender, type LifeSummary, type LogEntry, type Tick } from '@tsvl/shared';
 
 const RESULT = '.result.';
 
@@ -70,3 +70,28 @@ export function affairsRows(factions: LifeSummary['legacy']['factions']): Affair
   return factions.map((f, i) => ({ f, i })).sort((a, b) => FATE_ORDER[a.f.fate] - FATE_ORDER[b.f.fate] || a.i - b.i).map(({ f }) => f);
 }
 
+
+/** Một nghề trong "Một đời làm nghề" (v0.7 F4): gộp các lần vào cùng nghề. */
+export interface CareerRow { id: CareerId; rank: CareerRank; years: number; stints: number; current: boolean }
+
+/**
+ * Một đời làm nghề (v0.7 F4): mỗi nghề một dòng theo thứ tự vào nghề lần đầu; vào lại nghề cũ thì gộp — bậc cao nhất, cộng
+ * số năm, đếm số lần vào; nghề còn làm tới lúc nhắm mắt ghi riêng.
+ */
+export function careerRows(careers: LifeSummary['legacy']['careers']): CareerRow[] {
+  const rows: CareerRow[] = [];
+  for (const r of careers) {
+    const row = rows.find((x) => x.id === r.id);
+    if (!row) { rows.push({ id: r.id, rank: r.rank, years: r.years, stints: 1, current: !!r.current }); continue; }
+    if (CAREER_RANKS.indexOf(r.rank) > CAREER_RANKS.indexOf(row.rank)) row.rank = r.rank;
+    row.years += r.years; row.stints++; row.current ||= !!r.current;
+  }
+  return rows;
+}
+
+/** Nghề của cả đời, ghi dưới tên trên bia: nghề làm lâu nhất; bằng năm thì nghề còn làm tới cuối, rồi nghề vào sau. */
+export function lifeCareer(rows: readonly CareerRow[]): CareerRow | null {
+  let best: CareerRow | null = null;
+  for (const r of rows) if (!best || r.years > best.years || (r.years === best.years && (r.current || !best.current))) best = r;
+  return best;
+}

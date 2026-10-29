@@ -1,6 +1,6 @@
 // Khối "Thế lực ở {nơi}" (v0.6 F2): thế lực đặt chân ở quận đang đứng, vai của từng thế lực với nơi ấy, nhãn thế lực
 // của một người. Thuần, không có luật game: số liệu từ STATE.factions, STATE.control.
-import type { ContentId, FactionId, FactionKind, FactionView, NpcView } from '@tsvl/shared';
+import type { AttitudeBand, ContentId, FactionId, FactionKind, FactionView, NpcView } from '@tsvl/shared';
 
 /** Vai của thế lực với quận đang đứng. */
 export type FactionRole = 'holder' | 'lost' | 'lead' | 'seat' | 'near';
@@ -42,6 +42,11 @@ export function memberLabel(p: Pick<NpcView, 'faction'>, factions: readonly Fact
   const f = p.faction ? factions.find((x) => x.id === p.faction) : undefined;
   if (!f) return null;
   return { key: `ui.factions.member.${f.kind}`, params: { ...f.name.params } };
+}
+
+/** Sắc của thái độ thế lực với mình (v0.7 F3): ghét đỏ, dè chừng vàng đất, thân xanh, thường nhạt. */
+export function attitudeTone(band: AttitudeBand): 'bad' | 'warn' | 'good' | 'plain' {
+  return band === 'hostile' ? 'bad' : band === 'wary' ? 'warn' : band === 'friendly' ? 'good' : 'plain';
 }
 
 /** Người cầm đầu: người có tên quanh mình (ở quận đang đứng hay người quen); không thấy thì null (ở nơi khác). */

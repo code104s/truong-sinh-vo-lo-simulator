@@ -1,10 +1,11 @@
 import { t } from '@tsvl/content';
 import { GRAIN_PER_DOU, type CalendarDate, type CharacterView, type FoodWeeksBand, type HungerBand, type StaminaBand } from '@tsvl/shared';
 import type { ComponentChildren } from 'preact';
+import { careerLine } from '../app/career';
 import { dateText } from '../app/format';
 import { reputationTone } from '../app/people';
 import type { WorldInfo } from '../app/state';
-import { KIND_CHAR, SEASON_CHAR } from '../ui/icons';
+import { CAREER_CHAR, KIND_CHAR, SEASON_CHAR } from '../ui/icons';
 import { Enso, Portrait, Seal } from '../ui/ink';
 import { PORTRAIT_MIN_AGE, portraitOf } from '../ui/portraits';
 
@@ -47,6 +48,7 @@ export function StatusBar({ c, date, saved, world }: { c: CharacterView; date: C
   // Tiếng tăm ở quận đang đứng (v0.5 F3): đổi theo nơi mình đứng, nên đặt cạnh tên nơi ở
   const here = world?.map.counties[c.location]?.name ?? '';
   const rep = t(`reputation.${c.reputation}`);
+  const job = careerLine(c.career, c.canAct);
   const land = h.landMu > 0 ? `${t('ui.hud.mu', { mu: h.landMu })} · ${t(`tenure.${h.tenure}`)}` : h.tenure === 'tenant' ? t('tenure.tenant') : t('ui.hud.no_land');
   return (
     <header class="status-bar">
@@ -54,7 +56,10 @@ export function StatusBar({ c, date, saved, world }: { c: CharacterView; date: C
         <Portrait src={c.ageYears >= PORTRAIT_MIN_AGE ? portraitOf(c) : null} alt={c.name} age={c.ageYears} />
         <div class="who-text">
           <h2 class="char-name">{c.name}</h2>
-          <p class="muted">{t(`gender.${c.gender}`)} · {t('ui.life.age', { age: c.ageYears })}</p>
+          <p class="muted">
+            {t(`gender.${c.gender}`)} · {t('ui.life.age', { age: c.ageYears })}
+            {job && <>{' · '}<span class={`career-tag${c.career ? '' : ' none'}`}>{c.career && <Seal char={CAREER_CHAR[c.career.id].char} tone={CAREER_CHAR[c.career.id].tone} />}{t(job.key, job.params)}</span></>}
+          </p>
           <p class="small">
             {place && <Seal char={KIND_CHAR[place.kind]} tone="ink" />} {t('ui.life.here', { place: here })}
             {' · '}<span class={`reputation tone-${reputationTone(c.reputation)}`} title={t('ui.hud.reputation', { place: here, band: rep })}>{rep}</span>

@@ -1,6 +1,6 @@
 // Mọi khóa nội dung mà sim sinh ra đều có chuỗi tiếng Việt (kiểm tra bằng 300 đời thật, không liệt kê tay).
 import { hasKey, t } from '@tsvl/content';
-import { calendarOf, birthplaceId, regionId, type Birthplace, type SettlementKind } from '@tsvl/shared';
+import { calendarOf, birthplaceId, CAREER_RANKS, CAREERS, regionId, type Birthplace, type SettlementKind } from '@tsvl/shared';
 import { firstOpenChoice, Life } from '@tsvl/sim';
 import { describe, expect, it } from 'vitest';
 import { dateText, logText } from '../src/app/format';
@@ -43,6 +43,11 @@ describe('chuỗi nội dung phủ hết đầu ra của sim', () => {
       expect(hasKey(s.causeDetail), s.causeDetail).toBe(true);
     }
     expect([...seen].sort()).toEqual(expect.arrayContaining(['log.birth', 'log.death', 'log.illness.onset', 'log.illness.recovered', 'log.age.milestone']));
+    // 300 đời thật có thế lực (v0.6) chạy khoảng 60 s một mình, lâu hơn khi cả bộ chạy song song: giới hạn riêng 180 s
+  }, 180_000);
+
+  it('nghề, bậc nghề, y thuật có chuỗi (v0.7, chưa sim nào sinh ra trước S1)', () => {
+    for (const id of [...CAREERS.map((c) => `career.${c}`), ...CAREER_RANKS.map((r) => `career.rank.${r}`), 'skill.medicine']) expect(hasKey(id), id).toBe(true);
   });
 
   it('lịch đủ 12 tháng, 3 tuần, 4 mùa', () => {

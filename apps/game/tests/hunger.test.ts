@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { hungerAlert } from '../src/app/hunger';
 
 const h = (patch: Partial<HouseholdView>): HouseholdView => ({
-  independent: true, money: 0, grain: 100, landMu: 0, tenure: 'none', hungerBand: 'fed', foodWeeksBand: 'season', grainWeeks: 10, foodWeeks: 10, ...patch,
+  independent: true, money: 0, grain: 100, landMu: 0, tenure: 'none', hungerBand: 'fed', foodWeeksBand: 'season', grainWeeks: 10, foodWeeks: 10, goods: [], goodsCap: 1000, ...patch,
 });
 const opt = (id: string, locked: string | null = null): ActionOption => ({ id, group: 'livelihood', slots: 1, cost: { stamina: 'cost.medium', risk: 'risk.low', money: 'money.none' }, gains: [], locked });
 /** Ở làng: không có việc làm thuê; đói lả thì săn (việc nặng) bị khóa. */

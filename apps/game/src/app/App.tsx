@@ -152,10 +152,14 @@ export function App({ client }: { client: SimClient }) {
           onChoose={(instance, choice) => { setSaved(false); send({ type: 'CHOOSE', instance, choice }, 'plan'); }}
           market={s.market}
           onTrade={(grain) => { setSaved(false); send({ type: 'TRADE', grain }, 'plan'); }}
+          onTradeGoods={(good, qty) => { setSaved(false); send({ type: 'TRADE_GOODS', good, qty }, 'plan'); }}
           people={s.people}
           circle={s.circle}
           factions={s.factions}
           control={s.control}
+          careers={s.careers}
+          hauls={s.hauls}
+          onLeaveCareer={() => { setSaved(false); send({ type: 'LEAVE_CAREER' }, 'plan'); }}
         />
       )}
       {s.screen === 'summary' && s.summary && <SummaryScreen summary={s.summary} character={s.character} world={s.world} onBack={() => dispatch({ type: 'go', screen: 'menu' })} />}

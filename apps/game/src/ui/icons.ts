@@ -1,10 +1,17 @@
 // Chữ Hán trang trí cho ấn triện và vòng mùa. Chỉ để hiển thị, không phải luật game.
-import type { LogEntry, Season, SettlementKind } from '@tsvl/shared';
+import type { CareerId, LogEntry, Season, SettlementKind } from '@tsvl/shared';
 
 export const SEASON_CHAR: Record<Season, string> = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
 export const KIND_CHAR: Record<SettlementKind, string> = { city: '城', town: '鎮', village: '村' };
 
 export type SealTone = 'red' | 'ink' | 'jade' | 'ochre';
+
+/** Triện nghề (v0.7 F3): thanh trạng thái, khối Nghề, bảng chọn nghề, thẻ sự kiện riêng của nghề, biên niên. */
+export const CAREER_CHAR: Record<CareerId, { char: string; tone: SealTone }> = {
+  farmer: { char: '農', tone: 'ochre' }, artisan: { char: '匠', tone: 'ochre' }, hunter: { char: '獵', tone: 'ochre' },
+  merchant: { char: '商', tone: 'ochre' }, physician: { char: '醫', tone: 'jade' }, soldier: { char: '兵', tone: 'ink' },
+  drifter: { char: '浪', tone: 'ink' }, recluse: { char: '隱', tone: 'jade' }, outlaw: { char: '匪', tone: 'red' },
+};
 
 /** Ấn của từng hành động trong kế hoạch tháng và bảng chọn. */
 export const ACTION_CHAR: Record<string, { char: string; tone: SealTone }> = {
@@ -14,11 +21,28 @@ export const ACTION_CHAR: Record<string, { char: string; tone: SealTone }> = {
   'action.travel': { char: '行', tone: 'red' },
   // Xã giao (v0.5)
   'action.visit': { char: '訪', tone: 'jade' }, 'action.ask_help': { char: '求', tone: 'ink' }, 'action.propose': { char: '婚', tone: 'red' },
+  // Học việc (v0.7 S1); việc riêng của nghề, mua ruộng (S2)
+  'action.apprentice': { char: '徒', tone: 'ochre' },
+  'action.craft': { char: '匠', tone: 'ink' }, 'action.trap': { char: '阱', tone: 'ink' }, 'action.buy_land': { char: '田', tone: 'ochre' },
+  // Thương nhân (S3)
+  'action.haul': { char: '販', tone: 'red' }, 'action.join_guild': { char: '會', tone: 'ochre' },
+  // Lính, võ đường (S4)
+  'action.dojo': { char: '館', tone: 'ink' }, 'action.enlist': { char: '募', tone: 'ochre' }, 'action.patrol': { char: '巡', tone: 'ink' },
+  // Thầy thuốc (S5); lưu lạc, ẩn dật (S6)
+  'action.practice': { char: '醫', tone: 'jade' },
+  'action.drift': { char: '浪', tone: 'ink' }, 'action.build_hut': { char: '廬', tone: 'jade' },
 };
 
 /** Ấn triện cho một mục nhật ký theo khóa nội dung: chữ và màu. */
 export function logSeal(e: LogEntry): { char: string; tone: SealTone } | null {
   if (e.key === 'log.birth') return { char: '生', tone: 'red' };
+  // Kết quả sự kiện riêng của nghề (v0.7 F3): triện nghề
+  if (e.career) return CAREER_CHAR[e.career];
+  if (e.key.startsWith('log.outlaw.')) return { char: '匪', tone: 'red' };
+  // Vào nghề, lên bậc, rời nghề (v0.7 S1)
+  if (e.key.startsWith('log.career.')) return { char: '業', tone: 'ochre' };
+  if (e.key.startsWith('log.haul.') || e.key.startsWith('log.guild.')) return { char: '販', tone: e.key === 'log.haul.robbed' ? 'red' : 'ochre' };
+  if (e.key.startsWith('log.soldier.')) return { char: '兵', tone: e.key === 'log.soldier.lost' ? 'red' : 'ochre' };
   if (e.key === 'log.death' || e.key === 'log.death.hungry') return { char: '終', tone: 'ink' };
   if (e.key === 'log.age.milestone') return { char: '壽', tone: 'red' };
   if (e.key === 'log.npc.death') return { char: '喪', tone: 'ink' };

@@ -1,7 +1,7 @@
 import { t } from '@tsvl/content';
 import { calendarOf, type LogEntry, type Tick } from '@tsvl/shared';
 import { useMemo, useState } from 'preact/hooks';
-import { CHRONICLE_FILTERS, groupByYear, visibleItems, type ChronicleFilter } from '../app/chronicle';
+import { CHRONICLE_FILTERS, FILTERS_WITH_EMPTY, groupByYear, visibleItems, type ChronicleFilter } from '../app/chronicle';
 import { logText, shortDate } from '../app/format';
 import { logSeal } from '../ui/icons';
 import { Seal } from '../ui/ink';
@@ -38,8 +38,8 @@ export function Chronicle({ log, birthTick }: { log: LogEntry[]; birthTick: Tick
         </span>
       </div>
       <div class="log">
-        {(years.length === 0 || ((filter === 'people' || filter === 'affairs') && !years.some((g) => visibleItems(g, filter, false, false).items.length))) && (
-          <p class="muted small">{t(filter === 'people' ? 'ui.chron.people_empty' : filter === 'affairs' ? 'ui.chron.affairs_empty' : 'ui.chron.empty')}</p>
+        {(years.length === 0 || (FILTERS_WITH_EMPTY.includes(filter) && !years.some((g) => visibleItems(g, filter, false, false).items.length))) && (
+          <p class="muted small">{t(FILTERS_WITH_EMPTY.includes(filter) ? `ui.chron.${filter}_empty` : 'ui.chron.empty')}</p>
         )}
         {years.map((g, k) => {
           const { items, folded } = visibleItems(g, filter, k === 0, open.has(g.year));
