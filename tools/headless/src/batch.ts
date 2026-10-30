@@ -38,7 +38,9 @@ const GRAIN_BASE_COIN = 4;
  * bỏ tiêu chí "bần cùng chết đói ít hơn điều độ 25%" (S8): hơn nửa số chết đói ở tuổi thơ (hộ trừu tượng, Q2), còn nuôi
  * con tốn lương bù trừ phần người thân giúp lúc về già.
  */
-export const FAMILY_MARRIED_BY_30_PCT = 70;
+// v0.8 S7 (chủ dự án duyệt 2026-10-30, ADR 0023): 70 → 65 — linh căn 15% nên nhiều thanh niên NPC đỗ kỳ tuyển rời vùng,
+// ít người để cưới hơn (cùng code mà linh căn 5% thì 71,9%, 15% thì 69,1–69,4%)
+export const FAMILY_MARRIED_BY_30_PCT = 65;
 export const FAMILY_WITH_CHILDREN_PCT = 60;
 export const RARE_EVENTS: readonly string[] = [
   // v0.5 S7–S8: cần kẻ thù, món nợ ơn hay người quen thân ngoài người thân — chưa chiến lược nào tạo ra (`family` chỉ thăm

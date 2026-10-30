@@ -29,6 +29,7 @@
 
 ## Hệ quả
 - **Dân số:** kỳ tuyển nhận nhiều trẻ NPC hơn. Thế giới 30 seed × 100 năm vẫn giữ dân số mỗi quận 75–130% hạn mức, người 25–50 tuổi có vợ/chồng 81,6%, phụ nữ qua 45 tuổi trung bình 2,14 con. Hai tiêu chí v0.7 vẫn trượt như trước (nợ v0.7, chủ dự án để lại).
+- **Tiêu chí gia đình (v0.5):** "cưới trước 30 tuổi" tụt 71,9% → 69,4% vì ít thanh niên để cưới hơn. Chủ dự án duyệt hạ ngưỡng 70% → **65%** (2026-10-30), giữ luật kỳ tuyển (không đặt hạn ngạch).
 - **Kỳ tuyển:** nhiều trẻ khá, tốt hơn nên kỳ tuyển ít khi phải nhận linh căn tạp (`SECT_MIN_RECRUITS`, Q5). Đây là lý do chính khiến tỉ lệ vào tầng 1 của đường tông môn hạ từ 83% xuống 53%.
 - **Digest:** đổi cho mọi đời, vì lúc dựng NPC rút thêm độ thuần, số hệ. Digest pin cập nhật, kèm ghi chú.
 - **Người chơi máy thường:** không ai vào tầng 1 (0/1.000 mỗi chiến lược; tiêu chí dưới 0,5%).
