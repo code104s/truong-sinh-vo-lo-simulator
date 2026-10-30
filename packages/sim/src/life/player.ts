@@ -5,7 +5,7 @@ import type { Rng, RngStreams } from '../core/rng';
 /** Nguồn RNG theo tên luồng: người chơi dùng các luồng của đời; NPC dùng một luồng riêng cho mọi tên (ADR 0015). */
 export type RngSource = Pick<RngStreams, 'get'>;
 import { mulDiv } from '../core/math';
-import { ACTION_MIN_AGE, actionDef, slotLock, type ActionDef } from './actions';
+import { ACTION_MIN_AGE, actionDef, placeRiskPpm, slotLock, type ActionDef } from './actions';
 import { hasCondition, type CharacterState } from './character';
 import { pickIllness, startCondition, type Death } from './health';
 import { ACCIDENT_FATAL_PPM } from './params';
@@ -14,6 +14,7 @@ import { fatiguePct, recoverStamina, spendStamina } from './stamina';
 import { previewTravel } from './travel';
 import { routeRiskPct } from '../factions/impact';
 import { rankStep, type CareerState } from './career';
+import type { CultivationState } from './cultivation';
 import { DRIFTER_ROAD_RISK_PCT } from './wayward';
 import { HUNT_RANK_RISK_PCT } from '../economy/income';
 import { recordFarmWeek } from '../economy/farming';
@@ -29,12 +30,16 @@ export interface PlayerState {
   planWarned: boolean;
   /** Thân phận nghề (v0.7, chỉ người chơi): mở việc riêng của nghề, đổi thu nhập, rủi ro theo bậc (S2). NPC không có. */
   career?: CareerState | null;
+  /** Đường tu (v0.8, chỉ người chơi): sự kiện tu tiên đọc linh căn đã kiểm, đường vào (ADR 0022). */
+  cultivation?: CultivationState;
 }
 type Log = (e: Omit<LogEntry, 'tick'>) => void;
 
 const REST: PlanSlot = { action: 'action.rest' };
 /** Việc tự vào nghề (S6). */
 const OWN_ACTIONS: ReadonlySet<string> = new Set(['action.drift', 'action.build_hut']);
+/** Việc của tông môn (v0.8 S3): dự kỳ tuyển, tạp dịch. */
+const SECT_ACTIONS: ReadonlySet<string> = new Set(['action.trial', 'action.sect_duty']);
 /**
  * Khóa tạm thời: tự hết theo mùa hoặc khi hồi sức. Ô đó nghỉ, không ngắt tua, chuyến đi dở giữ nguyên.
  * Các khóa khác (sai nơi, không có đường) là kế hoạch hỏng: nghỉ và ngắt tua một lần để người chơi sửa.
@@ -57,6 +62,9 @@ export interface SocialHooks {
   /** Bỏ quê đi lang bạt, dựng lều ẩn cư (v0.7 S6): tự vào nghề. */
   ownLock?(action: string, c: CharacterState): string | null;
   own?(action: string, c: CharacterState, log: Log): void;
+  /** Tông môn (v0.8 S3): dự kỳ tuyển, tạp dịch của đệ tử ký danh — khóa và tác dụng lên đường tu. */
+  sectLock?(action: string, c: CharacterState): string | null;
+  sect?(action: string, c: CharacterState, log: Log): void;
 }
 
 /** `doctor`: người chơi hành nghề thuốc, chỉ pha NPC truyền vào — người bệnh NPC trả phí cho người chơi (S5). */
@@ -82,7 +90,8 @@ export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic
     // Chuyến buôn chỉ xét vốn, lời lúc khởi hành; đang đi dở thì đi tiếp
     ?? (!s.active && d0?.id === 'action.haul' ? (social?.haulLock ? social.haulLock(planned, c) : 'lock.career') : null)
     ?? (d0?.id === 'action.enlist' ? (social?.enlistLock ? social.enlistLock(c) : 'lock.not_seat') : null)
-    ?? (d0 && OWN_ACTIONS.has(d0.id) ? (social?.ownLock ? social.ownLock(d0.id, c) : 'lock.career') : null);
+    ?? (d0 && OWN_ACTIONS.has(d0.id) ? (social?.ownLock ? social.ownLock(d0.id, c) : 'lock.career') : null)
+    ?? (d0 && SECT_ACTIONS.has(d0.id) ? (social?.sectLock ? social.sectLock(d0.id, c) : 'lock.no_trial') : null);
   if (lock && !TRANSIENT_LOCKS.has(lock)) {
     if (!s.planWarned) log({ key: 'log.plan.invalid', params: { action: planned.action, reason: lock }, importance: 'minor' });
     s.planWarned = true;
@@ -105,6 +114,7 @@ export function playerPhase(s: PlayerState, c: CharacterState, tick: Tick, logic
   if (d.group === 'social' && social) social.act(active.slot, c, log);
   if (d.id === 'action.enlist') social?.enlist?.(c, log);
   if (OWN_ACTIONS.has(d.id)) social?.own?.(d.id, c, log);
+  if (SECT_ACTIONS.has(d.id)) social?.sect?.(d.id, c, log);
   social?.worked?.(d.id);
   active.remaining--;
   if (active.remaining === 0) {
@@ -171,7 +181,7 @@ export function slotEffects(d: ActionDef, route: TravelPreview | null, c: Charac
     for (const condition of c.conditions) condition.weeksLeft = Math.max(1, condition.weeksLeft - 1);
   }
   const terrain = route ? routeRiskPct(logic, route.route, roads) : 100;
-  let ppm = mulDiv(mulDiv(mulDiv(d.riskPpm, terrain, 100), tired, 100), moneyRiskPct, 100);
+  let ppm = mulDiv(mulDiv(mulDiv(placeRiskPpm(d, logic, c.location), terrain, 100), tired, 100), moneyRiskPct, 100);
   if (d.skill) ppm = mulDiv(ppm, skillRiskPct(c, d.skill), 100);
   // Thợ săn lành nghề ít gặp nạn hơn (S2); người lưu lạc từng trải đi đường ít nạn hơn (S6)
   if (d.id === 'action.hunt' || d.id === 'action.trap') ppm = mulDiv(ppm, HUNT_RANK_RISK_PCT[rankStep(career, 'hunter')], 100);

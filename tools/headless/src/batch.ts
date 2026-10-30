@@ -2,7 +2,7 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { ageYearsAt, calendarOf, type Birthplace, type RegionId } from '@tsvl/shared';
-import { BACKGROUNDS, CAREER_EVENT_IDS, CAREER_EVENTS_OF, EVENT_IDS, Life, mountainCounty } from '@tsvl/sim';
+import { BACKGROUNDS, CAREER_EVENT_IDS, CAREER_EVENTS_OF, CULTIVATION_EVENT_IDS, EVENT_IDS, Life, mountainCounty } from '@tsvl/sim';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { POLICIES, policyChoose, policyGoods, policyPlan, policyTrade, type PolicyContext, type PolicyName } from './policies';
 import { isPath, PATHS, pathChoose, pathPlan, type PathName } from './paths';
@@ -45,6 +45,11 @@ export const RARE_EVENTS: readonly string[] = [
   'event.debt_called', 'event.enemy_revenge', 'event.friend_brings_rice', 'event.friend_in_need',
   // v0.7 S8: sự kiện theo nghề chỉ đến với người làm nghề; người chơi máy chưa theo nghề nào (batch theo nghề ở S9)
   ...CAREER_EVENT_IDS,
+  // v0.8 S1: chuyện tu tiên đến với người tìm cơ duyên; người chơi máy tìm đạo ở S7 (tu sĩ ghé qua vẫn có thể đến người thường)
+  ...CULTIVATION_EVENT_IDS,
+  // v0.8 S3: bị cướp bắt theo — chỉ người chơi máy lang bạt gặp, 3–6 lần mỗi 1.000 đời ở v0.7–S2; trẻ NPC rời vùng (S3) đổi
+  // RNG thì ra 0. Đường đi có test riêng (events.test.ts); người chơi máy theo cướp ở batch nghề
+  'event.bandit_seize',
 ];
 
 export interface BackgroundReport { count: number; meanAge: number; starvationPct: number }

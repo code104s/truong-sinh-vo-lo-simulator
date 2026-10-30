@@ -4,7 +4,8 @@ import { vContentId, vNpcId, type ContentId, type NpcId } from './contentId';
 import { arr, int, nat, obj, oneOf, opt, record, str, union, type Validator } from './schema';
 
 /** Bốn loại thế lực tự vận hành ở v0.6 (Q1): quan phủ, gia tộc, thương hội, băng cướp. */
-export const FACTION_KINDS = ['government', 'clan', 'guild', 'bandits'] as const;
+/** v0.8: `sect` — tông môn ngoài vùng, chỉ có kỳ tuyển và đệ tử ký danh (ADR 0022 Q5). */
+export const FACTION_KINDS = ['government', 'clan', 'guild', 'bandits', 'sect'] as const;
 export type FactionKind = (typeof FACTION_KINDS)[number];
 
 /** Id thế lực, vd. "f3": cấp tăng dần trong một đời, không dùng lại (như NpcId). */

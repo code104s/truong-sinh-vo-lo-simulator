@@ -12,6 +12,7 @@ import { seedFamilies } from './family';
 import { newNpcWorld, npcMoney, type NpcState } from './state';
 import { controlOf, factionMoney, factionPhase, newFactionWorld } from '../factions/state';
 import { foundGovernment, GREEDY_FROM, HONEST_BELOW } from '../factions/government';
+import { foundSect, sectPhase } from '../factions/sect';
 
 export interface WorldRunStats {
   years: number;
@@ -66,6 +67,8 @@ export interface WorldRunStats {
   goodsStuckPermille: number;
   hideVillageSellX100: number;
   npcGoodsEnd: number;
+  /** Trẻ NPC được tông môn tuyển, rời vùng (v0.8 S3). */
+  sectRecruits: number;
   /** Phần tiền NPC nắm trong tổng tiền vùng (‰), đo đầu mỗi năm: cao nhất và năm cuối (S3–S8 v0.5: tiền không dồn mãi). */
   npcMoneyPermilleMax: number;
   npcMoneyPermilleEnd: number;
@@ -173,11 +176,12 @@ export function simulateWorld(logic: RegionLogic, years: number, seed: string, o
   const changes = logic.counties.map((): number[] => []);
   const leaders = logic.counties.map(() => new Set<string>());
   foundGovernment(factions, logic, 0);
+  foundSect(factions, logic, 0);
   const alive = () => npcs.people.filter((n) => n.death === null).length;
   const money = () => countyMoney(eco) + npcMoney(npcs) + factionMoney(factions);
   const stats: WorldRunStats = { years, counties: eco.counties.length, ticks: years * TICKS_PER_YEAR, npcStart: alive(), npcEnd: 0, moneyStart: money(), moneyEnd: 0, deaths: {}, deathAgeSum: 0, starvationNormalYears: 0, minQuotaPct: Number.MAX_SAFE_INTEGER, maxQuotaPct: 0, childrenPermille: 0, yearsWithPhysician: 0, yearsWithMerchant: 0, maxPhysiciansPerCounty: 0, births: 0,
     birthsWithParents: 0, marriedPermille: 0, mothersOver45: 0, childrenOfMothersOver45: 0, wivesOver45: 0, childrenOfWivesOver45: 0,
-    famines: 0, lowMoneyMonthsPermille: 0, minPricePct: Number.MAX_SAFE_INTEGER, maxPricePct: 0, minGrain: Number.MAX_SAFE_INTEGER, ledgerBreaks: 0, goodsStuckPermille: 0, hideVillageSellX100: 0, npcGoodsEnd: 0,
+    famines: 0, lowMoneyMonthsPermille: 0, minPricePct: Number.MAX_SAFE_INTEGER, maxPricePct: 0, minGrain: Number.MAX_SAFE_INTEGER, ledgerBreaks: 0, goodsStuckPermille: 0, hideVillageSellX100: 0, npcGoodsEnd: 0, sectRecruits: 0,
     npcMoneyPermilleMax: 0, npcMoneyPermilleEnd: 0, factionMoneyMax: 0, factionMoneyEnd: 0, factionGrainEnd: 0, clansMin: Number.MAX_SAFE_INTEGER, clansMax: 0, clansEnd: 0, clansFounded: 0, clansEnded: 0, clansSplit: 0, leaderChangedCounties: 0, guildsMin: Number.MAX_SAFE_INTEGER, guildsMax: 0, guildsEnd: 0, guildsFounded: 0, guildsEnded: 0, guildRoadsEnd: 0, guildMembersEnd: 0, guildMoneyEnd: 0, edges: logic.adjacency.length, banditsFounded: 0, banditsEnded: 0, banditMembersMax: 0, banditMembersAfterFamine: 0, yearsAfterFamine: 0, banditMembersNormal: 0, yearsNormal: 0, banditMembersGreedy: 0, yearsGreedy: 0, banditMembersHonest: 0, yearsHonest: 0, campaigns: 0, campaignWins: 0, reliefGrain: 0, officialsEnd: 0, govMoneyEnd: 0, controlChanges: 0, maxChangesPerDecade: 0, longestNonGovMajorityYears: 0, nonGovCountyYearsPermille: 0, yearly: [], at50: null as unknown as FactionTally };
   const inFamine = eco.counties.map((ce) => supplyOf(ce) === 'famine');
   let lowMoneyMonths = 0, months = 0, goodsStuck = 0, hideSell = 0, villageMonths = 0;
@@ -237,6 +241,8 @@ export function simulateWorld(logic: RegionLogic, years: number, seed: string, o
       }
       for (const f of factions.list) if (f.kind === 'clan' && f.ended === null) for (const c of f.counties) leaders[c]!.add(f.id);
     }
+    // Tông môn (v0.8 S3): trẻ NPC đỗ kỳ tuyển rời vùng
+    stats.sectRecruits += sectPhase(factions, npcs, eco, logic, t, null);
     npcPhase(npcs, eco, logic, t, null, opts);
     if (money() !== stats.moneyStart) stats.ledgerBreaks++;
     // Người đã mất bị dọn khỏi danh sách sau một năm (S4): ghi lại để thống kê

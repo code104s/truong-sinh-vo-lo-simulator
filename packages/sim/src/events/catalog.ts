@@ -13,11 +13,13 @@ import { ROAD } from './defs/road';
 import { FACTION_EVENTS } from './defs/factions';
 import { CAREER_EVENTS } from './defs/careers';
 import { SEASON_EVENTS } from './defs/seasons';
+import { CULTIVATION_EVENTS } from './defs/cultivation';
 
 export { WANDERING_PHYSICIAN_FEE } from './defs/health';
 export { COMING_OF_AGE_LIVE } from './defs/daily';
 export { CAREER_EVENT_IDS, CAREER_EVENTS_OF } from './defs/careers';
+export { CULTIVATION_EVENT_IDS, ROOT_TEST_LEADS } from './defs/cultivation';
 
-export const EVENTS: readonly EventDef[] = sortedCatalog([...DAILY, ...ECONOMY, ...DISASTER, ...ROAD, ...HEALTH, ...FORTUNE, ...FAMILY, ...RELATIONS, ...FACTION_EVENTS, ...CAREER_EVENTS, ...SEASON_EVENTS]);
+export const EVENTS: readonly EventDef[] = sortedCatalog([...DAILY, ...ECONOMY, ...DISASTER, ...ROAD, ...HEALTH, ...FORTUNE, ...FAMILY, ...RELATIONS, ...FACTION_EVENTS, ...CAREER_EVENTS, ...SEASON_EVENTS, ...CULTIVATION_EVENTS]);
 /** Id mọi sự kiện, cho công cụ batch kiểm "mỗi sự kiện xảy ra ít nhất một lần". */
 export const EVENT_IDS: readonly string[] = EVENTS.map((d) => d.id);

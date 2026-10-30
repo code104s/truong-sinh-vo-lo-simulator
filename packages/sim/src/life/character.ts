@@ -206,5 +206,7 @@ export function toView(c: CharacterState, tick: Tick, buyPricePerDou: number): C
     reputation: 'unknown',
     // Thân phận nghề của người chơi nằm ở snapshot đời (v0.7, ADR 0020); NPC có nghề riêng (`NpcState.occupation`)
     career: null,
+    // Đường tu nằm ở snapshot đời (v0.8, ADR 0022); ở đây là người phàm chưa kiểm linh căn
+    cultivation: { realm: 'mortal', root: null, path: null, qi: null },
   };
 }

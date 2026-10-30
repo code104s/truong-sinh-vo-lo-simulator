@@ -8,7 +8,7 @@ export { toView, type CharacterState } from './life/character';
 export { mountainCounty } from './life/wayward';
 export { MERCHANT_LIVING_CAPITAL } from './npc/phase';
 export { BACKGROUNDS, type Background } from './life/params';
-export { CAREER_EVENT_IDS, CAREER_EVENTS_OF, EVENT_IDS } from './events/catalog';
+export { CAREER_EVENT_IDS, CAREER_EVENTS_OF, CULTIVATION_EVENT_IDS, EVENT_IDS } from './events/catalog';
 export type { Death } from './life/health';
 export { simulateEconomy, type EconomyRunStats } from './economy/simulate';
 export { simulateWorld, type WorldRunStats } from './npc/world';

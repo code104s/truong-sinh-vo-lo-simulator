@@ -185,11 +185,17 @@ describe('tất định và lưu/tải (nghiệm thu Sim)', () => {
     // thường là chi tiền, góp gạo (quà chợ phiên, lễ cơm mới, góp làm cầu, đò ngang): đời 3 (chỉ nghỉ, sống bằng của để
     // dành) cạn sớm, chết đói 41 → 38; đời 1 49 → 50. Cùng nguyên nhân.
     // Đóng v0.7: SIM_VERSION 0.7.0 → 0.7.1 → digest đổi; tuổi, nguyên nhân giữ.
+    // v0.8 Bước 0: SIM_VERSION 0.8.0, đường tu (người phàm, chưa kiểm) trong snapshot → digest đổi; tuổi, nguyên nhân giữ.
+    // v0.8 S1: tu sĩ lưu lạc có thể ghé cả người thường (400 ppm mỗi tuần) — thêm một sự kiện vào lượt rút nên chuyện mỗi
+    // năm đổi: đời 1 chết đói 50 → 52, đời 3 (chỉ nghỉ) 38 → 42, đời 2 giữ 51. Cùng nguyên nhân.
+    // v0.8 S2: đời 3 gặp tu sĩ lưu lạc nên được hẹn kiểm linh căn (chọn lựa chọn cuối: thôi) → digest đổi; tuổi, nguyên nhân giữ.
+    // v0.8 S3: tông môn lập cùng quan phủ (số hiệu thế lực sau dịch một); trẻ NPC đỗ kỳ tuyển rời vùng → làng đổi người, đời 3
+    // chết đói 42 → 44; đời 1, 2 giữ tuổi. Cùng nguyên nhân.
     expect(out).toMatchInlineSnapshot(`
       [
-        "50 starvation 5e7ff33d719688e1",
-        "51 starvation b1e453dcab002859",
-        "38 starvation acb9089cab2ca9cb",
+        "52 starvation 5ab48436c67cadc1",
+        "51 starvation f00a26222fc75bd6",
+        "44 starvation d92ef1dae58e7468",
       ]
     `);
   });

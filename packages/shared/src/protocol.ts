@@ -20,13 +20,14 @@ import {
 } from './world';
 
 /**
+ * 8: v0.8 — cửa ngõ tu tiên: CharacterView.cultivation, LifeSummary.legacy.cultivation, thế lực loại `sect` (ADR 0022).
  * 7: v0.7 — nghề: CharacterView.career, LifeSummary.legacy.careers (ADR 0020).
  * 6: v0.6 — thế lực: STATE.factions, STATE.control, NpcView.faction, TravelOption.danger, LifeSummary.legacy.factions (ADR 0019).
  * 5: v0.5 — quan hệ, gia đình, tiếng tăm: STATE.circle, NpcView.kin/bond, CharacterView.reputation/spouse, LifeSummary.legacy,
  * PlanSlot.person (ADR 0017, 0018).
  * 4: v0.4 — STATE có người trong quận (ADR 0015, 0016). 3: v0.3 — chợ, mua bán, sự kiện có lựa chọn (ADR 0012–0014).
  */
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 
 export { ADVANCE_MODES, type AdvanceMode } from './actions';
 

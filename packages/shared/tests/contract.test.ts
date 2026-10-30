@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   HIDDEN_CHARACTER_KEYS, TICKS_PER_YEAR,
   ageYearsAt, base64ToBytes, HARVEST_MONTH, weeksToHarvest, bytesToBase64, calendarOf, decodeSave, encodeSave, isMonthStart, isYearStart,
-  parseCommand, parseWorkerMessage, vCommandRecord, vLogEntry, vCharacterView, vHouseholdView, vLifeSummary, vMarketView, vMonthPlan, vNpcView, vPendingEvent, vFactionView, vTravelOption, PROTOCOL_VERSION, SAVE_VERSION, CAREERS, CAREER_RANKS, GOODS,
+  parseCommand, parseWorkerMessage, vCommandRecord, vLogEntry, vCharacterView, vHouseholdView, vLifeSummary, vMarketView, vMonthPlan, vNpcView, vPendingEvent, vFactionView, vTravelOption, PROTOCOL_VERSION, SAVE_VERSION, CAREERS, CAREER_RANKS, GOODS, REALMS, ROOT_BANDS, CULTIVATION_PATHS, QI_BANDS, FACTION_KINDS,
 } from '../src/index';
 import {
   sampleBirthplace, sampleCharacter, sampleHousehold, sampleLife, sampleLog, sampleMap, sampleMarket, sampleNpc, sampleOption, samplePending, samplePlan, sampleSave, sampleSummary,
@@ -158,8 +158,9 @@ describe('save', () => {
     expect(decodeSave('{').ok).toBe(false);
     // Save v1 của v0.1 bị từ chối (ADR 0004)
     expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version: 1 })).ok).toBe(false);
-    // Save v2 (v0.3 Q9), v3 (v0.4 Q10), v4 của v0.4 (v0.5 Q11), v5 của v0.5, v6 của v0.6 (v0.7 Q12) bị từ chối, save đời sau cũng vậy
-    for (const version of [2, 3, 4, 5, 6, 8]) expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version })).ok, `v${version}`).toBe(false);
+    // Save v2 (v0.3 Q9), v3 (v0.4 Q10), v4 của v0.4 (v0.5 Q11), v5 của v0.5, v6 của v0.6 (v0.7 Q12), v7 của v0.7 (v0.8 Q15) bị
+    // từ chối, save đời sau cũng vậy
+    for (const version of [2, 3, 4, 5, 6, 7, 9]) expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), version })).ok, `v${version}`).toBe(false);
     expect(decodeSave(JSON.stringify({ ...JSON.parse(encodeSave(sampleSave())), format: 'other' })).ok).toBe(false);
   });
 });
@@ -325,8 +326,8 @@ describe('v0.5: quan hệ, gia đình, tiếng tăm (ADR 0017, 0018)', () => {
   const state = { type: 'STATE', reqId: 2, date: calendarOf(41), character: sampleCharacter, running: false, plan: null, active: null, slotIndex: 2, actions: [], travel: [], market: null, pending: null, people: [], factions: [], control: [], careers: [], hauls: [] };
   const bond = { closeness: 'friend', trust: 'trusted', hostility: 'none', owed: 'they_owe' };
 
-  it('phiên bản giao thức 7, save 7 (v0.7; v0.6 là 6, 6)', () => {
-    expect([PROTOCOL_VERSION, SAVE_VERSION]).toEqual([7, 7]);
+  it('phiên bản giao thức 8, save 8 (v0.8; v0.7 là 7, 7)', () => {
+    expect([PROTOCOL_VERSION, SAVE_VERSION]).toEqual([8, 8]);
   });
 
   it('STATE mang người thân, người quen ở mọi quận; STATE kiểu v0.4 (thiếu circle) bị từ chối', () => {
@@ -375,7 +376,8 @@ describe('hợp đồng v6: thế lực (v0.6, ADR 0019)', () => {
 
   it('FactionView: loại, dải thế đúng danh mục; id dạng "f3"; không lộ số thô', () => {
     expect(vFactionView.check(faction, '$')).toBeNull();
-    expect(vFactionView.check({ ...faction, kind: 'sect' }, '$')).not.toBeNull();
+    expect(vFactionView.check({ ...faction, kind: 'cult' }, '$')).not.toBeNull();
+    expect(vFactionView.check({ ...faction, kind: 'sect' }, '$')).toBeNull();
     expect(vFactionView.check({ ...faction, strength: 73 }, '$')).not.toBeNull();
     expect(vFactionView.check({ ...faction, id: 'n2' }, '$')).not.toBeNull();
     // Đường giữ (F1): cặp quận [nhỏ, lớn]
@@ -392,6 +394,31 @@ describe('hợp đồng v6: thế lực (v0.6, ADR 0019)', () => {
     expect(vLifeSummary.check({ ...sampleLife, legacy: { ...sampleLife.legacy, factions: [{ name: { key: 'faction.bandits.name', params: { place: 'núi Hổ' } }, kind: 'bandits', fate: 'gone' }] } }, '$')).toBeNull();
     expect(vLifeSummary.check({ ...sampleLife, legacy: { ...sampleLife.legacy, factions: [{ name: { key: 'faction.bandits.name', params: {} }, kind: 'bandits', fate: 'exploded' }] } }, '$')).not.toBeNull();
     expect(vFactionView.check({ ...faction, name: 'Họ Lương ở Vị Kinh' }, '$')).not.toBeNull();
+  });
+});
+
+describe('hợp đồng v8: cửa ngõ tu tiên (v0.8 Bước 0, ADR 0022)', () => {
+  it('CharacterView có đường tu: cảnh giới, linh căn đã kiểm (null là chưa), đường vào, dải linh khí; kiểu v0.7 (thiếu) bị từ chối', () => {
+    expect(vCharacterView.check(sampleCharacter, '$')).toBeNull();
+    const qi1 = { realm: 'qi1', root: 'fair', path: 'rogue', qi: 'half' };
+    expect(vCharacterView.check({ ...sampleCharacter, cultivation: qi1 }, '$')).toBeNull();
+    expect(vCharacterView.check({ ...sampleCharacter, cultivation: { ...qi1, realm: 'qi4' } }, '$')).toContain('cultivation');
+    expect(vCharacterView.check({ ...sampleCharacter, cultivation: { ...qi1, root: 73 } }, '$')).toContain('cultivation');
+    // Không lộ số linh khí, độ thuần linh căn
+    expect(vCharacterView.check({ ...sampleCharacter, cultivation: { ...qi1, purity: 80 } }, '$')).toContain('cultivation');
+    const { cultivation: _c, ...v07 } = sampleCharacter;
+    expect(vCharacterView.check(v07, '$')).not.toBeNull();
+    expect([REALMS, ROOT_BANDS, CULTIVATION_PATHS, QI_BANDS]).toEqual([['mortal', 'qi1'], ['none', 'mixed', 'fair', 'good'], ['sect', 'rogue'], ['empty', 'low', 'half', 'high', 'peak']]);
+  });
+
+  it('tổng kết có một đời tu; thế lực loại tông môn', () => {
+    expect(vLifeSummary.check(sampleLife, '$')).toBeNull();
+    const legacy = (cultivation: unknown) => ({ ...sampleLife, legacy: { ...sampleLife.legacy, cultivation } });
+    expect(vLifeSummary.check(legacy({ root: 'good', realm: 'qi1', path: 'sect', entered: 900, breakthroughs: [{ at: 880, ok: false }, { at: 900, ok: true }] }), '$')).toBeNull();
+    expect(vLifeSummary.check(legacy({ root: 'good', realm: 'qi1', path: 'sect', breakthroughs: [{ at: 900 }] }), '$')).toContain('cultivation');
+    const { cultivation: _c, ...v07 } = sampleLife.legacy;
+    expect(vLifeSummary.check({ ...sampleLife, legacy: v07 }, '$')).not.toBeNull();
+    expect(FACTION_KINDS).toContain('sect');
   });
 });
 

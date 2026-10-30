@@ -41,7 +41,8 @@ export interface MonthPlan {
   slots: [PlanSlot, PlanSlot, PlanSlot];
 }
 
-export const ACTION_GROUPS = ['livelihood', 'study', 'social', 'rest', 'heal', 'travel'] as const;
+/** v0.8: `seek` — tìm cơ duyên (GDD 3.2 E, ADR 0022 Q3). */
+export const ACTION_GROUPS = ['livelihood', 'study', 'social', 'rest', 'heal', 'travel', 'seek'] as const;
 export type ActionGroup = (typeof ACTION_GROUPS)[number];
 
 /** Hành động khả dụng ở nơi đang đứng, sim tính sẵn. FE chỉ hiển thị, không chứa luật. */

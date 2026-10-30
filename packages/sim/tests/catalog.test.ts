@@ -28,9 +28,9 @@ const def = (id: string) => EVENTS.find((d) => d.id === id)!;
 const ctxOf = (s: LifeSnapshot, tick = s.tick) => makeContext(s.character, s.events, s, s.economy, region, tick);
 
 describe('tuyển tập S6', () => {
-  it('khoảng 30 sự kiện, đủ sáu nhóm', () => {
+  it('khoảng 30 sự kiện, đủ sáu nhóm (v0.8 thêm nhóm đường tiên)', () => {
     expect(EVENTS.length).toBeGreaterThanOrEqual(28);
-    expect(new Set(EVENTS.map((d) => d.category))).toEqual(new Set(['daily', 'economy', 'disaster', 'road', 'health', 'opportunity']));
+    expect(new Set(EVENTS.map((d) => d.category))).toEqual(new Set(['daily', 'economy', 'disaster', 'road', 'health', 'opportunity', 'cultivation']));
   });
 
   it('G2: lập thân bật từ S7 — mười sáu tuổi chưa ra riêng thì gặp, một lần trong đời; đã ra riêng hay đã hẹn ở lại thì thôi', () => {

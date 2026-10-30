@@ -9,7 +9,8 @@ export const GOVERNMENT_RGB: Rgb = [150, 120, 70];
 export const BANDITS_RGB: Rgb = [160, 40, 30];
 export const CLAN_RGB: readonly Rgb[] = [[60, 110, 85], [55, 85, 135], [115, 70, 115], [140, 100, 40], [70, 120, 130], [105, 80, 60]];
 /** Độ đậm phủ quận (0–255): quận quan phủ giữ nhạt để quận cát cứ nổi lên. */
-export const FILL_ALPHA: Record<FactionKind, number> = { government: 40, clan: 110, guild: 110, bandits: 120 };
+// Tông môn (v0.8) ở ngoài vùng, không giữ quận nào
+export const FILL_ALPHA: Record<FactionKind, number> = { government: 40, clan: 110, guild: 110, bandits: 120, sect: 0 };
 
 export interface LegendEntry {
   id: FactionId;
@@ -29,7 +30,7 @@ export interface ControlLayer {
   guildRoads: [number, number][];
 }
 
-const KIND_ORDER: Record<FactionKind, number> = { government: 0, clan: 1, bandits: 2, guild: 3 };
+const KIND_ORDER: Record<FactionKind, number> = { government: 0, clan: 1, bandits: 2, guild: 3, sect: 4 };
 const idNum = (id: string) => Number(id.slice(1));
 const key = ([a, b]: readonly [number, number]) => `${a}-${b}`;
 

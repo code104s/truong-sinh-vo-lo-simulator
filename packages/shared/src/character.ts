@@ -4,6 +4,7 @@ import { STAMINA_BANDS, vSkillView, type CountyIndex, type SkillView, type Stami
 import { vContentId, vNpcId, type ContentId, type NpcId } from './contentId';
 import { FACTION_FATES, FACTION_KINDS, vFactionName, type FactionFate, type FactionKind, type FactionName } from './factions';
 import { CAREERS, vCareerRecord, vCareerView, type CareerId, type CareerRecord, type CareerView } from './careers';
+import { vCultivationRecord, vCultivationView, type CultivationRecord, type CultivationView } from './cultivation';
 import { TENURES, vHouseholdView, type Coin, type Grain, type HouseholdView, type Tenure } from './economy';
 import { arr, bool, int, intRange, nat, nonEmpty, nullable, obj, oneOf, opt, record, str, union } from './schema';
 import { vBirthplaceId, vNewLifeConfig, type BirthplaceId, type NewLifeConfig } from './world';
@@ -71,6 +72,8 @@ export interface CharacterView {
   spouse?: NpcId;
   /** Thân phận nghề (v0.7, ADR 0020); null khi chưa vào nghề nào (sống bằng việc tự do). */
   career: CareerView | null;
+  /** Đường tu (v0.8, ADR 0022): cảnh giới, linh căn đã kiểm, đường vào, linh khí theo dải. */
+  cultivation: CultivationView;
 }
 
 /** Khóa không bao giờ được xuất hiện trong CharacterView (test ở shared và sim). */
@@ -120,6 +123,8 @@ export interface Legacy {
   factions: { name: FactionName; kind: FactionKind; fate: FactionFate }[];
   /** Các nghề đã làm trong đời: bậc cao nhất, số năm (v0.7, F4). */
   careers: CareerRecord[];
+  /** Một đời tu (v0.8, F4): linh căn đã biết, cảnh giới, các lần đột phá. */
+  cultivation: CultivationRecord;
 }
 
 export const vCharacterView = obj<CharacterView>({
@@ -146,6 +151,7 @@ export const vCharacterView = obj<CharacterView>({
   reputation: oneOf(REPUTATION_BANDS),
   spouse: opt(vNpcId),
   career: nullable(vCareerView),
+  cultivation: vCultivationView,
 });
 
 export const vLogEntry = obj<LogEntry>({
@@ -174,6 +180,7 @@ export const vLifeSummary = obj<LifeSummary>({
     friends: nat, enemies: nat, reputation: oneOf(REPUTATION_BANDS),
     factions: arr(obj<{ name: FactionName; kind: FactionKind; fate: FactionFate }>({ name: vFactionName, kind: oneOf(FACTION_KINDS), fate: oneOf(FACTION_FATES) })),
     careers: arr(vCareerRecord),
+    cultivation: vCultivationRecord,
   }),
   digest: nonEmpty,
 });

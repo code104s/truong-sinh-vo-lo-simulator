@@ -31,6 +31,8 @@ export const ACTION_CHAR: Record<string, { char: string; tone: SealTone }> = {
   // Thầy thuốc (S5); lưu lạc, ẩn dật (S6)
   'action.practice': { char: '醫', tone: 'jade' },
   'action.drift': { char: '浪', tone: 'ink' }, 'action.build_hut': { char: '廬', tone: 'jade' },
+  // Tìm cơ duyên (v0.8 S1)
+  'action.seek': { char: '尋', tone: 'jade' },
 };
 
 /** Ấn triện cho một mục nhật ký theo khóa nội dung: chữ và màu. */

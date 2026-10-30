@@ -51,15 +51,17 @@ export interface ChoiceDef {
   apply: (ctx: EventContext, rng: Rng) => ChoiceOutcome;
 }
 
-export const EVENT_CATEGORIES = ['daily', 'economy', 'disaster', 'road', 'health', 'opportunity'] as const;
+/** v0.8: `cultivation` — tiếp xúc tu tiên, tu luyện (ADR 0022). */
+export const EVENT_CATEGORIES = ['daily', 'economy', 'disaster', 'road', 'health', 'opportunity', 'cultivation'] as const;
 
 /**
  * Nghề đổi nhịp sự kiện (v0.7 S6, Q7), % trọng số theo loại: người lưu lạc gặp chuyện đường xá và cơ duyên gấp đôi; người
  * ẩn dật cơ duyên gấp đôi, chuyện thường ngày, chợ búa còn một nửa.
  */
 export const CAREER_EVENT_PCT: Readonly<Partial<Record<CareerId, Partial<Record<(typeof EVENT_CATEGORIES)[number], number>>>>> = {
-  drifter: { road: 200, opportunity: 200 },
-  recluse: { opportunity: 200, daily: 50, economy: 50 },
+  // v0.8 S1: lưu lạc, ẩn dật gặp chuyện tu tiên gấp đôi (Q7 v0.7: cơ duyên nhiều hơn)
+  drifter: { road: 200, opportunity: 200, cultivation: 200 },
+  recluse: { opportunity: 200, daily: 50, economy: 50, cultivation: 200 },
 };
 
 export interface EventDef {

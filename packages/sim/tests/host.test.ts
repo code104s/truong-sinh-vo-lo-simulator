@@ -45,7 +45,7 @@ describe('SimHost', () => {
   it('READY rồi luồng chuẩn: GEN_WORLD → WORLD, NEW_LIFE → LOG + STATE', () => {
     const { h, out, send } = host();
     h.ready();
-    expect(out[0]).toMatchObject({ type: 'READY', protocolVersion: 7 });
+    expect(out[0]).toMatchObject({ type: 'READY', protocolVersion: 8 });
     const w = send({ type: 'GEN_WORLD', worldSeed: 'tsvl-01' });
     expect(w.map((m) => m.type)).toEqual(['PROGRESS', 'PROGRESS', 'WORLD']);
     const n = send({ type: 'NEW_LIFE', config: { worldSeed: 'tsvl-01', regionId: region.summary.id, birthplaceId: region.birthplaces[0]!.id } });
@@ -150,7 +150,7 @@ describe('SimHost — v0.2', () => {
     expect(send({ type: 'PREVIEW_TRAVEL', county })).toMatchObject([{ type: 'TRAVEL_PREVIEW' }]);
     const after = send({ type: 'SAVE' })[0] as Extract<WorkerMessage, { type: 'SAVED' }>;
     expect(after.save.digest).toBe(before.save.digest);
-    expect(after.save.version).toBe(7);
+    expect(after.save.version).toBe(8);
     expect(after.save.commandLog).toEqual(before.save.commandLog);
     expect(after.save.commandLog[0]!.cmd.type).toBe('NEW_LIFE');
   });

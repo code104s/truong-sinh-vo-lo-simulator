@@ -6,10 +6,10 @@ import type { AttitudeBand, ContentId, FactionId, FactionKind, FactionView, NpcV
 export type FactionRole = 'holder' | 'lost' | 'lead' | 'seat' | 'near';
 export interface FactionRow { f: FactionView; roles: FactionRole[] }
 
-const KIND_ORDER: Record<FactionKind, number> = { government: 0, clan: 1, guild: 2, bandits: 3 };
+const KIND_ORDER: Record<FactionKind, number> = { government: 0, clan: 1, guild: 2, bandits: 3, sect: 4 };
 const idNum = (id: string) => Number(id.slice(1));
 /** Chữ triện theo loại thế lực. */
-export const FACTION_CHAR: Record<FactionKind, string> = { government: '官', clan: '族', guild: '商', bandits: '匪' };
+export const FACTION_CHAR: Record<FactionKind, string> = { government: '官', clan: '族', guild: '商', bandits: '匪', sect: '宗' };
 
 /**
  * Thế lực ở quận `county`: quan phủ luôn có mặt (giữ đất này, hay đã mất đất này vào tay kẻ khác); người cát cứ giữ đất

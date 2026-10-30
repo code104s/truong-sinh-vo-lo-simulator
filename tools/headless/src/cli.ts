@@ -425,7 +425,7 @@ async function worldCmd(n: number, years: number, threads: number, allL0: boolea
   const regions = await regionPool(seeds.map((seed) => ({ seed })), threads);
   let ledgerBad = 0, ticks = 0, ms = 0, deathAges = 0, starvedNormal = 0, minQ = Number.MAX_SAFE_INTEGER, maxQ = 0, kids = 0, physYears = 0, merchYears = 0, births = 0, withParents = 0, married = 0, mothers = 0, motherKids = 0, wives = 0, wifeKids = 0;
   let famines = 0, countyYears = 0, lowMoney = 0, minPrice = Number.MAX_SAFE_INTEGER, maxPrice = 0, negative = 0;
-  let goodsStuck = 0, hideSell = 0, npcGoods = 0;
+  let goodsStuck = 0, hideSell = 0, npcGoods = 0, sectRecruits = 0, npcStartSum = 0;
   // Phần tiền NPC nắm (‰): năm cuối thấp/cao nhất giữa các vùng, và cao nhất mọi năm (v0.5 S8: chi dùng chặn tiền dồn)
   let npcEndMin = Number.MAX_SAFE_INTEGER, npcEndMax = 0, npcPeak = 0;
   // Kho thế lực (v0.6 S1): tiền (văn), lương (thăng) năm cuối thấp/cao nhất giữa các vùng; tiền so với tổng tiền vùng (‱)
@@ -451,7 +451,7 @@ async function worldCmd(n: number, years: number, threads: number, allL0: boolea
     if (s.moneyStart !== s.moneyEnd || s.ledgerBreaks > 0) ledgerBad++;
     famines += s.famines; countyYears += s.counties * years; lowMoney += s.lowMoneyMonthsPermille * s.counties;
     minPrice = Math.min(minPrice, s.minPricePct); maxPrice = Math.max(maxPrice, s.maxPricePct); if (s.minGrain < 0) negative++;
-    goodsStuck += s.goodsStuckPermille * s.counties; hideSell += s.hideVillageSellX100; npcGoods += s.npcGoodsEnd;
+    goodsStuck += s.goodsStuckPermille * s.counties; hideSell += s.hideVillageSellX100; npcGoods += s.npcGoodsEnd; sectRecruits += s.sectRecruits; npcStartSum += s.npcStart;
     for (const [k, v] of Object.entries(s.deaths)) deaths[k] = (deaths[k] ?? 0) + v;
     deathAges += s.deathAgeSum; starvedNormal += s.starvationNormalYears;
     minQ = Math.min(minQ, s.minQuotaPct); maxQ = Math.max(maxQ, s.maxQuotaPct); kids += s.childrenPermille; physYears += s.yearsWithPhysician; merchYears += s.yearsWithMerchant;
@@ -482,6 +482,7 @@ async function worldCmd(n: number, years: number, threads: number, allL0: boolea
   const lowMoneyPct = lowMoney / (countyYears / years) / 10;
   console.log(`Kinh tế có NPC: đói kém mỗi quận 1 lần / ${every.toFixed(1)} năm (mục tiêu 8–15) · giá ${minPrice}–${maxPrice}% (70–500) · tháng-quận quỹ cạn ${lowMoneyPct.toFixed(1)}% (≤ 5) · kho âm ${negative} vùng`);
   const goodsStuckPct = goodsStuck / Math.max(1, countiesAll) / 10;
+  console.log(`Tông môn (v0.8 S3): trẻ NPC được tuyển rời vùng ${sectRecruits} người trong ${regions.length} vùng (trung bình ${(sectRecruits / regions.length).toFixed(1)} mỗi vùng, ${(sectRecruits * 1000 / Math.max(1, npcStartSum)).toFixed(1)}‰ số NPC lúc đầu)`);
   console.log(`Chợ hàng (S3b): tháng-quận-món giá sát trần/đáy ${goodsStuckPct.toFixed(1)}% (≤ 20) · giá bán da ở chợ làng trung bình ${(hideSell / regions.length / 100).toFixed(1)} văn/phần (trước S3b trả ngay 20) · hàng NPC còn giữ cuối ${npcGoods} phân`);
   console.log(`Sổ cái lệch (kiểm từng tick): ${ledgerBad} vùng · NPC nắm ${npcEndMin / 10}–${npcEndMax / 10}% tổng tiền năm cuối (cao nhất mọi năm ${npcPeak / 10}%)`);
   console.log(`Gia tộc: còn sống ${clanMin}–${clanMax} mỗi vùng (mục tiêu 2–10) · lập sau năm đầu ${clanFounded}, tàn ${clanEnded} (gồm nhập), chi tách ${clanSplit} · vùng có cả lập lẫn tàn ${regionsFoundEnd}/${regions.length} · quận đổi họ đứng đầu ${(100 * leaderChanged / Math.max(1, countiesAll)).toFixed(0)}% (≥ 30)`);

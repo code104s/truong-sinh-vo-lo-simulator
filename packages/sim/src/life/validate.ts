@@ -1,7 +1,7 @@
 // Validate snapshot sim khi tải save (ADR 0004): save hỏng hoặc bị sửa tay thì từ chối trước khi chạy.
 import {
   arr, bool, intRange, lit, nat, nonEmpty, nullable, obj, oneOf, opt, record, str, vNpcId, vRegionId, type EventFigure,
-  DEATH_CAUSES, GOODS, FIGURE_AGES, FIGURE_CLASSES, GENDERS, SETTLEMENT_KINDS, TENURES, int, union, vBirthplaceId, vNewLifeConfig, vMonthPlan, vPlanSlot, vTravelPreview, vLogEntry, vFactionId, vFactionName, FACTION_KINDS, CAREERS, CAREER_RANKS, vCareerRecord, type Validator,
+  DEATH_CAUSES, GOODS, FIGURE_AGES, FIGURE_CLASSES, GENDERS, SETTLEMENT_KINDS, TENURES, int, union, vBirthplaceId, vNewLifeConfig, vMonthPlan, vPlanSlot, vTravelPreview, vLogEntry, vFactionId, vFactionName, FACTION_KINDS, CAREERS, CAREER_RANKS, CULTIVATION_PATHS, REALMS, ROOT_BANDS, vCareerRecord, type Validator,
 } from '@tsvl/shared';
 import type { RngState, RngStreamsSnapshot } from '../core/rng';
 import type { CharacterState, Condition, KinLinks, SpiritRoot } from './character';
@@ -12,6 +12,7 @@ import { SIM_VERSION, type LifeSnapshot } from './life';
 import { BACKGROUNDS, ELEMENTS, PERSONALITIES, TRAITS } from './params';
 import type { Skill } from './skills';
 import type { ActiveAction } from './player';
+import type { CultivationState } from './cultivation';
 import { HUNGER_MAX, type HouseholdState } from './household';
 import { DISASTERS, type CountyEconomy, type CountyGood, type EconomyState } from '../economy/market';
 import type { EventsState, PendingState } from '../events/engine';
@@ -82,6 +83,13 @@ const tupleNat2: Validator<[number, number]> = {
   check: (u, p) => (Array.isArray(u) && u.length === 2 && u.every((x) => Number.isInteger(x) && x >= 0) ? null : `${p}: cần cặp số tự nhiên`),
 };
 
+/** Đường tu (v0.8, ADR 0022). */
+const vCultivationState = obj<CultivationState>({
+  realm: oneOf(REALMS), root: nullable(oneOf(ROOT_BANDS)), path: nullable(oneOf(CULTIVATION_PATHS)), qi: nat, entered: nullable(nat),
+  breakthroughs: arr(obj<{ at: number; ok: boolean }>({ at: nat, ok: bool })),
+  stones: nat,
+  duty: nullable(obj<{ weeks: number; missed: number; since: number }>({ weeks: nat, missed: nat, since: nat })),
+});
 const vCareerState = obj<CareerState>({
   id: oneOf(CAREERS), rank: oneOf(CAREER_RANKS), since: nat, faction: nullable(vFactionId), mentor: nullable(vNpcId), years: nat, weeks: nat, idle: nat,
 });
@@ -116,6 +124,8 @@ export const vLifeSnapshot = obj<LifeSnapshot>({
       plan: nullable(vMonthPlan), active: nullable(vActive), planWarned: bool,
       // Thân phận nghề chỉ người chơi có (v0.7); NPC để trống
       career: opt(nullable(vCareerState)),
+      // Đường tu chỉ người chơi có (v0.8); NPC để trống
+      cultivation: opt(vCultivationState),
     })),
   }),
   bonds: arr(obj<Bond>({ id: vNpcId, closeness: intRange(0, 100), trust: intRange(0, 100), hostility: intRange(0, 100), owed: intRange(-100, 100) })),
@@ -129,12 +139,14 @@ export const vLifeSnapshot = obj<LifeSnapshot>({
       relations: arr(obj<{ other: string; attitude: number }>({ other: vFactionId, attitude: intRange(-100, 100) })),
       owed: opt(arr(obj<{ id: string; coin: number }>({ id: vNpcId, coin: nat }))),
       playerAttitude: opt(intRange(-100, 100)),
+      trial: opt(obj<{ tick: number; takesMixed: boolean; taken: number }>({ tick: nat, takesMixed: bool, taken: nat })),
       money: nat, grain: nat, founded: int, ended: nullable(int),
     })),
   }),
   factionsSeen: arr(obj<FactionSeen>({ id: vFactionId, kind: oneOf(FACTION_KINDS), name: vFactionName, first: nat, last: nat, ended: bool })),
   career: nullable(vCareerState),
   careers: arr(vCareerRecord),
+  cultivation: vCultivationState,
   rng: obj<RngStreamsSnapshot>({ root: u32, streams: record(vRngState) }),
   death: nullable(vDeath),
   plan: nullable(vMonthPlan),

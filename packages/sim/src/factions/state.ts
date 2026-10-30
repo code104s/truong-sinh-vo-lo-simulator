@@ -47,6 +47,8 @@ export interface FactionState {
   owed?: { id: string; coin: number }[];
   /** Thái độ với người chơi (v0.7 S7, Q9), −100 ghét … 100 thân; không có là 0 (thế giới không người chơi không ghi). */
   playerAttitude?: number;
+  /** Tông môn (v0.8 S3): kỳ tuyển gần nhất — lúc mở, có nhận linh căn tạp không, đã nhận mấy người. */
+  trial?: { tick: Tick; takesMixed: boolean; taken: number };
   /** Kho riêng (quan phủ, thương hội, băng cướp; gia tộc không có kho chung, Q4): vào sổ cái. */
   money: number;
   grain: number;

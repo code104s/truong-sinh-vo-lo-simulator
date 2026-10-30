@@ -87,7 +87,7 @@ describe('máy trạng thái màn', () => {
     expect(s.interrupt).toBeNull();
     s = run([msg({ type: 'INTERRUPT', reqId: 5, entry }), { type: 'advanceStart' }], s);
     expect(s.interrupt).toBeNull();
-    const summary = { config: { worldSeed: 's', regionId: regionId('r0'), birthplaceId: birthplaceId('r0/c1') }, name: 'A', birthTick: 0, deathTick: 9, ageYears: 0, cause: 'illness' as const, causeDetail: 'illness.cold', birthplaceId: birthplaceId('r0/c1'), milestones: [], estate: { money: 0, grain: 0, landMu: 0, tenure: 'none' as const }, hungerYears: 0, legacy: { spouse: null, children: [], friends: 0, enemies: 0, reputation: 'unknown' as const, factions: [], careers: [], hauls: [] }, digest: 'x' };
+    const summary = { config: { worldSeed: 's', regionId: regionId('r0'), birthplaceId: birthplaceId('r0/c1') }, name: 'A', birthTick: 0, deathTick: 9, ageYears: 0, cause: 'illness' as const, causeDetail: 'illness.cold', birthplaceId: birthplaceId('r0/c1'), milestones: [], estate: { money: 0, grain: 0, landMu: 0, tenure: 'none' as const }, hungerYears: 0, legacy: { spouse: null, children: [], friends: 0, enemies: 0, reputation: 'unknown' as const, factions: [], careers: [], cultivation: { root: null, realm: 'mortal' as const, path: null, breakthroughs: [] } }, digest: 'x' };
     s = run([{ type: 'hasSave', value: true }, msg({ type: 'DIED', reqId: 4, summary })], s);
     expect(s.screen).toBe('summary');
     expect(s.running).toBe(false);

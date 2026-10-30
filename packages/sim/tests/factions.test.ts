@@ -121,7 +121,8 @@ describe('quan phủ: thuế và chi nha môn (Q3)', () => {
 describe('quan phủ trong đời người chơi', () => {
   it('STATE thấy quan phủ giữ mọi quận; sổ cái gồm kho quan phủ không đổi qua từng tick hai năm; lưu, tải cùng digest', () => {
     const l = Life.create({ worldSeed: 'gov', regionId: regionId('r0'), birthplaceId: bp.id }, bp, region);
-    expect(l.factions().map((f) => [f.kind, f.strength])).toEqual([['government', 'dominant']]);
+    // v0.8 S3: tông môn ngoài vùng lập cùng lúc với quan phủ (không giữ quận nào)
+    expect(l.factions().map((f) => [f.kind, f.strength, f.counties.length])).toEqual([['government', 'dominant', region.counties.length], ['sect', 'strong', 0]]);
     expect(l.control()).toEqual(['f1', 'f1', 'f1']);
     const total = l.totalMoney();
     for (let i = 0; i < 72; i++) {

@@ -72,7 +72,7 @@ describe('những người đã đi trước (v0.4 F4)', () => {
 });
 
 describe('di sản (v0.5 F4)', () => {
-  const base = { spouse: null, children: [], friends: 0, enemies: 0, reputation: 'unknown' as const, factions: [], careers: [] };
+  const base = { spouse: null, children: [], friends: 0, enemies: 0, reputation: 'unknown' as const, factions: [], careers: [], cultivation: { root: null, realm: 'mortal' as const, path: null, breakthroughs: [] } };
   const text = (r: ReturnType<typeof legacyRows>[number]) => t(r.value, r.params);
 
   it('vợ/chồng gọi theo giới người chơi; đã mất thì ghi; chưa cưới thì "Không lập gia đình"', () => {

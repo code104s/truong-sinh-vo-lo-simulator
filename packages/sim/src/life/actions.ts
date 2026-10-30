@@ -4,11 +4,15 @@ import { hasSeverity, type CharacterState } from './character';
 import { isStarving } from './household';
 import { SKILL_BASE_GAIN, type Skill } from './skills';
 import { CAREER_DEFS, hasRank, type CareerState } from './career';
+import { seekLock } from './cultivation';
+import { mountainCounty } from './wayward';
 import { previewTravel } from './travel';
 import { moneyCost, moneyGains, moneyLock } from '../economy/income';
 import type { CountyEconomy, EconomyState } from '../economy/market';
 
 export const ACTION_MIN_AGE = 12;
+/** Tìm cơ duyên ở núi sâu (v0.8 S1): rủi ro như săn bắn; thăm miếu ở quận không núi thì không rủi ro. */
+export const SEEK_MOUNTAIN_RISK_PPM = 1_500;
 export interface ActionDef {
   id: string; group: ActionGroup; slots: number; stamina: number; riskPpm: number;
   skill?: Skill; places?: readonly SettlementKind[]; minStamina?: number;
@@ -54,6 +58,11 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'action.apprentice', group: 'social', slots: 1, stamina: 150, riskPpm: 200 },
   // Xin vào thương hội (S3): nhờ một hội viên cùng quận bảo lãnh
   { id: 'action.join_guild', group: 'social', slots: 1, stamina: 20, riskPpm: 0 },
+  // Tìm cơ duyên (v0.8 S1, ADR 0022 Q3): vào núi sâu (rủi ro cao như săn) hay thăm miếu (không rủi ro); không ra tiền, lương
+  { id: 'action.seek', group: 'seek', slots: 1, stamina: 200, riskPpm: SEEK_MOUNTAIN_RISK_PPM, minStamina: 60 },
+  // Tông môn (S3): dự kỳ tuyển ở trị sở trong tháng có sứ giả; đệ tử ký danh làm tạp dịch (chép kinh, hái thuốc nộp lên núi)
+  { id: 'action.trial', group: 'seek', slots: 1, stamina: 30, riskPpm: 0 },
+  { id: 'action.sect_duty', group: 'seek', slots: 1, stamina: 150, riskPpm: 0 },
   { id: 'action.rest', group: 'rest', slots: 1, stamina: 0, riskPpm: 0 },
   { id: 'action.heal', group: 'heal', slots: 1, stamina: 20, riskPpm: 0, places: ['town', 'city'] },
   { id: 'action.travel', group: 'travel', slots: 1, stamina: 100, riskPpm: 300, minStamina: 30 },
@@ -94,15 +103,25 @@ export function actionOptions(c: CharacterState, tick: Tick, logic: RegionLogic,
   const market = eco.counties[c.location]!;
   return ACTIONS.filter((d) => !d.hidden).map((d) => ({
     id: d.id, group: d.group, slots: d.slots,
-    cost: { stamina: d.stamina === 0 ? 'cost.none' : d.stamina < 80 ? 'cost.low' : d.stamina < HEAVY_STAMINA ? 'cost.medium' : 'cost.high', risk: d.riskPpm === 0 ? 'risk.none' : d.riskPpm < 300 ? 'risk.low' : d.riskPpm < 1000 ? 'risk.medium' : 'risk.high',
+    cost: { stamina: d.stamina === 0 ? 'cost.none' : d.stamina < 80 ? 'cost.low' : d.stamina < HEAVY_STAMINA ? 'cost.medium' : 'cost.high', risk: riskBand(placeRiskPpm(d, logic, c.location)),
       money: moneyCost(d.id) },
     // Xã giao (v0.5) không có cái được chung: thân thiết, cái ăn, gia đình đã ở moneyGains; mua ruộng (S2) chỉ được ruộng, ứng tuyển (S4), bỏ quê, dựng lều (S6) chỉ được nghề
-    gains: [...moneyGains(d.id), ...(d.skill ? [`skill.${d.skill}`] : d.group === 'social' || d.id === 'action.buy_land' || d.id === 'action.enlist' || d.id === 'action.drift' || d.id === 'action.build_hut' ? [] : [d.group === 'rest' ? 'gain.recovery' : d.group === 'heal' ? 'gain.healing' : 'gain.location'])],
-    locked: actionLock(d, c, tick, kind, market, career),
+    gains: [...moneyGains(d.id), ...(d.skill ? [`skill.${d.skill}`] : d.group === 'social' || d.group === 'seek' || d.id === 'action.buy_land' || d.id === 'action.enlist' || d.id === 'action.drift' || d.id === 'action.build_hut' ? [] : [d.group === 'rest' ? 'gain.recovery' : d.group === 'heal' ? 'gain.healing' : 'gain.location'])],
+    locked: actionLock(d, c, tick, kind, market, career) ?? placeLock(d, logic, c.location),
     // F1: việc riêng của nghề nào; ô nào tính vào năm làm nghề đang làm
     ...(d.career ? { career: d.career } : {}),
     ...(career && CAREER_DEFS[career.id].works.includes(d.id) ? { careerWork: true as const } : {}),
   }));
+}
+
+const riskBand = (ppm: number) => (ppm === 0 ? 'risk.none' : ppm < 300 ? 'risk.low' : ppm < 1000 ? 'risk.medium' : 'risk.high');
+/** Rủi ro gốc của việc ở nơi này (ppm, chưa nhân mệt, kỹ năng). */
+export function placeRiskPpm(d: ActionDef, logic: RegionLogic, county: number): number {
+  return d.id === 'action.seek' && !mountainCounty(logic, county) ? 0 : d.riskPpm;
+}
+/** Khóa theo nơi chốn trên bản đồ (S1): tìm cơ duyên chỉ ở quận có núi hay có miếu. */
+function placeLock(d: ActionDef, logic: RegionLogic, county: number): string | null {
+  return d.id === 'action.seek' ? seekLock(logic, county) : null;
 }
 
 /** Điều kiện thời điểm chạy kiểm lại từng tick; ở đây chỉ chặn lệnh không hợp lệ về ý nghĩa. */
@@ -118,7 +137,7 @@ export function validatePlan(plan: MonthPlan, logic: RegionLogic): boolean {
 export function slotLock(slot: PlanSlot, c: CharacterState, tick: Tick, logic: RegionLogic, market?: CountyEconomy, career: CareerState | null = null): string | null {
   const def = actionDef(slot.action);
   if (!def) return 'lock.action';
-  const lock = actionLock(def, c, tick, logic.settlementKind[c.location]!, market, career);
+  const lock = actionLock(def, c, tick, logic.settlementKind[c.location]!, market, career) ?? placeLock(def, logic, c.location);
   if (lock) return lock;
   if (def.group === 'travel' && (slot.target === undefined || !previewTravel(logic, c.location, slot.target))) return 'lock.route';
   return null;
