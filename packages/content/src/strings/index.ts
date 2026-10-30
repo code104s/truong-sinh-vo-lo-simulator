@@ -24,4 +24,12 @@ export function t(key: string, params: Params = {}): string {
 
 export const hasKey = (key: string): boolean => VI[key] !== undefined;
 
+/**
+ * Sự kiện đường tiên (v0.8 F3): mọi sự kiện có văn bản ở events.cultivation.vi.ts (nhóm `cultivation` của sim, test giữ
+ * hai bên khớp). Thẻ sự kiện đóng triện riêng, biên niên lọc "Đạo".
+ */
+export const CULTIVATION_EVENT_IDS: ReadonlySet<string> = new Set(
+  Object.keys(EVENTS_CULTIVATION_VI).filter((k) => k.endsWith('.title')).map((k) => k.slice(0, -'.title'.length)),
+);
+
 export { VI };

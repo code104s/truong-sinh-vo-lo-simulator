@@ -1,7 +1,7 @@
 // Đường tu (v0.8 F1): cảnh giới trên thanh trạng thái khi đã bước qua, khối "Đạo" ở hồ sơ. F2: dòng đường tu trên ô việc
 // trong bảng chọn việc, hỏi lại trước khi đột phá. Thuần, không có luật game: mọi thứ đọc từ CharacterView.cultivation (dải
 // chữ, không lộ số linh khí, không lộ xác suất) và thế lực tông môn trong danh sách thế lực.
-import type { BreakthroughPreview, CultivationView, FactionName, FactionView, LogEntry, Realm, SectDutyView } from '@tsvl/shared';
+import type { BreakthroughPreview, CultivationView, FactionName, FactionView, LogEntry, Realm, SectDutyView, TrialNews } from '@tsvl/shared';
 
 export type RisenRealm = Exclude<Realm, 'mortal'>;
 
@@ -125,3 +125,31 @@ export function newBreakthrough(log: readonly LogEntry[], afterTick: number): { 
 
 /** Giao diện đổi màu mực khi đã bước qua phàm nhân (mục 7.3: "bước qua ngưỡng thì giao diện đổi theo"). */
 export const realmClass = (cv: CultivationView): string => (cv.realm === 'mortal' ? '' : ` realm-${cv.realm}`);
+
+// —— Ngưỡng cửa (v0.8 F3): tin kỳ tuyển trên màn đời ——
+
+export interface TrialBanner {
+  key: string;
+  params: Record<string, string>;
+  /** Việc nên làm: tới nơi tuyển trong tháng Ba, hay xếp "Dự tuyển" ngay khi đang ở đó. */
+  hint: { key: string; params: Record<string, string> };
+  /** Chưa ở nơi tuyển: có nút mở bản đồ đi đường. */
+  toMap: boolean;
+}
+
+/**
+ * Dải tin kỳ tuyển (F3): chỉ khi người chơi còn dự được và đã tự xếp việc (từ 12 tuổi); từ tháng nghe tin tới hết tháng
+ * tuyển. Nói kỳ tuyển ở đâu, lúc nào, và việc cần làm.
+ */
+export function trialBanner(news: TrialNews | undefined, canAct: boolean, location: number): TrialBanner | null {
+  if (!news?.eligible || !canAct) return null;
+  const params = { sect: news.sect, place: news.place };
+  const here = location === news.county;
+  return {
+    key: news.open ? 'ui.trial.open' : 'ui.trial.soon',
+    params,
+    hint: { key: here && news.open ? 'ui.trial.here' : 'ui.trial.go', params },
+    toMap: !here,
+  };
+}
+

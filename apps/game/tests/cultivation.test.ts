@@ -1,9 +1,9 @@
 // Đường tu (v0.8 F1): cảnh giới trên thanh trạng thái, khối Đạo ở hồ sơ. F2: ô tu luyện, đột phá, hỏi lại trước khi đột phá.
 import { hasKey, t } from '@tsvl/content';
-import { CHANCE_BANDS, MIND_BANDS, QI_BANDS, QI_PLACE_BANDS, REALMS, ROOT_BANDS, type CultivationView, type FactionView, type LogEntry } from '@tsvl/shared';
+import { CHANCE_BANDS, MIND_BANDS, QI_BANDS, QI_PLACE_BANDS, REALMS, ROOT_BANDS, SITE_KINDS, type CultivationView, type FactionView, type LogEntry, type TrialNews } from '@tsvl/shared';
 import { describe, expect, it } from 'vitest';
 import {
-  breakthroughAsk, breakthroughOutcome, cultivationNote, daoBlock, dutyLines, lastBreakthroughTick, needsConfirm, newBreakthrough, REALM_SEAL, realmClass, realmLine,
+  breakthroughAsk, breakthroughOutcome, cultivationNote, daoBlock, dutyLines, lastBreakthroughTick, needsConfirm, newBreakthrough, REALM_SEAL, realmClass, realmLine, trialBanner,
 } from '../src/app/cultivation';
 
 const mortal: CultivationView = { realm: 'mortal', root: null, path: null, qi: null };
@@ -118,3 +118,30 @@ describe('cảnh đột phá có dựng, vào tầng một (v0.8 F2 bổ sung)',
       expect(hasKey(id), id).toBe(true);
   });
 });
+
+describe('ngưỡng cửa: tin kỳ tuyển, chốn đã biết (v0.8 F3)', () => {
+  const news: TrialNews = { sect: 'sect.name.4', place: 'Khê Kinh', county: 4, open: false, eligible: true };
+  it('dải kỳ tuyển: báo trước từ tháng Giêng, chỉ đường tới nơi tuyển; đang ở đó tháng Ba thì bảo xếp "Dự tuyển"', () => {
+    const soon = trialBanner(news, true, 1)!;
+    expect(t(soon.key, soon.params)).toBe('Bích Lạc Tông sẽ xuống Khê Kinh chọn trẻ có căn cơ vào tháng Ba năm nay.');
+    expect(t(soon.hint.key, soon.hint.params)).toBe('Tháng Ba có mặt ở Khê Kinh, xếp "Dự tuyển" vào một tuần.');
+    expect(soon.toMap).toBe(true);
+    const here = trialBanner({ ...news, open: true }, true, 4)!;
+    expect(t(here.key, here.params)).toContain('đang ở Khê Kinh');
+    expect(here.hint.key).toBe('ui.trial.here');
+    expect(here.toMap).toBe(false);
+  });
+
+  it('không hiện khi không dự được, chưa tự xếp việc, hay không có kỳ tuyển', () => {
+    expect(trialBanner(undefined, true, 4)).toBeNull();
+    expect(trialBanner({ ...news, eligible: false }, true, 4)).toBeNull();
+    expect(trialBanner(news, false, 4)).toBeNull();
+  });
+
+  it('chữ của chốn, kỳ tuyển, sự kiện đường tiên có chuỗi', () => {
+    for (const k of SITE_KINDS) for (const id of [`site.${k}`, `site.${k}_note`]) expect(hasKey(id), id).toBe(true);
+    for (const id of ['ui.trial.soon', 'ui.trial.open', 'ui.trial.go', 'ui.trial.here', 'ui.trial.to_map', 'ui.event.dao', 'log.sect.known_taken', 'log.sect.neighbor_taken'])
+      expect(hasKey(id), id).toBe(true);
+  });
+});
+

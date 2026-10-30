@@ -1,5 +1,5 @@
 // Cửa ngõ tu tiên và tu luyện (v0.8, ADR 0022). Chỉ kiểu và validate, không có luật; dải chữ, không lộ số linh khí.
-import { arr, bool, nat, nullable, obj, oneOf, opt, type Validator } from './schema';
+import { arr, bool, nat, nonEmpty, nullable, obj, oneOf, opt, type Validator } from './schema';
 import type { Tick } from './calendar';
 
 /** Cảnh giới ở v0.8 (Q1): phàm nhân, Luyện Khí tầng 1 (trần v0.8). v0.9 thêm tầng 2, 3. Khóa nội dung `realm.<id>`. */
@@ -38,6 +38,30 @@ export interface BreakthroughPreview {
   stones: number;
 }
 
+/** Chốn tìm cơ duyên (S1): di tích (hang đá cũ), miếu. Khóa nội dung `site.<loại>`. */
+export const SITE_KINDS = ['ruin', 'shrine'] as const;
+export type SiteKind = (typeof SITE_KINDS)[number];
+
+/** Một chốn người chơi đã biết (F3): quận, loại; bản đồ vẽ triện ở trị sở quận ấy. */
+export interface SiteView {
+  county: number;
+  kind: SiteKind;
+}
+
+/** Tin kỳ tuyển năm nay (F3): từ lúc nghe tin (tháng Giêng) tới hết tháng tuyển. */
+export interface TrialNews {
+  /** Tên tông môn (tham số `name` của `faction.sect.name`). */
+  sect: string;
+  /** Tên nơi sứ giả xuống (trị sở tông môn trong vùng). */
+  place: string;
+  /** Quận ấy, để bản đồ, nút đi đường chỉ tới. */
+  county: number;
+  /** Đang trong tháng tuyển (dự được nếu đứng ở đó). */
+  open: boolean;
+  /** Người chơi còn dự được: chưa có đường tu, chưa quá tuổi. */
+  eligible: boolean;
+}
+
 /** Đường tu như người chơi thấy. */
 export interface CultivationView {
   realm: Realm;
@@ -56,6 +80,10 @@ export interface CultivationView {
   place?: QiPlaceBand;
   /** Xem trước đột phá (F2); chỉ khi người phàm có đường tu đã tích linh khí tới đỉnh. */
   breakthrough?: BreakthroughPreview;
+  /** Tin kỳ tuyển năm nay (F3), từ tháng nghe tin tới hết tháng tuyển. */
+  trial?: TrialNews;
+  /** Di tích, miếu đã biết (F3): ở quận từng đặt chân tới; xếp theo quận rồi loại. */
+  sites?: SiteView[];
 }
 
 export interface SectDutyView {
@@ -76,6 +104,8 @@ export const vCultivationView: Validator<CultivationView> = obj<CultivationView>
   duty: opt(vSectDutyView),
   place: opt(oneOf(QI_PLACE_BANDS)),
   breakthrough: opt(obj<BreakthroughPreview>({ chance: oneOf(CHANCE_BANDS), mind: oneOf(MIND_BANDS), stones: nat })),
+  trial: opt(obj<TrialNews>({ sect: nonEmpty, place: nonEmpty, county: nat, open: bool, eligible: bool })),
+  sites: opt(arr(obj<SiteView>({ county: nat, kind: oneOf(SITE_KINDS) }))),
 });
 
 /** Một đời tu cho tổng kết (F4): linh căn đã biết, cảnh giới cao nhất, lúc dẫn khí, các lần đột phá. */

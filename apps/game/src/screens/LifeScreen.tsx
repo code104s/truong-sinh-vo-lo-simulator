@@ -3,12 +3,12 @@ import type { AdvanceMode, CalendarDate, CareerEntryView, CharacterView, GoodId,
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { placeEntry } from '../app/career';
-import { lastBreakthroughTick, newBreakthrough, realmClass, type BreakthroughOutcome } from '../app/cultivation';
+import { lastBreakthroughTick, newBreakthrough, realmClass, trialBanner, type BreakthroughOutcome } from '../app/cultivation';
 import { logText } from '../app/format';
 import { hungerAlert } from '../app/hunger';
 import { defaultPlan, planDirty, planInvalid } from '../app/plan';
 import type { WorldInfo } from '../app/state';
-import { KIND_CHAR } from '../ui/icons';
+import { ACTION_CHAR, KIND_CHAR } from '../ui/icons';
 import { InkLandscape, Scroll, Seal } from '../ui/ink';
 import { ActionPlanner } from './ActionPlanner';
 import { CareerDialog, CareerPanel, LeaveDialog } from './Career';
@@ -70,6 +70,19 @@ function HungerBanner({ c, actions, locked, onMarket }: { c: CharacterView; acti
   );
 }
 
+/** Dải tin kỳ tuyển (v0.8 F3): ngay dưới dải đói; tới nơi tuyển trong tháng Ba, xếp "Dự tuyển". */
+function TrialStrip({ c, locked, onMap }: { c: CharacterView; locked: boolean; onMap: (() => void) | null }) {
+  const b = trialBanner(c.cultivation.trial, c.canAct, c.location);
+  if (!b) return null;
+  return (
+    <div class="hunger-banner trial-banner" role="status">
+      <Seal char={ACTION_CHAR['action.trial']!.char} tone="jade" />
+      <p><strong>{t(b.key, b.params)}</strong> {t(b.hint.key, b.hint.params)}</p>
+      {b.toMap && onMap && <button type="button" class="btn small-btn" disabled={locked} onClick={onMap}>{t('ui.trial.to_map')}</button>}
+    </div>
+  );
+}
+
 /** Thân thế: những gì không đổi hoặc ít đổi. Đặt bên phải để thanh trạng thái và biên niên được chỗ (đề xuất P0). */
 function Dossier({ c, world, factions, actions, locked, onCareers, onLeave, children }: {
   c: CharacterView; world: WorldInfo | null; factions: FactionView[]; actions: ActionOption[]; locked: boolean; onCareers: () => void; onLeave: () => void; children?: ComponentChildren;
@@ -107,6 +120,8 @@ function Dossier({ c, world, factions, actions, locked, onCareers, onLeave, chil
 
 export function LifeScreen({ world, date, character: c, log, interrupt, running, busy, saved, onAdvance, onRun, onPause, plan, active, actions, travel, travelPreview, onPlan, onPreview, pending, onChoose, market, onTrade, onTradeGoods, people, circle, factions, control, careers, onLeaveCareer, hauls }: Props) {
   const [travelOpen, setTravelOpen] = useState(false);
+  // Nút "Xem đường đi" của dải kỳ tuyển (F3): mở bản đồ đi đường, chọn sẵn nơi tuyển
+  const [travelFocus, setTravelFocus] = useState<number | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);
   const [careersOpen, setCareersOpen] = useState(false);
@@ -143,6 +158,7 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
         <div class="life">
           <StatusBar c={c} date={date} saved={saved} world={world} />
           <HungerBanner c={c} actions={actions} locked={lock} onMarket={market ? () => setMarketOpen(true) : null} />
+          <TrialStrip c={c} locked={lock || !!active || !!actions.find((a) => a.id === 'action.travel')?.locked} onMap={world && c.cultivation.trial ? () => { setTravelFocus(c.cultivation.trial!.county); setTravelOpen(true); } : null} />
           <div class="life-body">
             <main class="chronicle">
               {c.canAct
@@ -162,7 +178,7 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
                 <button class="btn" disabled={lock} onClick={withDraft(() => onAdvance('month'))}>{t('ui.ctrl.month')}</button>
                 <button class="btn" disabled={lock} onClick={withDraft(() => onAdvance('year'))}>{t('ui.ctrl.year')}</button>
                 <button class="btn primary" disabled={lock} onClick={withDraft(onRun)}>{t('ui.ctrl.until')}</button>
-                <button class="btn ghost" disabled={lock || !c.canAct || !!active || !!actions.find((a) => a.id === 'action.travel')?.locked} onClick={() => setTravelOpen(true)}>{t('ui.travel.open')}</button>
+                <button class="btn ghost" disabled={lock || !c.canAct || !!active || !!actions.find((a) => a.id === 'action.travel')?.locked} onClick={() => { setTravelFocus(null); setTravelOpen(true); }}>{t('ui.travel.open')}</button>
                 <button class="btn ghost" disabled={!world || !!pending} onClick={() => setMapOpen(true)}>{t('ui.map.open')}</button>
                 {running && <span class="muted running">{t('ui.ctrl.running')}</span>}
               </footer>
@@ -179,7 +195,7 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
       {scene && <BreakthroughScene entry={scene.entry} outcome={scene.outcome} onClose={() => setScene(null)} />}
       {pending && <EventCard pending={pending} date={date} busy={busy} onChoose={(choice) => onChoose(pending.instance, choice)} />}
       {marketOpen && market && !pending && <MarketDialog market={market} household={c.household} place={place} canAct={c.canAct} busy={busy || running} onTrade={onTrade} onTradeGoods={onTradeGoods} onClose={() => setMarketOpen(false)} />}
-      {travelOpen && world && <TravelDialog world={world} location={c.location} slotIndex={date.tenDay} plan={plan} options={travel} preview={travelPreview} onPreview={onPreview} onPlan={onPlan} onClose={() => setTravelOpen(false)} factions={factions} control={control} />}
+      {travelOpen && world && <TravelDialog world={world} location={c.location} slotIndex={date.tenDay} plan={plan} options={travel} preview={travelPreview} onPreview={onPreview} onPlan={onPlan} onClose={() => setTravelOpen(false)} factions={factions} control={control} sites={c.cultivation.sites ?? []} focus={travelFocus} />}
       {careersOpen && c.canAct && !pending && <CareerDialog board={careers} career={c.career} people={people} place={place} week={date.tenDay} busy={!!active || busy || running} onPick={pickCareer} onClose={() => setCareersOpen(false)} />}
       {leaveOpen && c.career && !pending && <LeaveDialog career={c.career} factions={factions} busy={busy || running} onConfirm={() => { onLeaveCareer(); setLeaveOpen(false); }} onClose={() => setLeaveOpen(false)} />}
       {mapOpen && world && !pending && <FactionMapDialog world={world} location={c.location} factions={factions} control={control} onClose={() => setMapOpen(false)} />}

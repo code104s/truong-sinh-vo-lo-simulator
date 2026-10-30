@@ -1,8 +1,8 @@
 import { CAREERS, type LogEntry } from '@tsvl/shared';
 import { describe, expect, it } from 'vitest';
-import { CHRONICLE_FILTERS, FILTERS_WITH_EMPTY, groupByYear, isAffairsNews, isCareerNews, isPeopleNews, visibleItems } from '../src/app/chronicle';
+import { CHRONICLE_FILTERS, FILTERS_WITH_EMPTY, groupByYear, isAffairsNews, isCareerNews, isDaoEvent, isDaoNews, isPeopleNews, visibleItems } from '../src/app/chronicle';
 import { planDirty } from '../src/app/plan';
-import { CAREER_CHAR, logSeal } from '../src/ui/icons';
+import { CAREER_CHAR, DAO_CHAR, logSeal } from '../src/ui/icons';
 
 const e = (tick: number, importance: LogEntry['importance'] = 'minor', key = 'log.child.help'): LogEntry => ({ tick, key, params: {}, importance });
 
@@ -120,7 +120,7 @@ describe('lọc "Nghề" và triện nghề (v0.7 F3)', () => {
     const [g] = groupByYear(log, 0);
     expect(visibleItems(g!, 'career', false, false)).toMatchObject({ folded: 0 });
     expect(visibleItems(g!, 'career', false, false).items).toHaveLength(6);
-    expect(CHRONICLE_FILTERS).toEqual(['all', 'major', 'career', 'people', 'affairs']);
+    expect(CHRONICLE_FILTERS).toEqual(['all', 'major', 'career', 'dao', 'people', 'affairs']);
     for (const f of FILTERS_WITH_EMPTY) expect(hasKey(`ui.chron.${f}_empty`), f).toBe(true);
     for (const f of CHRONICLE_FILTERS) expect(hasKey(`ui.chron.${f}`), f).toBe(true);
   });
@@ -131,3 +131,26 @@ describe('lọc "Nghề" và triện nghề (v0.7 F3)', () => {
     expect(new Set(CAREERS.map((c) => CAREER_CHAR[c].char)).size).toBe(CAREERS.length);
   });
 });
+
+describe('lọc "Đạo" và triện đường tiên (v0.8 F3)', () => {
+  const at = (key: string, importance: LogEntry['importance'] = 'major'): LogEntry => ({ tick: 40, key, params: {}, importance });
+  it('chỉ chuyện đường tiên: tông môn, kỳ tuyển, dấu hiệu, dẫn khí, tu luyện, đột phá, kết quả sự kiện đường tiên; không gập', () => {
+    const log = [at('log.sect.rumor'), at('log.sect.neighbor_taken', 'minor'), at('log.omen.dream'), at('log.rogue.induced'), at('log.cultivate.peak', 'minor'),
+      at('log.breakthrough.failed'), at('event.seek_cave.result.enter'), at('event.tax_collector.result.pay'), at('log.harvest.own'), at('event.seek_cavern.result.x')];
+    expect(log.map(isDaoNews)).toEqual([true, true, true, true, true, true, true, false, false, false]);
+    const [g] = groupByYear(log, 0);
+    expect(visibleItems(g!, 'dao', false, false)).toMatchObject({ folded: 0 });
+    expect(visibleItems(g!, 'dao', false, false).items).toHaveLength(7);
+    expect(isDaoEvent('event.seek_cave')).toBe(true);
+    expect(isDaoEvent('event.tax_collector')).toBe(false);
+  });
+
+  it('kết quả sự kiện đường tiên đóng triện 道; đột phá thành ngọc, hỏng đỏ; tông môn 宗', () => {
+    expect(logSeal(at('event.wandering_cultivator.result.share'))).toEqual(DAO_CHAR);
+    expect(logSeal(at('log.breakthrough.ok'))).toEqual({ char: '成', tone: 'jade' });
+    expect(logSeal(at('log.breakthrough.severe'))).toEqual({ char: '逆', tone: 'red' });
+    expect(logSeal(at('log.sect.joined'))).toEqual({ char: '宗', tone: 'jade' });
+    expect(logSeal(at('log.sect.expelled'))).toEqual({ char: '宗', tone: 'ink' });
+  });
+});
+

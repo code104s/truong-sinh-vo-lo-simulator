@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest';
 import { Life } from '../src/index';
 import { autoAdvance, lastChoice, pastComingOfAge } from './auto';
 import {
-  attendTrial, dutyLock, dutyYear, isTrialYear, SECT_AGE, SECT_DUTY_FEE, SECT_DUTY_WEEKS, SECT_STONES_JOIN, SECT_STONES_YEAR, sectOf, sectPhase, trialLock, trialOpen,
+  attendTrial, dutyLock, dutyYear, isTrialYear, SECT_AGE, SECT_DUTY_FEE, SECT_DUTY_WEEKS, SECT_STONES_JOIN, SECT_STONES_YEAR, sectOf, sectPhase, trialLock, trialNews, trialOpen,
 } from '../src/factions/sect';
+import { ensureBond } from '../src/social/bonds';
+import { kinRole } from '../src/npc/family';
 import { countyMoney } from '../src/economy/market';
 import { npcMoney } from '../src/npc/state';
 import { factionMoney } from '../src/factions/state';
@@ -105,7 +107,7 @@ describe('người chơi dự kỳ tuyển, đệ tử ký danh (v0.8 S3)', () =
     const keys: string[] = [];
     expect(attendTrial(ok.character, ok.cultivation, ok.factions, TRIAL, ok.events.flags, (e) => keys.push(e.key))).toBe(true);
     expect(ok.cultivation).toMatchObject({ root: 'fair', path: 'sect', stones: SECT_STONES_JOIN, duty: { weeks: 0, missed: 0, since: TRIAL } });
-    expect(trialLock(ok.character, ok.cultivation, ok.factions, TRIAL)).toBe('lock.member');
+    expect(trialLock(ok.character, ok.cultivation, ok.factions, TRIAL)).toBe('lock.has_path');
     // Kỳ đủ người khá, tốt (hai trẻ NPC) thì không nhận tạp
     const full = world(); kid(full, 9, GOOD); kid(full, 11, FAIR); opened(full); full.character.spiritRoot = MIXED;
     expect(attendTrial(full.character, full.cultivation, full.factions, TRIAL, full.events.flags, (e) => keys.push(e.key))).toBe(false);
@@ -143,7 +145,7 @@ describe('người chơi dự kỳ tuyển, đệ tử ký danh (v0.8 S3)', () =
     const l = Life.restore(s, [], region);
     for (let k = 0; k < 6; k++) autoAdvance(l, 'week', lastChoice);
     expect(l.snapshot().cultivation).toMatchObject({ root: 'good', path: 'sect' });
-    expect(l.view().cultivation).toEqual({ realm: 'mortal', root: 'good', path: 'sect', qi: 'empty', duty: { weeks: 0, need: 6, missed: 0, expelAt: 2, fee: 600 }, place: 'thin' });
+    expect(l.view().cultivation).toEqual({ realm: 'mortal', root: 'good', path: 'sect', qi: 'empty', duty: { weeks: 0, need: 6, missed: 0, expelAt: 2, fee: 600 }, place: 'thin', sites: [{ county: 1, kind: 'shrine' }] });
     expect(l.log.some((e) => e.key === 'log.sect.joined')).toBe(true);
     expect(l.actions().find((a) => a.id === 'action.sect_duty')!.locked).toBeNull();
     expect(l.setPlan({ slots: [0, 1, 2].map(() => ({ action: 'action.sect_duty' })) as never })).toBe(true);
@@ -155,3 +157,45 @@ describe('người chơi dự kỳ tuyển, đệ tử ký danh (v0.8 S3)', () =
     expect(m.digest()).toBe(l.digest());
   });
 });
+
+describe('ngưỡng cửa trên giao diện (v0.8 F3)', () => {
+  it('tin kỳ tuyển: từ tháng Giêng tới hết tháng Ba năm tuyển; tháng Ba mới mở; dự được khi chưa có đường tu, chưa quá tuổi', () => {
+    const s = world();
+    const news = (tick: number) => trialNews(s.character, s.cultivation, s.factions, region, tick);
+    expect(news(TRIAL - 3 * 3)).toBeNull();
+    expect(news(TRIAL - 2 * 3)).toEqual({ sect: sectOf(s.factions)!.name.params.name, place: 'Quận 1', county: 1, open: false, eligible: true });
+    sectPhase(s.factions, s.npcs, s.economy, region, TRIAL, null);
+    expect(news(TRIAL + 2)!.open).toBe(true);
+    expect(news(TRIAL + 3)).toBeNull();
+    expect(news(TRIAL + 36 - 2 * 3)).toBeNull();
+    const old = world(21);
+    expect(trialNews(old.character, old.cultivation, old.factions, region, TRIAL)!.eligible).toBe(false);
+    s.cultivation.path = 'rogue';
+    expect(news(TRIAL)!.eligible).toBe(false);
+  });
+
+  it('khóa dự tuyển khi đã có đường tu là "Đã bước vào đường tu" (trước dùng nhầm khóa của thương hội)', () => {
+    const s = world();
+    sectPhase(s.factions, s.npcs, s.economy, region, TRIAL, null);
+    s.cultivation.path = 'rogue';
+    expect(trialLock(s.character, s.cultivation, s.factions, TRIAL)).toBe('lock.has_path');
+  });
+
+  it('trẻ quen được chọn là tin lớn; trẻ hàng xóm cùng quận là tin thường; trẻ quận khác không quen thì chỉ có dòng chung', () => {
+    const s = world();
+    // Người nhà có tin riêng (S3): ở đây chỉ lấy trẻ không phải người nhà
+    const stranger = (age: number, root: SpiritRoot) => { for (;;) { const n = kid(s, age, root); if (!kinRole(s.character, n)) return n; n.character.spiritRoot = null; } };
+    const known = stranger(10, GOOD), near = stranger(11, GOOD), far = stranger(12, FAIR);
+    known.character.location = 0; near.character.location = 1; far.character.location = 0;
+    const bonds = [...s.bonds];
+    ensureBond(bonds, known.id);
+    const log: LogEntry[] = [];
+    sectPhase(s.factions, s.npcs, s.economy, region, TRIAL, { c: s.character, log: (e) => log.push({ tick: TRIAL, ...e }), bonds });
+    const of = (key: string) => log.filter((e) => e.key === key);
+    expect(of('log.sect.known_taken')).toEqual([expect.objectContaining({ params: { name: known.character.name, sect: sectOf(s.factions)!.name.params.name }, importance: 'major' })]);
+    expect(of('log.sect.neighbor_taken')).toEqual([expect.objectContaining({ params: { name: near.character.name, sect: sectOf(s.factions)!.name.params.name }, importance: 'minor' })]);
+    expect(log.some((e) => e.params.name === far.character.name)).toBe(false);
+    expect(of('log.sect.took')).toHaveLength(1);
+  });
+});
+

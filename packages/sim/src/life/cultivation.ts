@@ -1,6 +1,6 @@
 // Đường tu của người chơi (v0.8, ADR 0022): cảnh giới, linh căn đã kiểm, đường vào, linh khí, các lần đột phá; linh khí
 // nơi ở theo bản đồ. Bước 0: chỉ trạng thái và phép chiếu (luôn phàm nhân, chưa kiểm); luật ở S1–S5. Thuần, tất định.
-import type { CultivationPath, CultivationRecord, CultivationView, QiBand, QiPlaceBand, Realm, RootBand, Tick } from '@tsvl/shared';
+import type { CultivationPath, CultivationRecord, CultivationView, QiBand, QiPlaceBand, Realm, RootBand, SiteView, Tick } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import type { SpiritRoot } from './character';
 import { hash32 } from '../core/hash';
@@ -22,6 +22,11 @@ export interface CultivationState {
   duty: { weeks: number; missed: number; since: Tick } | null;
   /** Ô tu luyện trong năm nay (S6): tu nhiều thì ít thời gian cho người thân, quan hệ phai nhanh hơn; đầu năm đặt lại. */
   secluded: number;
+  /**
+   * Quận có di tích, miếu mà người chơi từng đặt chân tới (F3), xếp tăng dần: người ở đó ai cũng biết ngôi miếu, hang đá
+   * cũ trong núi. Thiếu là chưa biết chốn nào (save trước F3).
+   */
+  seen?: number[];
 }
 
 export const newCultivation = (): CultivationState => ({ realm: 'mortal', root: null, path: null, qi: 0, entered: null, breakthroughs: [], stones: 0, duty: null, secluded: 0 });
@@ -100,6 +105,25 @@ export function sitesOf(logic: RegionLogic): Sites {
 export function hasSite(logic: RegionLogic, county: number, site: Site): boolean {
   const s = sitesOf(logic);
   return (site === 'ruin' ? s.ruins : s.shrines).includes(county);
+}
+
+/** Đặt chân tới quận có chốn (F3): ghi vào danh sách đã biết, giữ thứ tự tăng dần. */
+export function noteSites(s: CultivationState, logic: RegionLogic, county: number): void {
+  if (!hasSite(logic, county, 'ruin') && !hasSite(logic, county, 'shrine')) return;
+  const seen = (s.seen ??= []);
+  if (seen.includes(county)) return;
+  seen.push(county);
+  seen.sort((a, b) => a - b);
+}
+
+/** Chốn đã biết như người chơi thấy (F3): theo quận, di tích trước miếu. */
+export function knownSites(s: CultivationState, logic: RegionLogic): SiteView[] {
+  const out: SiteView[] = [];
+  for (const county of s.seen ?? []) {
+    if (hasSite(logic, county, 'ruin')) out.push({ county, kind: 'ruin' });
+    if (hasSite(logic, county, 'shrine')) out.push({ county, kind: 'shrine' });
+  }
+  return out;
 }
 
 /**

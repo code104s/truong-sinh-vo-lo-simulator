@@ -195,11 +195,13 @@ describe('tất định và lưu/tải (nghiệm thu Sim)', () => {
     // linh căn) nên gặp sự kiện ám ảnh, chọn lựa chọn đầu: bỏ việc lên núi tìm một tháng, chết đói 44 → 41. Cùng nguyên nhân.
     // v0.8 S7 (ADR 0023): linh căn 5% → 15% cho mọi người — lúc dựng NPC rút thêm độ thuần, số hệ nên làng đổi người, kỳ
     // tuyển có trẻ NPC đỗ rời vùng → digest cả ba đời đổi; đời 1 chết đói 52 → 50, đời 2, 3 giữ tuổi. Cùng nguyên nhân.
+    // v0.8 F3: snapshot đường tu nhớ di tích, miếu ở quận từng đặt chân tới; trẻ quen, trẻ hàng xóm đỗ kỳ tuyển có dòng biên
+    // niên → digest cả ba đời đổi; không đổi luật nên tuổi, nguyên nhân giữ.
     expect(out).toMatchInlineSnapshot(`
       [
-        "50 starvation e6e4b27e22b8fcbc",
-        "51 starvation 9ae77b6c31f69a5b",
-        "41 starvation 1f953c7e820b60bc",
+        "50 starvation 2abacf5a9fa60953",
+        "51 starvation b0f8cc9bb1d3c55f",
+        "41 starvation 9f2e1db211b34e37",
       ]
     `);
   });

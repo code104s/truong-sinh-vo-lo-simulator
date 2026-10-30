@@ -1,13 +1,13 @@
 // Bản đồ vùng chơi: AtlasViewer (vector, nét ở mọi mức phóng) + lớp SVG cho nơi sinh (ADR 0006), lớp "ai kiểm soát" (v0.6 F1).
 import { t } from '@tsvl/content';
-import type { Birthplace, BirthplaceId, RegionMapData, RegionSummary } from '@tsvl/shared';
+import type { Birthplace, BirthplaceId, RegionMapData, RegionSummary, SiteView } from '@tsvl/shared';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { setLang } from '../cartographer/i18n';
 import { ensureFonts } from '../cartographer/render/atlas';
 import { buildAtlasVector } from '../cartographer/render/atlas/svg/vector';
 import { AtlasViewer } from '../cartographer/render/atlas/svg/viewer';
 import { smoothRivers } from '../cartographer/render/rivers';
-import { KIND_CHAR } from '../ui/icons';
+import { KIND_CHAR, SITE_CHAR } from '../ui/icons';
 import { controlPixels, rgbCss, type ControlLayer } from './control';
 import { countyLines, maskOutline, outsideMaskUrl, regionWorld } from './regionWorld';
 
@@ -30,6 +30,8 @@ interface Props {
   layer?: ControlLayer | null;
   /** Đường bị cướp giữ, vẽ cả khi tắt lớp (F3: bản đồ di chuyển ghi đường nguy hiểm). */
   dangerRoads?: [number, number][];
+  /** Di tích, miếu đã biết (v0.8 F3): triện nhỏ cạnh trị sở quận. */
+  sites?: SiteView[];
 }
 
 interface View {
@@ -38,7 +40,7 @@ interface View {
   k: number;
 }
 
-export function MapView({ map, region, seed, birthplaces, selected, onSelect, location, route = [], layer = null, dangerRoads = [] }: Props) {
+export function MapView({ map, region, seed, birthplaces, selected, onSelect, location, route = [], layer = null, dangerRoads = [], sites = [] }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const canvasHost = useRef<HTMLDivElement>(null);
   const viewer = useRef<AtlasViewer | null>(null);
@@ -163,6 +165,19 @@ export function MapView({ map, region, seed, birthplaces, selected, onSelect, lo
                 <text y={-markerW(b) / 2 - 0.45} class="bp-label">{b.name}</text>
               </g>
             ))}
+            {sites.map((x, i) => {
+              // Bên phải triện trị sở (vẽ sau nơi sinh để tên quận không đè); quận có cả hai chốn thì miếu đứng cạnh di tích
+              const seat = map.counties[x.county]?.seat;
+              if (!seat) return null;
+              const second = i > 0 && sites[i - 1]!.county === x.county;
+              return (
+                <g key={`${x.county}-${x.kind}`} class={`site site-${x.kind}`} transform={`translate(${seat.x + 0.5 + (second ? 3.3 : 1.75)} ${seat.y + 0.5})`}>
+                  <title>{t(`site.${x.kind}_note`)}</title>
+                  <rect x={-0.7} y={-0.7} width={1.4} height={1.4} rx={0.12} class="site-mark" />
+                  <text y={0.4} class="site-char">{SITE_CHAR[x.kind]}</text>
+                </g>
+              );
+            })}
           </g>
         </g>
       </svg>

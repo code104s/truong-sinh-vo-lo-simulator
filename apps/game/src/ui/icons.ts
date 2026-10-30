@@ -1,5 +1,6 @@
 // Chữ Hán trang trí cho ấn triện và vòng mùa. Chỉ để hiển thị, không phải luật game.
-import type { CareerId, LogEntry, Season, SettlementKind } from '@tsvl/shared';
+import { CULTIVATION_EVENT_IDS } from '@tsvl/content';
+import type { CareerId, LogEntry, Season, SettlementKind, SiteKind } from '@tsvl/shared';
 
 export const SEASON_CHAR: Record<Season, string> = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
 export const KIND_CHAR: Record<SettlementKind, string> = { city: '城', town: '鎮', village: '村' };
@@ -12,6 +13,11 @@ export const CAREER_CHAR: Record<CareerId, { char: string; tone: SealTone }> = {
   merchant: { char: '商', tone: 'ochre' }, physician: { char: '醫', tone: 'jade' }, soldier: { char: '兵', tone: 'ink' },
   drifter: { char: '浪', tone: 'ink' }, recluse: { char: '隱', tone: 'jade' }, outlaw: { char: '匪', tone: 'red' },
 };
+
+/** Triện đường tiên (v0.8 F3): thẻ sự kiện đường tiên, biên niên. */
+export const DAO_CHAR = { char: '道', tone: 'jade' } as const satisfies { char: string; tone: SealTone };
+/** Chốn đã biết trên bản đồ (F3): di tích (hang đá cũ), miếu. */
+export const SITE_CHAR: Record<SiteKind, string> = { ruin: '洞', shrine: '廟' };
 
 /** Ấn của từng hành động trong kế hoạch tháng và bảng chọn. */
 export const ACTION_CHAR: Record<string, { char: string; tone: SealTone }> = {
@@ -74,5 +80,12 @@ export function logSeal(e: LogEntry): { char: string; tone: SealTone } | null {
   if (e.key === 'log.faction.bandits_founded' || e.key === 'log.faction.seized_bandits') return { char: '匪', tone: 'red' };
   if (e.key.startsWith('log.faction.campaign_') || e.key === 'log.faction.retaken') return { char: '官', tone: 'ink' };
   if (e.key.startsWith('log.faction.')) return { char: '勢', tone: 'ochre' };
+  // Đường tiên (v0.8 F3): tông môn, dấu hiệu lúc nhỏ, dẫn khí, tu luyện, đột phá, sự kiện đường tiên
+  if (e.key.startsWith('log.sect.')) return { char: '宗', tone: e.key === 'log.sect.expelled' || e.key.startsWith('log.sect.rejected') ? 'ink' : 'jade' };
+  if (e.key.startsWith('log.omen.')) return { char: '兆', tone: 'jade' };
+  if (e.key.startsWith('log.breakthrough.')) return e.key === 'log.breakthrough.ok' ? { char: '成', tone: 'jade' } : { char: '逆', tone: 'red' };
+  if (e.key.startsWith('log.rogue.')) return { char: '引', tone: e.key === 'log.rogue.induced' ? 'jade' : 'ink' };
+  if (e.key.startsWith('log.cultivate.')) return { char: '修', tone: 'jade' };
+  if (e.key.startsWith('event.') && CULTIVATION_EVENT_IDS.has(e.key.slice(0, e.key.indexOf('.', 'event.'.length)))) return DAO_CHAR;
   return null;
 }

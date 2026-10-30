@@ -1,13 +1,14 @@
 // Tông môn tối giản (v0.8 S3, ADR 0022 Q5): một tông môn ngoài vùng, chỉ có kỳ tuyển và đệ tử ký danh. Sơn môn không vẽ,
 // không mô phỏng bên trong; sứ giả xuống trị sở mỗi ba năm, tháng Ba, kiểm linh căn trẻ 8–20 tuổi (người chơi và NPC cùng
 // luật). Trẻ NPC đỗ thì rời vùng lên núi; của trong túi để lại cho cha mẹ. Không rút RNG.
-import { ageYearsAt, calendarOf, type LogEntry, type SectDutyView, type Tick } from '@tsvl/shared';
+import { ageYearsAt, calendarOf, type LogEntry, type SectDutyView, type Tick, type TrialNews } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { hash32 } from '../core/hash';
 import type { EconomyState } from '../economy/market';
 import type { CharacterState } from '../life/character';
 import { rootBand, testRoot, type CultivationState } from '../life/cultivation';
 import { feedersOf, kinRole, lookup } from '../npc/family';
+import { bondOf, type Bond } from '../social/bonds';
 import type { NpcState, NpcWorldState } from '../npc/state';
 import { governmentSeat } from './government';
 import type { FactionState, FactionWorldState } from './state';
@@ -65,7 +66,7 @@ function depart(n: NpcState, npcs: NpcWorldState, eco: EconomyState, fw: Faction
  * Đầu mỗi tháng (sau pha Thế lực): tháng Giêng năm tuyển báo tin cho người chơi; đầu tháng Ba sứ giả kiểm trẻ NPC 8–20
  * tuổi chưa ra riêng — người đỗ rời vùng. Ghi kỳ tuyển vào tông môn để người chơi dự trong tháng. Trả số trẻ NPC đỗ.
  */
-export function sectPhase(fw: FactionWorldState, npcs: NpcWorldState, eco: EconomyState, logic: RegionLogic, tick: Tick, player: { c: CharacterState; log: Log } | null): number {
+export function sectPhase(fw: FactionWorldState, npcs: NpcWorldState, eco: EconomyState, logic: RegionLogic, tick: Tick, player: { c: CharacterState; log: Log; bonds?: readonly Bond[] } | null): number {
   const f = sectOf(fw);
   if (!f || tick % 3 !== 0 || !isTrialYear(tick)) return 0;
   const month = calendarOf(tick).month;
@@ -79,12 +80,23 @@ export function sectPhase(fw: FactionWorldState, npcs: NpcWorldState, eco: Econo
   for (const { n, band } of bands) {
     if (!trialAccepts(f, band)) continue;
     // Con cháu, anh em người chơi được chọn: tin lớn của nhà mình
-    if (player && kinRole(player.c, n)) player.log({ key: 'log.sect.kin_taken', params: { name: n.character.name, sect: f.name.params.name! }, importance: 'major' });
+    if (player) takenNews(player, n, f.name.params.name!);
     depart(n, npcs, eco, fw);
     f.trial.taken++;
   }
   if (player && f.trial.taken > 0) player.log({ key: 'log.sect.took', params: { count: f.trial.taken, place, sect: f.name.params.name! }, importance: 'minor' });
   return f.trial.taken;
+}
+
+/**
+ * Trẻ đỗ mà người chơi biết (F3): người nhà là tin lớn (S3); người quen (đã có quan hệ) cũng là tin lớn — đứa trẻ mình
+ * biết mặt đã lên núi; trẻ hàng xóm cùng quận đang đứng là tin thường. Chỉ là dòng biên niên.
+ */
+function takenNews(player: { c: CharacterState; log: Log; bonds?: readonly Bond[] }, n: NpcState, sect: string | number): void {
+  const name = n.character.name;
+  if (kinRole(player.c, n)) player.log({ key: 'log.sect.kin_taken', params: { name, sect }, importance: 'major' });
+  else if (bondOf(player.bonds ?? [], n.id)) player.log({ key: 'log.sect.known_taken', params: { name, sect }, importance: 'major' });
+  else if (n.character.location === player.c.location) player.log({ key: 'log.sect.neighbor_taken', params: { name, sect }, importance: 'minor' });
 }
 
 // —— Người chơi: dự kỳ tuyển, đệ tử ký danh (Q5) ——
@@ -102,7 +114,23 @@ export function trialLock(c: CharacterState, cult: CultivationState, fw: Faction
   const f = sectOf(fw);
   if (!f || !trialOpen(tick) || !f.trial || c.location !== f.seat) return 'lock.no_trial';
   if (ageYearsAt(c.birthTick, tick) > SECT_AGE[1]) return 'lock.trial_age';
-  return cult.path ? 'lock.member' : null;
+  // Đã có đường tu thì không dự nữa (F3 sửa: trước dùng nhầm khóa "Đã là hội viên" của thương hội)
+  return cult.path ? 'lock.has_path' : null;
+}
+
+/**
+ * Tin kỳ tuyển cho giao diện (F3): năm tuyển, từ tháng nghe tin tới hết tháng tuyển; nơi sứ giả xuống; đang mở chưa;
+ * người chơi còn dự được không (chưa có đường tu, chưa quá tuổi). Cùng luật `trialLock`, không đổi trạng thái.
+ */
+export function trialNews(c: CharacterState, cult: CultivationState, fw: FactionWorldState, logic: RegionLogic, tick: Tick): TrialNews | null {
+  const f = sectOf(fw);
+  const month = calendarOf(tick).month;
+  if (!f || !isTrialYear(tick) || month < SECT_RUMOR_MONTH || month > SECT_TRIAL_MONTH) return null;
+  return {
+    sect: String(f.name.params.name), place: logic.counties[f.seat]?.name ?? 'place.unknown', county: f.seat,
+    open: trialOpen(tick) && f.trial !== null,
+    eligible: cult.path === null && ageYearsAt(c.birthTick, tick) <= SECT_AGE[1],
+  };
 }
 
 /** Một tuần dự tuyển: sứ giả kiểm linh căn (ghi dải); đỗ thì thành đệ tử ký danh, trượt thì mang ám ảnh. Trả có đỗ không. */

@@ -40,9 +40,9 @@ import { enlist, enlistLock, type EnlistWorld } from './soldier';
 import { ATONE_FEE, bandOf, canAtone, leaveBand, OUTLAW_CAUGHT_REP, ownEnter, ownLock, taxExempt, type OwnWorld } from './wayward';
 import { apprenticeAct, apprenticeLock, CAREER_DEFS, careerView, careerWorked, careerYear, entryGift, leaveAngers, legacyCareers, leaveCareer, mentorCareer, rankStep, type ApprenticeWorld, type CareerState } from './career';
 import { roadRisk, routeDanger } from '../factions/impact';
-import { cultivationView, legacyCultivation, newCultivation, qiPlaceBand, qiPlacePct, type CultivationState } from './cultivation';
+import { cultivationView, knownSites, legacyCultivation, newCultivation, noteSites, qiPlaceBand, qiPlacePct, type CultivationState } from './cultivation';
 import { omenYear } from './omens';
-import { attendTrial, dutyLock, dutyView, dutyYear, foundSect, sectPhase, trialLock } from '../factions/sect';
+import { attendTrial, dutyLock, dutyView, dutyYear, foundSect, sectPhase, trialLock, trialNews } from '../factions/sect';
 import { induce, induceLock } from './rogue';
 import { breakthrough, breakthroughLock, breakthroughPreview, cultivate, cultivateLock, FAIL_SHAKEN_TICKS, SECLUSION_FADE_SLOTS } from './cultivate';
 import { LEAVE_ATTITUDE, shiftAttitude } from '../factions/attitude';
@@ -317,7 +317,9 @@ export class Life {
       trackSeen(this.s.factionsSeen, this.s.factions, this.logic, c.location);
     }
     // Tông môn (v0.8 S3): tin kỳ tuyển tháng Giêng; đầu tháng Ba sứ giả kiểm trẻ NPC, trẻ đỗ rời vùng. Đầu năm xét nghĩa vụ đệ tử
-    sectPhase(this.s.factions, this.s.npcs, this.s.economy, this.logic, t, { c, log });
+    sectPhase(this.s.factions, this.s.npcs, this.s.economy, this.logic, t, { c, log, bonds: this.s.bonds });
+    // Di tích, miếu ở quận đang đứng thành chốn đã biết (F3)
+    noteSites(this.s.cultivation, this.logic, c.location);
     if (isYearStart(t)) dutyYear(c, this.s.cultivation, this.s.factions, t, log);
     // Dấu hiệu tiên duyên tuổi thơ (S7, ADR 0023): chỉ dòng biên niên, suy từ seed gốc của đời
     if (isYearStart(t)) omenYear(c, lifeRoot(this.s.config), t, log);
@@ -790,10 +792,14 @@ export class Life {
     const s = this.s, cult = s.cultivation;
     const duty = dutyView(cult);
     const preview = breakthroughPreview(s.character, cult, s.tick, () => this.mourning());
+    const trial = trialNews(s.character, cult, s.factions, this.logic, s.tick);
+    const sites = knownSites(cult, this.logic);
     return {
       ...cultivationView(cult), ...(duty ? { duty } : {}),
       ...(cult.path ? { place: qiPlaceBand(qiPlacePct(this.logic, s.character.location)) } : {}),
       ...(preview ? { breakthrough: preview } : {}),
+      ...(trial ? { trial } : {}),
+      ...(sites.length ? { sites } : {}),
     };
   }
 

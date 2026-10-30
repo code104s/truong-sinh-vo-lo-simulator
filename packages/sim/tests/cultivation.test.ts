@@ -1,11 +1,12 @@
 // v0.8 Bước 0: đường tu trong snapshot, phép chiếu, linh khí nơi ở (ADR 0022).
+import { CULTIVATION_EVENT_IDS } from '@tsvl/content';
 import { birthplaceId, HIDDEN_CHARACTER_KEYS, regionId, vCharacterView } from '@tsvl/shared';
 import { SECT_DUTY_FEE, SECT_DUTY_WEEKS, SECT_EXPEL_MISSED } from '../src/factions/sect';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { describe, expect, it } from 'vitest';
 import { Life, Rng } from '../src/index';
 import { autoAdvance, lastChoice, pastComingOfAge } from './auto';
-import { cultivationView, hasSite, legacyCultivation, newCultivation, QI_PEAK, QI_PLACE_PCT, qiBand, qiPlacePct, rootBand, seekLock, sitesOf, testRoot } from '../src/life/cultivation';
+import { cultivationView, hasSite, knownSites, legacyCultivation, newCultivation, noteSites, QI_PEAK, QI_PLACE_PCT, qiBand, qiPlacePct, rootBand, seekLock, sitesOf, testRoot } from '../src/life/cultivation';
 import { createCharacter, type SpiritRoot } from '../src/life/character';
 import { actionDef, actionOptions, placeRiskPpm, SEEK_MOUNTAIN_RISK_PPM } from '../src/life/actions';
 import { mountainCounty } from '../src/life/wayward';
@@ -105,6 +106,40 @@ describe('chốn tìm cơ duyên trên bản đồ (v0.8 S1)', () => {
     const nowhere = wide.counties.findIndex((_, k) => !mountainCounty(wide, k) && !hasSite(wide, k, 'shrine'));
     expect(nowhere).toBeGreaterThanOrEqual(0);
     expect(seekLock(wide, nowhere)).toBe('lock.no_seek_place');
+  });
+});
+
+describe('chốn đã biết, sự kiện đường tiên trên giao diện (v0.8 F3)', () => {
+  it('đặt chân tới quận có chốn thì nhớ, không trùng, xếp tăng dần; quận không có chốn thì không ghi', () => {
+    const s = newCultivation();
+    const all = [...new Set([...sitesOf(wide).ruins, ...sitesOf(wide).shrines])].sort((a, b) => a - b);
+    const plain = wide.counties.findIndex((_, k) => !all.includes(k));
+    for (const k of [...all].reverse()) noteSites(s, wide, k);
+    noteSites(s, wide, all[0]!);
+    if (plain >= 0) noteSites(s, wide, plain);
+    expect(s.seen).toEqual(all);
+    const known = knownSites(s, wide);
+    expect(known.filter((x) => x.kind === 'ruin').map((x) => x.county)).toEqual(sitesOf(wide).ruins);
+    expect(known.filter((x) => x.kind === 'shrine').map((x) => x.county)).toEqual(sitesOf(wide).shrines);
+    expect(knownSites(newCultivation(), wide)).toEqual([]);
+  });
+
+  it('chơi thật: đứng ở quận có miếu một tuần thì view có miếu ấy; save cũ thiếu danh sách vẫn qua schema', () => {
+    const shrine = sitesOf(region).shrines[0]!;
+    const s = Life.create({ worldSeed: 'tu', regionId: regionId('r0'), birthplaceId: bp.id }, bp, region).snapshot();
+    s.character.location = shrine;
+    expect(s.cultivation.seen).toBeUndefined();
+    expect(vLifeSnapshot.check(JSON.parse(JSON.stringify(s)), '$')).toBeNull();
+    const l = Life.restore(s, [], region);
+    autoAdvance(l, 'week', lastChoice);
+    expect(l.view().cultivation.sites).toContainEqual({ county: shrine, kind: 'shrine' });
+    expect(vCharacterView.check(JSON.parse(JSON.stringify(l.view())), '$')).toBeNull();
+    expect(vLifeSnapshot.check(JSON.parse(JSON.stringify(l.snapshot())), '$')).toBeNull();
+  });
+
+  it('mọi sự kiện nhóm đường tiên có văn bản ở tệp sự kiện đường tiên và ngược lại (thẻ sự kiện, lọc "Đạo" dựa vào đây)', () => {
+    const ids = EVENTS.filter((e) => e.category === 'cultivation').map((e) => e.id).sort();
+    expect([...CULTIVATION_EVENT_IDS].sort()).toEqual(ids);
   });
 });
 
@@ -280,7 +315,7 @@ describe('ba lối kiểm linh căn (v0.8 S2)', () => {
     const s = adult(0, ['hermit_stone'], { elements: ['fire', 'earth', 'water'], purity: 40 });
     run(hermitStoneTest, s, 'hold');
     const l = Life.restore(JSON.parse(JSON.stringify(s)), [], wide);
-    expect(l.view().cultivation).toEqual({ realm: 'mortal', root: 'mixed', path: null, qi: null });
+    expect(l.view().cultivation).toMatchObject({ realm: 'mortal', root: 'mixed', path: null, qi: null });
     const m = Life.restore(JSON.parse(JSON.stringify(l.snapshot())), [], wide);
     for (let k = 0; k < 2; k++) { autoAdvance(l, 'year', lastChoice); autoAdvance(m, 'year', lastChoice); }
     expect(m.digest()).toBe(l.digest());

@@ -331,6 +331,10 @@ p { margin: 0; }
 .bp-mark.seal-red { fill: var(--cinnabar); }
 .bp-mark.seal-ink { fill: #2b2926; }
 .bp-char { font-family: var(--han); font-weight: 700; fill: #f6eee2; text-anchor: middle; pointer-events: none; }
+/* v0.8 F3: chốn đã biết — triện nhỏ màu ngọc cạnh trị sở */
+.site-mark { fill: var(--jade); stroke: #efeae0; stroke-width: 0.1; }
+.site-ruin .site-mark { fill: #6d5a3a; }
+.site-char { font: 700 1.1px var(--han); fill: #fbf6ec; text-anchor: middle; pointer-events: none; }
 .bp-label { font: 700 1.05px var(--serif); text-anchor: middle; fill: var(--ink); paint-order: stroke; stroke: #efeae0; stroke-width: 0.32; pointer-events: none; }
 .bp-city .bp-label { font-size: 1.35px; }
 .bp.is-hover .bp-ring { stroke: var(--gold); }
@@ -675,6 +679,7 @@ p { margin: 0; }
 .control-fill { pointer-events: none; }
 polyline.road-bandit { fill: none; stroke: var(--cinnabar); stroke-width: .55; stroke-dasharray: .7 .35; stroke-linecap: round; pointer-events: none; }
 .danger-tag { margin-left: 6px; padding: 0 5px; font-size: 12px; color: #f6eee2; background: var(--cinnabar); border-radius: 2px; }
+.site-tag { margin-left: 6px; padding: 0 5px; font-size: 12px; color: #f6eee2; background: var(--jade); border-radius: 2px; white-space: nowrap; }
 .danger-note { color: var(--cinnabar); font-weight: 600; }
 polyline.road-guild { fill: none; stroke: var(--ochre); stroke-width: .3; stroke-dasharray: .12 .35; stroke-linecap: round; pointer-events: none; }
 .map-legend { position: absolute; left: 10px; bottom: 10px; z-index: 3; padding: 8px 12px; max-width: min(340px, 70%); max-height: 45%; overflow: auto; cursor: default;
@@ -901,6 +906,10 @@ polyline.road-guild { fill: none; stroke: var(--ochre); stroke-width: .3; stroke
 .event-career-seal { position: absolute; right: 2px; top: 12px; }
 .event-career-seal .seal { width: 34px; height: 34px; font-size: 20px; box-shadow: 0 2px 6px rgba(25, 20, 12, 0.3); }
 .event-career { color: var(--ochre); font-weight: 600; }
+/* v0.8 F3: sự kiện đường tiên — viền trong ngả ngọc, nhãn ngọc */
+.event-card.dao-event { box-shadow: inset 0 0 0 5px rgba(255, 255, 255, 0.35), inset 0 0 0 6px rgba(79, 107, 85, 0.75), 0 24px 60px rgba(20, 16, 10, 0.5); }
+.event-dao { color: var(--jade); font-weight: 600; }
+.trial-banner { color: #2f4636; border-color: rgba(79, 107, 85, 0.5); background: rgba(79, 107, 85, 0.1); }
 .faction .attitude { font-weight: 600; }
 .faction .attitude.tone-bad, .faction-card dd.tone-bad { color: var(--cinnabar); }
 .faction .attitude.tone-warn, .faction-card dd.tone-warn { color: var(--ochre); }

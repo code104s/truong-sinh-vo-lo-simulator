@@ -1,4 +1,5 @@
 // Gom nhật ký thành biên niên theo năm (đề xuất giao diện P0). Thuần, test được; không có luật game.
+import { CULTIVATION_EVENT_IDS } from '@tsvl/content';
 import { ageYearsAt, calendarOf, type LogEntry, type Tick } from '@tsvl/shared';
 
 export interface ChronicleItem { entry: LogEntry; index: number }
@@ -33,10 +34,10 @@ export function groupByYear(log: readonly LogEntry[], birthTick: Tick): YearGrou
   return groups;
 }
 
-export type ChronicleFilter = 'all' | 'major' | 'career' | 'people' | 'affairs';
-export const CHRONICLE_FILTERS: readonly ChronicleFilter[] = ['all', 'major', 'career', 'people', 'affairs'];
+export type ChronicleFilter = 'all' | 'major' | 'career' | 'dao' | 'people' | 'affairs';
+export const CHRONICLE_FILTERS: readonly ChronicleFilter[] = ['all', 'major', 'career', 'dao', 'people', 'affairs'];
 /** Lọc có dòng "chưa có gì" riêng khi trống. */
-export const FILTERS_WITH_EMPTY: readonly ChronicleFilter[] = ['career', 'people', 'affairs'];
+export const FILTERS_WITH_EMPTY: readonly ChronicleFilter[] = ['career', 'dao', 'people', 'affairs'];
 
 /**
  * Nghề (v0.7 F3): vào, lên bậc, rời nghề; lương, trận của sai dịch; chuyến buôn, thương hội; theo cướp; và kết quả các
@@ -44,6 +45,18 @@ export const FILTERS_WITH_EMPTY: readonly ChronicleFilter[] = ['career', 'people
  */
 const CAREER_PREFIXES = ['log.career.', 'log.soldier.', 'log.outlaw.', 'log.haul.', 'log.guild.'] as const;
 export const isCareerNews = (e: LogEntry): boolean => e.career !== undefined || CAREER_PREFIXES.some((p) => e.key.startsWith(p));
+
+/** Sự kiện đường tiên (v0.8 F3) theo mã sự kiện; dòng kết quả có khóa `event.<id>.result.<kết quả>`. */
+export const isDaoEvent = (eventId: string): boolean => CULTIVATION_EVENT_IDS.has(eventId);
+const eventIdOf = (key: string): string => key.slice(0, key.indexOf('.', 'event.'.length));
+
+/**
+ * Đạo (v0.8 F3): tin kỳ tuyển, trẻ được chọn, đệ tử ký danh; dấu hiệu tiên duyên lúc nhỏ; tự dẫn khí, tu luyện, đột phá;
+ * và kết quả các sự kiện đường tiên.
+ */
+const DAO_PREFIXES = ['log.sect.', 'log.omen.', 'log.rogue.', 'log.cultivate.', 'log.breakthrough.'] as const;
+export const isDaoNews = (e: LogEntry): boolean =>
+  DAO_PREFIXES.some((p) => e.key.startsWith(p)) || (e.key.startsWith('event.') && isDaoEvent(eventIdOf(e.key)));
 
 /**
  * Thế sự (v0.6 F3): tin thế lực ở quận đang đứng, tin đồn thế lực từ quận kề, quan mới nhậm chức, và kết quả các sự kiện
@@ -68,6 +81,7 @@ const isNeighbourNews = (e: LogEntry): boolean => e.importance === 'minor' && e.
  * Những dòng hiện cho một năm:
  * - "Chuyện lớn": chỉ việc lớn;
  * - "Nghề" (v0.7 F3): chỉ việc nghề, không gập;
+ * - "Đạo" (v0.8 F3): chỉ chuyện đường tiên, không gập;
  * - "Người quanh mình": chỉ tin về người có tên, không gập;
  * - "Thế sự" (v0.6 F3): chỉ tin thế lực, không gập;
  * - "Tất cả": năm mới nhất hiện đủ, trừ tin sinh, mất của người chưa quen (F2); năm cũ gập mọi việc thường ngày. Người
@@ -75,6 +89,7 @@ const isNeighbourNews = (e: LogEntry): boolean => e.importance === 'minor' && e.
  */
 export function visibleItems(g: YearGroup, filter: ChronicleFilter, latest: boolean, unfolded: boolean): { items: ChronicleItem[]; folded: number } {
   if (filter === 'career') return { items: g.items.filter((it) => isCareerNews(it.entry)), folded: 0 };
+  if (filter === 'dao') return { items: g.items.filter((it) => isDaoNews(it.entry)), folded: 0 };
   if (filter === 'people') return { items: g.items.filter((it) => isPeopleNews(it.entry)), folded: 0 };
   if (filter === 'affairs') return { items: g.items.filter((it) => isAffairsNews(it.entry)), folded: 0 };
   if (filter === 'major') return { items: g.items.filter((it) => it.entry.importance === 'major'), folded: 0 };
