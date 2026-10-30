@@ -414,6 +414,9 @@ export const VI: Readonly<Record<string, string>> = {
   'ui.bt.lose_qi': 'linh khí chỉ còn một nửa;', 'ui.bt.lose_meridian': 'thương kinh mạch, ốm dài, khỏi mới tu tiếp được;',
   'ui.bt.lose_mind': 'tâm cảnh chấn động một năm, chưa thử lại được;', 'ui.bt.lose_severe': 'hỏng nặng thì tổn thọ.',
   'ui.bt.confirm': 'Xếp đột phá', 'ui.bt.cancel': 'Để sau',
+  // Cảnh đột phá có dựng (đề xuất "cuốn hơn" mục 7.3): chờ một nhịp rồi mới hiện kết quả
+  'ui.bt.scene_gather': 'Khí dồn về đan điền, chạm vào chỗ tắc…',
+  'ui.bt.scene_ok': 'Phá cảnh', 'ui.bt.scene_failed': 'Khí nghịch', 'ui.bt.scene_severe': 'Khí nghịch, tổn thọ', 'ui.bt.scene_close': 'Tiếp',
   'ui.plan.career_work': 'Việc nghề', 'ui.plan.career_work_hint': 'Ô này tính vào năm làm nghề',
   'ui.plan.other_careers': 'Việc riêng của nghề khác', 'ui.plan.career_of': '{action} ({career})',
   // v0.7 F2: bảng chọn nghề ở quận đang đứng, rời nghề

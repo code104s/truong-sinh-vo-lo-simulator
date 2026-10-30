@@ -1,8 +1,10 @@
 // Đường tu (v0.8 F1): cảnh giới trên thanh trạng thái, khối Đạo ở hồ sơ. F2: ô tu luyện, đột phá, hỏi lại trước khi đột phá.
 import { hasKey, t } from '@tsvl/content';
-import { CHANCE_BANDS, MIND_BANDS, QI_BANDS, QI_PLACE_BANDS, REALMS, ROOT_BANDS, type CultivationView, type FactionView } from '@tsvl/shared';
+import { CHANCE_BANDS, MIND_BANDS, QI_BANDS, QI_PLACE_BANDS, REALMS, ROOT_BANDS, type CultivationView, type FactionView, type LogEntry } from '@tsvl/shared';
 import { describe, expect, it } from 'vitest';
-import { breakthroughAsk, cultivationNote, daoBlock, dutyLines, needsConfirm, realmLine } from '../src/app/cultivation';
+import {
+  breakthroughAsk, breakthroughOutcome, cultivationNote, daoBlock, dutyLines, lastBreakthroughTick, needsConfirm, newBreakthrough, REALM_SEAL, realmClass, realmLine,
+} from '../src/app/cultivation';
 
 const mortal: CultivationView = { realm: 'mortal', root: null, path: null, qi: null };
 const sect: FactionView = { id: 'f9', kind: 'sect', name: { key: 'faction.sect.name', params: { name: 'Thanh Vân' } }, seat: 2, counties: [], strength: 'modest', members: 0 };
@@ -76,5 +78,43 @@ describe('đường tu (v0.8 F1)', () => {
   it('F2: mọi dải linh khí nơi ở, cơ hội, tâm cảnh và chữ hộp hỏi có chuỗi', () => {
     for (const id of [...QI_PLACE_BANDS.map((b) => `qi_place.${b}`), ...CHANCE_BANDS.map((b) => `chance.${b}`), ...MIND_BANDS.map((b) => `mind.${b}`),
       'ui.bt.title', 'ui.bt.intro', 'ui.bt.chance', 'ui.bt.mind', 'ui.bt.mind_warn', 'ui.bt.win', 'ui.bt.lose', 'ui.bt.confirm', 'ui.bt.cancel']) expect(hasKey(id), id).toBe(true);
+  });
+});
+
+const entry = (tick: number, key: string): LogEntry => ({ tick, key, params: {}, importance: 'major' });
+
+describe('cảnh đột phá có dựng, vào tầng một (v0.8 F2 bổ sung)', () => {
+  it('chỉ ba dòng kết quả đột phá được dựng cảnh', () => {
+    expect(breakthroughOutcome(entry(5, 'log.breakthrough.ok'))).toBe('ok');
+    expect(breakthroughOutcome(entry(5, 'log.breakthrough.failed'))).toBe('failed');
+    expect(breakthroughOutcome(entry(5, 'log.breakthrough.severe'))).toBe('severe');
+    expect(breakthroughOutcome(entry(5, 'log.breakthrough.other'))).toBeNull();
+    expect(breakthroughOutcome(entry(5, 'log.illness.onset'))).toBeNull();
+  });
+
+  it('mở save thì nhớ lần đột phá cũ, không dựng lại; chỉ lần mới sau tick đó mới dựng', () => {
+    const old = [entry(3, 'log.breakthrough.failed'), entry(4, 'log.illness.onset')];
+    expect(lastBreakthroughTick([])).toBe(-1);
+    expect(lastBreakthroughTick(old)).toBe(3);
+    expect(newBreakthrough(old, lastBreakthroughTick(old))).toBeNull();
+    const next = [...old, entry(9, 'log.breakthrough.ok'), entry(9, 'log.family.birth')];
+    expect(newBreakthrough(next, 3)).toEqual({ entry: next[2], outcome: 'ok' });
+    expect(newBreakthrough(next, 9)).toBeNull();
+  });
+
+  it('biên niên bị cắt đầu (LOG_LIMIT) vẫn nhận ra lần mới theo tick, không theo độ dài', () => {
+    const cut = [entry(10, 'log.illness.onset'), entry(12, 'log.breakthrough.severe')];
+    expect(newBreakthrough(cut, 3)?.outcome).toBe('severe');
+  });
+
+  it('giao diện đổi màu mực và triện khi đã vào tầng một; người phàm giữ nguyên', () => {
+    expect(realmClass(mortal)).toBe('');
+    expect(realmClass({ realm: 'qi1', root: 'fair', path: 'rogue', qi: 'low' })).toBe(' realm-qi1');
+    for (const r of REALMS) if (r !== 'mortal') expect(REALM_SEAL[r], r).toBeTruthy();
+  });
+
+  it('chữ của cảnh đột phá có chuỗi', () => {
+    for (const id of ['ui.bt.scene_gather', 'ui.bt.scene_ok', 'ui.bt.scene_failed', 'ui.bt.scene_severe', 'ui.bt.scene_close', 'log.breakthrough.ok', 'log.breakthrough.failed', 'log.breakthrough.severe'])
+      expect(hasKey(id), id).toBe(true);
   });
 });

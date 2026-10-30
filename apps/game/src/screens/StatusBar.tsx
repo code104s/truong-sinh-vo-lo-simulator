@@ -2,7 +2,7 @@ import { t } from '@tsvl/content';
 import { GRAIN_PER_DOU, type CalendarDate, type CharacterView, type FoodWeeksBand, type HungerBand, type StaminaBand } from '@tsvl/shared';
 import type { ComponentChildren } from 'preact';
 import { careerLine } from '../app/career';
-import { realmLine } from '../app/cultivation';
+import { REALM_SEAL, realmLine } from '../app/cultivation';
 import { dateText } from '../app/format';
 import { reputationTone } from '../app/people';
 import type { WorldInfo } from '../app/state';
@@ -62,7 +62,7 @@ export function StatusBar({ c, date, saved, world }: { c: CharacterView; date: C
           <p class="muted">
             {t(`gender.${c.gender}`)} · {t('ui.life.age', { age: c.ageYears })}
             {job && <>{' · '}<span class={`career-tag${c.career ? '' : ' none'}`}>{c.career && <Seal char={CAREER_CHAR[c.career.id].char} tone={CAREER_CHAR[c.career.id].tone} />}{t(job.key, job.params)}</span></>}
-            {realm && <>{' · '}<span class="realm-tag"><Seal char="道" tone="jade" />{t(`realm.${realm}`)}</span></>}
+            {realm && <>{' · '}<span class="realm-tag"><Seal char={REALM_SEAL[realm]} tone="jade" />{t(`realm.${realm}`)}</span></>}
           </p>
           <p class="small">
             {place && <Seal char={KIND_CHAR[place.kind]} tone="ink" />} {t('ui.life.here', { place: here })}

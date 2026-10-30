@@ -1,12 +1,17 @@
 // Đường tu (v0.8 F1): cảnh giới trên thanh trạng thái khi đã bước qua, khối "Đạo" ở hồ sơ. F2: dòng đường tu trên ô việc
 // trong bảng chọn việc, hỏi lại trước khi đột phá. Thuần, không có luật game: mọi thứ đọc từ CharacterView.cultivation (dải
 // chữ, không lộ số linh khí, không lộ xác suất) và thế lực tông môn trong danh sách thế lực.
-import type { BreakthroughPreview, CultivationView, FactionName, FactionView, Realm, SectDutyView } from '@tsvl/shared';
+import type { BreakthroughPreview, CultivationView, FactionName, FactionView, LogEntry, Realm, SectDutyView } from '@tsvl/shared';
+
+export type RisenRealm = Exclude<Realm, 'mortal'>;
 
 /** Cảnh giới cho thanh trạng thái: chỉ khi đã bước qua phàm nhân (người phàm không ghi gì). */
-export function realmLine(cv: CultivationView): Realm | null {
+export function realmLine(cv: CultivationView): RisenRealm | null {
   return cv.realm === 'mortal' ? null : cv.realm;
 }
+
+/** Triện riêng của từng cảnh giới trên thanh trạng thái (F2 bổ sung): tầng một là chữ 氣. */
+export const REALM_SEAL: Record<RisenRealm, string> = { qi1: '氣' };
 
 export type Tone = 'good' | 'warn' | 'bad';
 
@@ -88,3 +93,35 @@ export function breakthroughAsk(p: BreakthroughPreview): BreakthroughAsk {
     losses: ['ui.bt.lose_qi', 'ui.bt.lose_meridian', 'ui.bt.lose_mind', 'ui.bt.lose_severe'],
   };
 }
+
+// —— Cảnh đột phá có dựng (đề xuất "cuốn hơn" mục 7.3, 9.5): màn tối, chờ một nhịp rồi mới hiện kết quả ——
+
+export type BreakthroughOutcome = 'ok' | 'failed' | 'severe';
+const OUTCOME_PREFIX = 'log.breakthrough.';
+
+/** Kết quả một dòng biên niên đột phá; dòng khác thì null. */
+export function breakthroughOutcome(e: LogEntry): BreakthroughOutcome | null {
+  if (!e.key.startsWith(OUTCOME_PREFIX)) return null;
+  const k = e.key.slice(OUTCOME_PREFIX.length);
+  return k === 'ok' || k === 'failed' || k === 'severe' ? k : null;
+}
+
+/** Tick của lần đột phá gần nhất trong biên niên đang giữ (-1 nếu chưa có): mở save thì không dựng lại cảnh cũ. */
+export function lastBreakthroughTick(log: readonly LogEntry[]): number {
+  for (let i = log.length - 1; i >= 0; i--) if (breakthroughOutcome(log[i]!)) return log[i]!.tick;
+  return -1;
+}
+
+/** Lần đột phá mới (sau `afterTick`) vừa vào biên niên, để dựng cảnh; không có thì null. */
+export function newBreakthrough(log: readonly LogEntry[], afterTick: number): { entry: LogEntry; outcome: BreakthroughOutcome } | null {
+  for (let i = log.length - 1; i >= 0; i--) {
+    const e = log[i]!;
+    if (e.tick <= afterTick) break;
+    const outcome = breakthroughOutcome(e);
+    if (outcome) return { entry: e, outcome };
+  }
+  return null;
+}
+
+/** Giao diện đổi màu mực khi đã bước qua phàm nhân (mục 7.3: "bước qua ngưỡng thì giao diện đổi theo"). */
+export const realmClass = (cv: CultivationView): string => (cv.realm === 'mortal' ? '' : ` realm-${cv.realm}`);

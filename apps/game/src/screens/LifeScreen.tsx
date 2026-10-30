@@ -3,6 +3,7 @@ import type { AdvanceMode, CalendarDate, CareerEntryView, CharacterView, GoodId,
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { placeEntry } from '../app/career';
+import { lastBreakthroughTick, newBreakthrough, realmClass, type BreakthroughOutcome } from '../app/cultivation';
 import { logText } from '../app/format';
 import { hungerAlert } from '../app/hunger';
 import { defaultPlan, planDirty, planInvalid } from '../app/plan';
@@ -12,7 +13,7 @@ import { InkLandscape, Scroll, Seal } from '../ui/ink';
 import { ActionPlanner } from './ActionPlanner';
 import { CareerDialog, CareerPanel, LeaveDialog } from './Career';
 import { Chronicle } from './Chronicle';
-import { DaoPanel } from './Dao';
+import { BreakthroughScene, DaoPanel } from './Dao';
 import { EventCard } from './EventCard';
 import { FactionMapDialog } from './FactionMap';
 import { MarketDialog, MarketPanel, PackPanel } from './Market';
@@ -115,7 +116,16 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
   // Mỗi STATE mang một object kế hoạch mới; chỉ đặt lại bản nháp khi kế hoạch thật sự đổi.
   const planKey = JSON.stringify(plan);
   useEffect(() => setDraft(copyPlan(plan)), [planKey]);
-  const lock = running || busy || !!pending;
+  // Cảnh đột phá (v0.8 F2): dựng khi biên niên có lần đột phá mới; mở save thì không dựng lại lần cũ
+  const [seenBreakthrough, setSeenBreakthrough] = useState(() => lastBreakthroughTick(log));
+  const [scene, setScene] = useState<{ entry: LogEntry; outcome: BreakthroughOutcome } | null>(null);
+  useEffect(() => {
+    const b = newBreakthrough(log, seenBreakthrough);
+    if (!b) return;
+    setSeenBreakthrough(b.entry.tick);
+    setScene(b);
+  }, [log]);
+  const lock = running || busy || !!pending || !!scene;
   const dirty = c.canAct && planDirty(draft, plan);
   const applicable = dirty && !planInvalid(draft, actions, travel);
   /** Bấm tua khi đang sửa dở: áp dụng bản nháp trước (worker xử lý lệnh theo thứ tự). */
@@ -127,7 +137,7 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
   };
 
   return (
-    <div class="screen ink-screen full">
+    <div class={`screen ink-screen full${realmClass(c.cultivation)}`}>
       <InkLandscape />
       <Scroll className="wide">
         <div class="life">
@@ -166,6 +176,7 @@ export function LifeScreen({ world, date, character: c, log, interrupt, running,
           </div>
         </div>
       </Scroll>
+      {scene && <BreakthroughScene entry={scene.entry} outcome={scene.outcome} onClose={() => setScene(null)} />}
       {pending && <EventCard pending={pending} date={date} busy={busy} onChoose={(choice) => onChoose(pending.instance, choice)} />}
       {marketOpen && market && !pending && <MarketDialog market={market} household={c.household} place={place} canAct={c.canAct} busy={busy || running} onTrade={onTrade} onTradeGoods={onTradeGoods} onClose={() => setMarketOpen(false)} />}
       {travelOpen && world && <TravelDialog world={world} location={c.location} slotIndex={date.tenDay} plan={plan} options={travel} preview={travelPreview} onPreview={onPreview} onPlan={onPlan} onClose={() => setTravelOpen(false)} factions={factions} control={control} />}
