@@ -57,7 +57,8 @@ const vCharacter = obj<CharacterState>({
   traits: arr(oneOf(TRAITS.map((t) => t.id))),
   spiritRoot: nullable(obj<SpiritRoot>({ elements: arr(oneOf(ELEMENTS)), purity: intRange(1, 100) })),
   lifespanBase: nat,
-  lifespanBonus: nat,
+  // Thọ cộng thêm: tầng 1 cộng, đột phá hỏng nặng trừ (v0.8 S5) — người phàm hỏng nặng thì âm
+  lifespanBonus: int,
   health: intRange(0, 1000),
   healthMax: intRange(0, 1000),
   scars: nat,

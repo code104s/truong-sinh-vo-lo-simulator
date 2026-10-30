@@ -264,3 +264,8 @@ Theo tài liệu "Làm Trường Sinh Vô Lộ cuốn hơn" (mục 7.3, 9.5), ha
 - Dùng `LifeSummary.legacy.cultivation` có sẵn từ Bước 0 (`CultivationRecord`), không đổi hợp đồng, không đổi digest.
 - **Bia đời** thêm khối "Đường tu": một câu nói đời ấy chạm tới đâu (chưa từng được kiểm; kiểm ra không có linh căn; biết có linh căn mà chưa bước qua cửa; đã dẫn khí mà chưa phá cảnh; bước qua ngưỡng cửa, vào tầng một năm bao nhiêu tuổi), rồi linh căn, đường tu, cảnh giới, số lần đột phá (thành, hỏng) kèm tuổi từng lần. Người vào tầng một có thêm dòng cảnh giới với triện 氣 dưới tên.
 - **Tab "Đạo"** bên phải: các mốc lớn về đường tiên trong cả đời (tông môn, trẻ quen được chọn, dấu hiệu lúc nhỏ, dẫn khí, đột phá, kết quả sự kiện đường tiên). Bỏ tin kỳ tuyển ba năm một lần vì lặp suốt đời, lấn mất chuyện của chính mình.
+
+### F5 — nghiệm thu nhánh FE (2026-10-30)
+- Tám save đời tu (phàm năm tuyển, tông môn, tán tu, trước/sau đột phá hỏng, trước đột phá thành, tầng một, đã mất) và một save trình duyệt phát lại PASS. Ảnh hai khổ chụp từ save thật nạp vào trình duyệt. Chi tiết ở [báo cáo FE v0.8](../v0.8-bao-cao-fe.md).
+- **Sửa lỗi S5:** đột phá hỏng nặng làm `character.lifespanBonus` âm ở người chưa vào tầng một; kiểm tra save đòi số ≥ 0 nên save bị từ chối khi tải. `lifespanBonus` nay là số nguyên có dấu; luật, snapshot, digest không đổi; test hồi quy ở `cultivate.test.ts`.
+- **+1 năm trên production:** máy cloud đo lần này chậm hơn máy đo v0.7 nhiều (v0.7 đo lại ở đây p95 165–196 ms); v0.8 cùng máy p95 118–167 ms, không chậm hơn v0.7. Ngưỡng ≤ 50 ms cần đo lại trên máy chủ dự án lúc đóng.

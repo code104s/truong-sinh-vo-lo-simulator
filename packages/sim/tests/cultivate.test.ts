@@ -241,4 +241,17 @@ describe('chơi thật (v0.8 S5)', () => {
     for (let k = 0; k < 2; k++) { autoAdvance(l, 'year', lastChoice); autoAdvance(m, 'year', lastChoice); }
     expect(m.digest()).toBe(l.digest());
   });
+
+  it('hỏng nặng ở người phàm: thọ nguyên cộng thêm thành âm, save vẫn qua schema và tải lại được (F5 sửa lỗi S5)', () => {
+    // Người phàm chưa có thọ cộng thêm; hỏng nặng trừ ba năm → âm. Trước sửa, schema đòi số không âm nên save bị từ chối
+    // (nghiệm thu F5 bắt: save ngay sau lần hỏng nặng không phát lại được)
+    const l = life({ qi: PEAK }, 'action.rest');
+    const s = l.snapshot();
+    s.character.lifespanBonus = -SEVERE_LIFESPAN_TICKS;
+    const json = JSON.parse(JSON.stringify(s));
+    expect(vLifeSnapshot.check(json, '$')).toBeNull();
+    const m = Life.restore(json, [], region);
+    autoAdvance(m, 'year', lastChoice);
+    expect(m.snapshot().character.lifespanBonus).toBe(-SEVERE_LIFESPAN_TICKS);
+  });
 });
