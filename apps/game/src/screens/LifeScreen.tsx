@@ -12,6 +12,7 @@ import { InkLandscape, Scroll, Seal } from '../ui/ink';
 import { ActionPlanner } from './ActionPlanner';
 import { CareerDialog, CareerPanel, LeaveDialog } from './Career';
 import { Chronicle } from './Chronicle';
+import { DaoPanel } from './Dao';
 import { EventCard } from './EventCard';
 import { FactionMapDialog } from './FactionMap';
 import { MarketDialog, MarketPanel, PackPanel } from './Market';
@@ -87,6 +88,7 @@ function Dossier({ c, world, factions, actions, locked, onCareers, onLeave, chil
         <dd>{c.traits.length ? c.traits.map((x) => t(x)).join(' · ') : <span class="muted">{t('ui.life.traits_none')}</span>}</dd>
       </dl>
       {c.canAct && <CareerPanel career={c.career} factions={factions} actions={actions} locked={locked} onOpen={onCareers} onLeave={onLeave} />}
+      <DaoPanel cultivation={c.cultivation} factions={factions} />
       {c.canAct && <PackPanel household={c.household} />}
       <div class="dossier-block">
         <span class="dossier-k">{t('ui.life.skills')}</span>

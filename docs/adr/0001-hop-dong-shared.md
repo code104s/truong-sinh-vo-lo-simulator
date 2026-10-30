@@ -494,3 +494,4 @@ Lý do: cửa ngõ tu tiên và Luyện Khí tầng 1 (chủ dự án duyệt Q1
   - **Nội dung:** `realm.*`, `root.*`, `cultivation.path.*`, `qi.*`, `faction.kind.sect`, `faction.sect.name`, nhãn khối thế lực cho tông môn.
   - **FE:** bảng loại thế lực thêm tông môn (triện 宗, không tô quận); hiển thị đường tu ở F1–F5.
 - v0.8 S1: `ACTION_GROUPS` thêm `seek` (tìm cơ duyên, GDD 3.2 E); hành động `action.seek`; khóa nội dung `group.seek`, `gain.fortune`, `lock.no_seek_place`. v8 chưa phát hành nên không tăng số.
+- v0.8 F1: `CultivationView` thêm `duty?: SectDutyView { weeks; need; missed; expelAt; fee }` (tùy chọn, chỉ khi đệ tử ký danh còn tên trong sổ): tuần tạp dịch năm nay, số năm liền bỏ nghĩa vụ, mức bị gạch tên, tiền nộp thay — để khối Đạo ở hồ sơ ghi nghĩa vụ. Không vào save, không đổi digest. v8 chưa phát hành nên không tăng số.

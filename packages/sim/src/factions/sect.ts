@@ -1,7 +1,7 @@
 // Tông môn tối giản (v0.8 S3, ADR 0022 Q5): một tông môn ngoài vùng, chỉ có kỳ tuyển và đệ tử ký danh. Sơn môn không vẽ,
 // không mô phỏng bên trong; sứ giả xuống trị sở mỗi ba năm, tháng Ba, kiểm linh căn trẻ 8–20 tuổi (người chơi và NPC cùng
 // luật). Trẻ NPC đỗ thì rời vùng lên núi; của trong túi để lại cho cha mẹ. Không rút RNG.
-import { ageYearsAt, calendarOf, type LogEntry, type Tick } from '@tsvl/shared';
+import { ageYearsAt, calendarOf, type LogEntry, type SectDutyView, type Tick } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { hash32 } from '../core/hash';
 import type { EconomyState } from '../economy/market';
@@ -122,6 +122,12 @@ export function attendTrial(c: CharacterState, cult: CultivationState, fw: Facti
   f.trial!.taken++;
   log({ key: 'log.sect.joined', params: { sect, root: `root.${band}`, stones: SECT_STONES_JOIN }, importance: 'major' });
   return true;
+}
+
+/** Nghĩa vụ như người chơi thấy (F1): tuần tạp dịch năm nay, năm liền bỏ, mức bị gạch tên, tiền nộp thay; null khi không còn tên. */
+export function dutyView(cult: CultivationState): SectDutyView | null {
+  const d = cult.duty;
+  return d ? { weeks: d.weeks, need: SECT_DUTY_WEEKS, missed: d.missed, expelAt: SECT_EXPEL_MISSED, fee: SECT_DUTY_FEE } : null;
 }
 
 /** Tạp dịch cho tông môn: chỉ đệ tử còn tên trong sổ. */

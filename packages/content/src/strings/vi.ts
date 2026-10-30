@@ -390,6 +390,15 @@ export const VI: Readonly<Record<string, string>> = {
   'ui.career.title': 'Nghề', 'ui.career.none': 'Chưa theo nghề nào, sống bằng việc tự do.',
   'ui.career.rank': 'Bậc', 'ui.career.since': 'Vào nghề', 'ui.career.mentor': 'Thầy', 'ui.career.mentor_dead': '{name} (đã mất)',
   'ui.career.faction': 'Nơi nhận', 'ui.career.works': 'Việc tính năm nghề',
+  // v0.8 F1: đường tu — cảnh giới trên thanh trạng thái khi đã bước qua, khối Đạo ở hồ sơ (dải chữ, không lộ số)
+  'ui.dao.title': 'Đạo', 'ui.dao.root': 'Linh căn', 'ui.dao.root_unknown': 'Chưa từng được kiểm',
+  'ui.dao.path': 'Đường tu', 'ui.dao.realm': 'Cảnh giới', 'ui.dao.qi': 'Linh khí',
+  'ui.dao.expelled': 'Đã bị gạch tên khỏi sổ tông môn; công pháp đã học vẫn nhớ.',
+  'ui.dao.ceiling': 'Đã tới đỉnh tầng một. Tầng sau chưa tới lúc.',
+  'ui.dao.duty': 'Nghĩa vụ', 'ui.dao.duty_weeks': 'Tạp dịch năm nay {weeks}/{need} tuần',
+  'ui.dao.duty_done': 'Tạp dịch năm nay đã đủ ({weeks}/{need} tuần)',
+  'ui.dao.duty_fee': 'Thiếu tuần thì cuối năm nộp {coin} văn thay.',
+  'ui.dao.duty_missed': 'Đã bỏ nghĩa vụ {missed} năm liền; {expel} năm liền thì bị gạch tên.',
   'ui.plan.career_work': 'Việc nghề', 'ui.plan.career_work_hint': 'Ô này tính vào năm làm nghề',
   'ui.plan.other_careers': 'Việc riêng của nghề khác', 'ui.plan.career_of': '{action} ({career})',
   // v0.7 F2: bảng chọn nghề ở quận đang đứng, rời nghề

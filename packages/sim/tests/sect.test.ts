@@ -143,7 +143,7 @@ describe('người chơi dự kỳ tuyển, đệ tử ký danh (v0.8 S3)', () =
     const l = Life.restore(s, [], region);
     for (let k = 0; k < 6; k++) autoAdvance(l, 'week', lastChoice);
     expect(l.snapshot().cultivation).toMatchObject({ root: 'good', path: 'sect' });
-    expect(l.view().cultivation).toEqual({ realm: 'mortal', root: 'good', path: 'sect', qi: 'empty' });
+    expect(l.view().cultivation).toEqual({ realm: 'mortal', root: 'good', path: 'sect', qi: 'empty', duty: { weeks: 0, need: 6, missed: 0, expelAt: 2, fee: 600 } });
     expect(l.log.some((e) => e.key === 'log.sect.joined')).toBe(true);
     expect(l.actions().find((a) => a.id === 'action.sect_duty')!.locked).toBeNull();
     expect(l.setPlan({ slots: [0, 1, 2].map(() => ({ action: 'action.sect_duty' })) as never })).toBe(true);

@@ -2,6 +2,7 @@ import { t } from '@tsvl/content';
 import { GRAIN_PER_DOU, type CalendarDate, type CharacterView, type FoodWeeksBand, type HungerBand, type StaminaBand } from '@tsvl/shared';
 import type { ComponentChildren } from 'preact';
 import { careerLine } from '../app/career';
+import { realmLine } from '../app/cultivation';
 import { dateText } from '../app/format';
 import { reputationTone } from '../app/people';
 import type { WorldInfo } from '../app/state';
@@ -49,6 +50,8 @@ export function StatusBar({ c, date, saved, world }: { c: CharacterView; date: C
   const here = world?.map.counties[c.location]?.name ?? '';
   const rep = t(`reputation.${c.reputation}`);
   const job = careerLine(c.career, c.canAct);
+  // Cảnh giới (v0.8 F1): chỉ hiện khi đã bước qua phàm nhân
+  const realm = realmLine(c.cultivation);
   const land = h.landMu > 0 ? `${t('ui.hud.mu', { mu: h.landMu })} · ${t(`tenure.${h.tenure}`)}` : h.tenure === 'tenant' ? t('tenure.tenant') : t('ui.hud.no_land');
   return (
     <header class="status-bar">
@@ -59,6 +62,7 @@ export function StatusBar({ c, date, saved, world }: { c: CharacterView; date: C
           <p class="muted">
             {t(`gender.${c.gender}`)} · {t('ui.life.age', { age: c.ageYears })}
             {job && <>{' · '}<span class={`career-tag${c.career ? '' : ' none'}`}>{c.career && <Seal char={CAREER_CHAR[c.career.id].char} tone={CAREER_CHAR[c.career.id].tone} />}{t(job.key, job.params)}</span></>}
+            {realm && <>{' · '}<span class="realm-tag"><Seal char="道" tone="jade" />{t(`realm.${realm}`)}</span></>}
           </p>
           <p class="small">
             {place && <Seal char={KIND_CHAR[place.kind]} tone="ink" />} {t('ui.life.here', { place: here })}

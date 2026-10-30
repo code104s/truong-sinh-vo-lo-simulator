@@ -233,3 +233,9 @@
 - **Kết luận:** muốn sim nhanh rõ thì phải bớt việc sim làm (đổi luật tầng L1, đổi digest và cân bằng), việc ấy cần chủ dự án quyết. Sim trong game không chậm: một năm 36 tuần khoảng 25 ms.
 - **Bộ test:** `apps/game` kiểm chữ bằng 300 đời trong một test chạy 187 s, quá giới hạn 180 s nên `pnpm test` trượt trên máy này. Tách thành bốn tệp 75 đời (`content-lives-*.test.ts`, cùng seed đời 0–299) để vitest chạy song song: game 93 s. Tách test tương đương L0/L1 (98 s) khỏi `npc.test.ts` (163 s) sang `npc-tiers.test.ts`: hai tệp chạy song song hết 94 s. Cả bộ `pnpm test` xanh, 5 phút 13 giây trên máy 4 lõi (trước đó trượt ở game). Tổng CPU khoảng 10,5 phút, nên máy nhiều lõi hơn sẽ nhanh hơn nhiều.
 - **Quyết định** (chủ dự án, 2026-10-30): giữ luật NPC, không gộp L1 hay chạy quận xa theo quý. Hiệu chỉnh cân bằng chạy batch 200–300 đời, chỉ chạy đủ 1.000 đời lúc chốt phiên bản.
+
+### F1 — đường tu trên giao diện (2026-10-30)
+- **Thanh trạng thái:** cảnh giới (triện 道) cạnh tuổi, nghề; chỉ hiện khi đã vào tầng một. Người phàm, kể cả đệ tử chưa đột phá, không ghi gì.
+- **Khối "Đạo" ở Thân thế** (mọi đời, kể cả trẻ con): linh căn ("chưa từng được kiểm" hay dải); khi đã có đường tu thì thêm đường (đệ tử ký danh kèm tên tông môn, tán tu), cảnh giới, dải linh khí; đỉnh tầng một ghi "tầng sau chưa tới lúc" (M8); bị gạch tên thì ghi rõ, công pháp vẫn nhớ.
+- **Nghĩa vụ tông môn:** tuần tạp dịch năm nay trên số phải làm, thiếu thì cuối năm nộp tiền thay, đã bỏ mấy năm liền và mức bị gạch tên. Cần thêm `CultivationView.duty?` (ADR 0001, tùy chọn, không vào save, digest không đổi).
+- Logic hiển thị thuần ở `apps/game/src/app/cultivation.ts` (test `cultivation.test.ts`), giao diện ở `screens/Dao.tsx`.

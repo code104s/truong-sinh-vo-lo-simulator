@@ -1,5 +1,6 @@
 // v0.8 Bước 0: đường tu trong snapshot, phép chiếu, linh khí nơi ở (ADR 0022).
-import { birthplaceId, HIDDEN_CHARACTER_KEYS, regionId } from '@tsvl/shared';
+import { birthplaceId, HIDDEN_CHARACTER_KEYS, regionId, vCharacterView } from '@tsvl/shared';
+import { SECT_DUTY_FEE, SECT_DUTY_WEEKS, SECT_EXPEL_MISSED } from '../src/factions/sect';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { describe, expect, it } from 'vitest';
 import { Life, Rng } from '../src/index';
@@ -24,6 +25,17 @@ const region: RegionLogic = {
 const bp = { id: birthplaceId('r0/c2'), name: 'Thành', nameHan: '城', kind: 'city' as const, cell: { x: 2, y: 0 }, county: 2 };
 
 describe('đường tu (v0.8 Bước 0)', () => {
+  it('view có nghĩa vụ tông môn khi còn tên trong sổ (F1): tuần tạp dịch, mức gạch tên, tiền nộp thay; qua schema, tải lại vẫn vậy', () => {
+    const s = Life.create({ worldSeed: 'tu', regionId: regionId('r0'), birthplaceId: bp.id }, bp, region).snapshot();
+    s.cultivation = { ...newCultivation(), root: 'fair', path: 'sect', qi: 1_000, duty: { weeks: 3, missed: 1, since: 0 } };
+    const l = Life.restore(s, [], region);
+    expect(l.view().cultivation).toEqual({ realm: 'mortal', root: 'fair', path: 'sect', qi: 'low', duty: { weeks: 3, need: SECT_DUTY_WEEKS, missed: 1, expelAt: SECT_EXPEL_MISSED, fee: SECT_DUTY_FEE } });
+    expect(vCharacterView.check(l.view(), '$')).toBeNull();
+    // Bị gạch tên (hay tán tu): không có nghĩa vụ
+    s.cultivation = { ...s.cultivation, duty: null };
+    expect(Life.restore(s, [], region).view().cultivation).not.toHaveProperty('duty');
+  });
+
   it('đời mới là người phàm chưa kiểm linh căn; view không lộ linh căn, số linh khí; tổng kết có một đời tu', () => {
     const l = Life.create({ worldSeed: 'tu', regionId: regionId('r0'), birthplaceId: bp.id }, bp, region);
     expect(l.snapshot().cultivation).toEqual(newCultivation());

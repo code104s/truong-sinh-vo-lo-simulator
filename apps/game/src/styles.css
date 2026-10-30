@@ -478,7 +478,14 @@ p { margin: 0; }
 .career-tag.none { color: var(--muted); font-weight: 400; }
 .career-tag .seal { margin-right: 4px; }
 .career-name { margin: 0; display: flex; align-items: center; gap: 6px; }
-.career-attrs { padding: 6px 0; }
+.dao-block .tone-good { color: var(--jade); }
+.dao-block .tone-warn { color: var(--ochre); }
+.dao-block .tone-bad { color: var(--cinnabar); }
+.dao-block p { margin: 0; }
+.dao-duty { display: flex; flex-direction: column; gap: 2px; }
+.realm-tag { white-space: nowrap; color: var(--jade); font-weight: 600; }
+.realm-tag .seal { margin-right: 4px; }
+.career-attrs, .dao-attrs { padding: 6px 0; }
 .skill-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .skill-list li { display: flex; justify-content: space-between; gap: 8px; }
 

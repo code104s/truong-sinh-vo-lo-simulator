@@ -1,7 +1,7 @@
 // Một đời người: vòng tick theo pha có nhịp (ADR 0002), tua, nhật ký, snapshot (ADR 0004).
 import {
   CAREERS, CARGOS, GRAIN_PER_DOU, TICKS_PER_MONTH, TICKS_PER_YEAR, ageYearsAt, calendarOf, isMonthStart, isQuarterStart, isYearStart,
-  type ActionOption, type AdvanceMode, type Birthplace, type CareerEntryView, type CareerLeaveView, type CareerRecord, type GoodId, type HaulOption, type FactionView, type PlanSlot, type CharacterView, type LifeSummary, type LogEntry, type MarketView, type NpcView, type NewLifeConfig, type PendingEvent, type Tick, type MonthPlan, type SupplyBand,
+  type ActionOption, type AdvanceMode, type Birthplace, type CareerEntryView, type CareerLeaveView, type CareerRecord, type CultivationView, type GoodId, type HaulOption, type FactionView, type PlanSlot, type CharacterView, type LifeSummary, type LogEntry, type MarketView, type NpcView, type NewLifeConfig, type PendingEvent, type Tick, type MonthPlan, type SupplyBand,
 } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { digestOf } from '../core/digest';
@@ -42,7 +42,7 @@ import { apprenticeAct, apprenticeLock, CAREER_DEFS, careerView, careerWorked, c
 import { roadRisk, routeDanger } from '../factions/impact';
 import { cultivationView, legacyCultivation, newCultivation, type CultivationState } from './cultivation';
 import { omenYear } from './omens';
-import { attendTrial, dutyLock, dutyYear, foundSect, sectPhase, trialLock } from '../factions/sect';
+import { attendTrial, dutyLock, dutyView, dutyYear, foundSect, sectPhase, trialLock } from '../factions/sect';
 import { induce, induceLock } from './rogue';
 import { breakthrough, breakthroughLock, cultivate, cultivateLock, FAIL_SHAKEN_TICKS, SECLUSION_FADE_SLOTS } from './cultivate';
 import { LEAVE_ATTITUDE, shiftAttitude } from '../factions/attitude';
@@ -245,7 +245,7 @@ export class Life {
   view(): CharacterView {
     const c = this.s.character;
     // Tiếng tăm ở quận đang đứng (S6)
-    const v = { ...toView(c, this.displayTick, buyPrice(this.s.economy.counties[c.location]!)), reputation: reputationBand(repAt(this.s.reputation, c.location)), career: careerView(this.s.career, this.s.npcs, this.leaveView()), cultivation: cultivationView(this.s.cultivation) };
+    const v = { ...toView(c, this.displayTick, buyPrice(this.s.economy.counties[c.location]!)), reputation: reputationBand(repAt(this.s.reputation, c.location)), career: careerView(this.s.career, this.s.npcs, this.leaveView()), cultivation: this.cultivationView() };
     // Vợ/chồng còn sống (v0.5 S5)
     const sp = this.spouse();
     return sp && sp.death === null ? { ...v, spouse: sp.id } : v;
@@ -780,6 +780,12 @@ export class Life {
         if (refused) throw new Error(`runToDeath: ${refused}`);
       }
     }
+  }
+
+  /** Đường tu như người chơi thấy, kèm nghĩa vụ tông môn khi còn tên trong sổ (F1). */
+  private cultivationView(): CultivationView {
+    const duty = dutyView(this.s.cultivation);
+    return { ...cultivationView(this.s.cultivation), ...(duty ? { duty } : {}) };
   }
 
   private context(t: Tick) {

@@ -27,13 +27,29 @@ export interface CultivationView {
   path: CultivationPath | null;
   /** Linh khí tới đỉnh tầng; null khi chưa dẫn khí. */
   qi: QiBand | null;
+  /**
+   * Nghĩa vụ đệ tử ký danh (F1): tuần tạp dịch đã làm năm nay trên số tuần phải làm, số năm liền bỏ nghĩa vụ (tới
+   * `expelAt` thì bị gạch tên), tiền nộp thay khi thiếu tuần. Chỉ có khi còn tên trong sổ tông môn.
+   */
+  duty?: SectDutyView;
 }
+
+export interface SectDutyView {
+  weeks: number;
+  need: number;
+  missed: number;
+  expelAt: number;
+  fee: number;
+}
+
+const vSectDutyView: Validator<SectDutyView> = obj<SectDutyView>({ weeks: nat, need: nat, missed: nat, expelAt: nat, fee: nat });
 
 export const vCultivationView: Validator<CultivationView> = obj<CultivationView>({
   realm: oneOf(REALMS),
   root: nullable(oneOf(ROOT_BANDS)),
   path: nullable(oneOf(CULTIVATION_PATHS)),
   qi: nullable(oneOf(QI_BANDS)),
+  duty: opt(vSectDutyView),
 });
 
 /** Một đời tu cho tổng kết (F4): linh căn đã biết, cảnh giới cao nhất, lúc dẫn khí, các lần đột phá. */
