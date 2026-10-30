@@ -1,51 +1,11 @@
-// Mọi khóa nội dung mà sim sinh ra đều có chuỗi tiếng Việt (kiểm tra bằng 300 đời thật, không liệt kê tay).
+// Khóa nội dung chưa sim nào sinh ra, lịch, khóa thiếu. Phần kiểm bằng 300 đời thật ở content-lives-*.test.ts.
 import { hasKey, t } from '@tsvl/content';
-import { calendarOf, birthplaceId, CAREER_RANKS, CAREERS, CULTIVATION_PATHS, QI_BANDS, REALMS, regionId, ROOT_BANDS, type Birthplace, type SettlementKind } from '@tsvl/shared';
-import { firstOpenChoice, Life } from '@tsvl/sim';
+import { calendarOf, CAREER_RANKS, CAREERS, CULTIVATION_PATHS, QI_BANDS, REALMS, ROOT_BANDS } from '@tsvl/shared';
 import { describe, expect, it } from 'vitest';
-import { dateText, logText } from '../src/app/format';
-
-const MISSING = /⟨|\{\w+\}/;
+import { dateText } from '../src/app/format';
+import { MISSING } from './contentLives';
 
 describe('chuỗi nội dung phủ hết đầu ra của sim', () => {
-  it('300 đời: mọi câu nhật ký, mọi trường view, mọi tổng kết đều dịch được', () => {
-    const kinds: SettlementKind[] = ['village', 'town', 'city'];
-    const seen = new Set<string>();
-    for (let i = 0; i < 300; i++) {
-      const bp: Birthplace = { id: birthplaceId(`r0/c${i % 5}`), name: 'Phố Kỳ', nameHan: '浦岐', kind: kinds[i % 3]!, cell: { x: 0, y: 0 }, county: 0 };
-      const life = Life.create({ worldSeed: 'content', regionId: regionId('r0'), birthplaceId: bp.id, lifeSeed: i }, bp);
-      while (life.alive) {
-        const res = life.advance('year');
-        // Thẻ sự kiện: tựa, lời kể, lựa chọn, giá, lý do khóa đều dịch được; rồi chọn như người chơi máy mặc định
-        if (res.status === 'event') {
-          const p = res.pending;
-          const texts = [t(`${p.eventId}.title`, p.params), t(p.variant ? `${p.eventId}.body.${p.variant}` : `${p.eventId}.body`, p.params),
-            ...p.choices.flatMap((c) => [t(`${p.eventId}.choice.${c.id}`, p.params), ...c.costs.map((tag) => t(`event.cost.${tag}`)), ...(c.locked ? [t(c.locked)] : [])])];
-          for (const text of texts) expect(text, p.eventId).not.toMatch(MISSING);
-          seen.add(p.eventId);
-          life.choose(p.instance, firstOpenChoice(p));
-        }
-        const v = life.view();
-        for (const id of [v.background, v.personality, v.constitution, v.aptitude, `health.${v.healthBand}`, `gender.${v.gender}`, `stamina.${v.staminaBand}`, ...v.skills.flatMap((s) => [s.id, s.rank]), ...v.traits, ...v.conditions.map((c) => c.id), ...v.conditions.map((c) => `severity.${c.severity}`)]) {
-          expect(hasKey(id), id).toBe(true);
-        }
-        // Người trong quận (v0.4): nghề, dải sức khỏe dịch được
-        for (const v of life.people()) for (const id of [v.occupation, `health.${v.healthBand}`]) expect(hasKey(id), id).toBe(true);
-        for (const option of life.actions()) for (const id of [option.id, option.cost.stamina, option.cost.risk, option.cost.money, ...option.gains, ...(option.locked ? [option.locked] : [])]) expect(hasKey(id), id).toBe(true);
-      }
-      for (const e of life.log) {
-        seen.add(e.key);
-        const text = logText(e);
-        expect(text, `${e.key} ${JSON.stringify(e.params)}`).not.toMatch(MISSING);
-      }
-      const s = life.summary();
-      expect(hasKey(`death.${s.cause}`)).toBe(true);
-      expect(hasKey(s.causeDetail), s.causeDetail).toBe(true);
-    }
-    expect([...seen].sort()).toEqual(expect.arrayContaining(['log.birth', 'log.death', 'log.illness.onset', 'log.illness.recovered', 'log.age.milestone']));
-    // 300 đời thật có thế lực (v0.6) chạy khoảng 60 s một mình, lâu hơn khi cả bộ chạy song song: giới hạn riêng 180 s
-  }, 180_000);
-
   it('nghề, bậc nghề, y thuật có chuỗi (v0.7, chưa sim nào sinh ra trước S1)', () => {
     for (const id of [...CAREERS.map((c) => `career.${c}`), ...CAREER_RANKS.map((r) => `career.rank.${r}`), 'skill.medicine']) expect(hasKey(id), id).toBe(true);
   });

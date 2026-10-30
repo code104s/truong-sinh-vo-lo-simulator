@@ -225,3 +225,10 @@
 - **Hiệu năng:** trung bình 397 µs/tick trên 30 vùng (máy cloud 4 lõi, bận chạy batch song song); vùng 20 quận 698 µs. Vượt ngân sách 300 µs — nợ v0.7 còn đó, đề xuất một task tối ưu riêng. Batch mỗi chiến lược 296–330 s trên máy này (ngân sách 110 s đo trên máy chủ dự án).
 - **Digest pin:** đổi theo ADR 0023 (linh căn 15%); đời 1 chết đói 52 → 50, đời 2, 3 giữ tuổi.
 - **Test:** 737 (sim 508, headless 14); mới: `omens.test.ts` (3), `tools/headless/tests/seekers.test.ts` (6), test hồi quy trần sức khỏe.
+
+### Sau S7 — task hiệu năng (2026-10-30)
+- **Đo** (máy cloud 4 lõi): thế giới 20 quận 1.096 µs/tick, 9 quận 350; đời người chơi máy điều độ 635–740 µs/tick (nhiễu giữa các lần chạy khoảng ±10%). Mỗi vùng 186–316 NPC, khoảng 40 người ở L0, còn lại L1: tính ra chừng 2,5 µs mỗi NPC-tuần.
+- **Profiler** (`node --cpu-prof`, 10 đời điều độ): pha NPC 69% (bước tháng L1 46%, tuần L0 16%, xếp kế hoạch 11%), thế lực 8%, rút sự kiện 6%, khung người chơi máy 6%. Hồ sơ phẳng: hàm tự tốn nhiều nhất chỉ 3–4% (khóa hành động, hậu quả, tác dụng ô, độ mệt). Không có chỗ O(n²): bảng tra người, trần thể lực đã nhớ từ v0.4.
+- **Thử sửa vặt giữ digest:** bỏ kiểm lại trạng thái RNG mỗi tuần của NPC, dùng bảng tra người có sẵn ở bốn pha thế lực, nhớ kết quả quét người trong một lần rút sự kiện. Digest y nguyên, nhưng thời gian không đổi đo được (chênh nằm trong nhiễu). Đã **bỏ** cả ba, không đưa code phức tạp hơn mà không nhanh hơn.
+- **Kết luận:** muốn sim nhanh rõ thì phải bớt việc sim làm (đổi luật tầng L1, đổi digest và cân bằng), việc ấy cần chủ dự án quyết. Sim trong game không chậm: một năm 36 tuần khoảng 25 ms.
+- **Bộ test:** `apps/game` kiểm chữ bằng 300 đời trong một test chạy 187 s, quá giới hạn 180 s nên `pnpm test` trượt trên máy này. Tách thành bốn tệp 75 đời (`content-lives-*.test.ts`, cùng seed đời 0–299) để vitest chạy song song: game 93 s. Tách test tương đương L0/L1 (98 s) khỏi `npc.test.ts` (163 s) sang `npc-tiers.test.ts`: hai tệp chạy song song hết 94 s. Cả bộ `pnpm test` xanh, 5 phút 13 giây trên máy 4 lõi (trước đó trượt ở game). Tổng CPU khoảng 10,5 phút, nên máy nhiều lõi hơn sẽ nhanh hơn nhiều.
