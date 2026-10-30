@@ -38,13 +38,13 @@ type Log = (e: Omit<LogEntry, 'tick'>) => void;
 const REST: PlanSlot = { action: 'action.rest' };
 /** Việc tự vào nghề (S6). */
 const OWN_ACTIONS: ReadonlySet<string> = new Set(['action.drift', 'action.build_hut']);
-/** Việc của tông môn (v0.8 S3): dự kỳ tuyển, tạp dịch. */
-const SECT_ACTIONS: ReadonlySet<string> = new Set(['action.trial', 'action.sect_duty']);
+/** Việc đường tu: tông môn (v0.8 S3) — dự kỳ tuyển, tạp dịch; tán tu (S4) — tự dẫn khí. */
+const SECT_ACTIONS: ReadonlySet<string> = new Set(['action.trial', 'action.sect_duty', 'action.induce']);
 /**
  * Khóa tạm thời: tự hết theo mùa hoặc khi hồi sức. Ô đó nghỉ, không ngắt tua, chuyến đi dở giữ nguyên.
  * Các khóa khác (sai nơi, không có đường) là kế hoạch hỏng: nghỉ và ngắt tua một lần để người chơi sửa.
  */
-export const TRANSIENT_LOCKS: ReadonlySet<string> = new Set(['lock.winter', 'lock.stamina', 'lock.health', 'lock.hunger', 'lock.money', 'lock.no_work', 'lock.no_land', 'lock.no_profit']);
+export const TRANSIENT_LOCKS: ReadonlySet<string> = new Set(['lock.winter', 'lock.stamina', 'lock.health', 'lock.hunger', 'lock.money', 'lock.no_work', 'lock.no_land', 'lock.no_profit', 'lock.meridian']);
 
 /** Pha 5. Mỗi ô chỉ trừ giá một lần; hành động đang dở tiếp tục qua ranh tháng. */
 /** Hành động xã giao của người chơi (v0.5 S4): khóa riêng (người ấy có ở đây không) và tác dụng lên quan hệ. */
@@ -62,7 +62,7 @@ export interface SocialHooks {
   /** Bỏ quê đi lang bạt, dựng lều ẩn cư (v0.7 S6): tự vào nghề. */
   ownLock?(action: string, c: CharacterState): string | null;
   own?(action: string, c: CharacterState, log: Log): void;
-  /** Tông môn (v0.8 S3): dự kỳ tuyển, tạp dịch của đệ tử ký danh — khóa và tác dụng lên đường tu. */
+  /** Đường tu (v0.8): dự kỳ tuyển, tạp dịch của đệ tử ký danh (S3), tự dẫn khí của tán tu (S4) — khóa và tác dụng. */
   sectLock?(action: string, c: CharacterState): string | null;
   sect?(action: string, c: CharacterState, log: Log): void;
 }

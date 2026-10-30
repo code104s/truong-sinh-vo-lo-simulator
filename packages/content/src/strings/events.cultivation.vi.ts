@@ -83,4 +83,21 @@ export const EVENTS_CULTIVATION_VI: Readonly<Record<string, string>> = {
   'event.hermit_stone.result.fair': 'Viên đá trong dần, ánh một màu. Ông lão gật gù: "Linh căn khá."',
   'event.hermit_stone.result.good': 'Viên đá trong suốt, sáng lên giữa lòng bàn tay. Ông lão im một lúc lâu: "Linh căn tốt."',
   'event.hermit_stone.result.leave': 'Trả đá, cúi chào rồi về. Ông lão không gọi lại.',
+
+  // —— Tán tu (S4). Công pháp thô: chữ trong tàn quyển, khẩu quyết của người áo xám; chưa có thầy dẫn ——
+  'event.ruin_scroll.title': 'Cuộn sách trong khe đá',
+  'event.ruin_scroll.body': 'Sau khối đá nhẵn có một khe hẹp, trong nhét cuộn lụa mục, chữ viết dày đặc, chỗ còn chỗ mất. Đọc hết phải ngồi trong hơi lạnh tới tối. Không biết chữ thì chỉ là mấy vệt mực.',
+  'event.ruin_scroll.choice.read': 'Ngồi xuống, dò từng chữ',
+  'event.ruin_scroll.choice.leave': 'Nhét cuộn lụa lại chỗ cũ',
+  'event.ruin_scroll.result.read': 'Đọc tới khi đuốc tàn. Trong sách dạy ngồi thế nào, thở thế nào, dẫn hơi đi đường nào trong người. Nhiều chỗ mất chữ, phải tự đoán.',
+  'event.ruin_scroll.result.leave': 'Nhét cuộn lụa lại vào khe đá rồi ra. Mấy vệt mực cứ hiện trong đầu.',
+
+  'event.cultivator_teach.title': 'Xin chỉ đường',
+  'event.cultivator_teach.body': 'Đêm rằm, lại gặp người áo xám ở quán nước. Người ấy bảo có căn cơ mà không thầy thì cũng như có ruộng không có giống. Chỉ cho mấy câu khẩu quyết thì lấy {price} văn, hoặc theo làm việc {weeks} tuần.',
+  'event.cultivator_teach.choice.pay': 'Đặt tiền, xin học khẩu quyết',
+  'event.cultivator_teach.choice.serve': 'Theo làm việc {weeks} tuần',
+  'event.cultivator_teach.choice.decline': 'Cảm ơn, đứng dậy về',
+  'event.cultivator_teach.result.pay': 'Người ấy đọc chậm mấy câu khẩu quyết, bắt nhắc lại tới khi thuộc. "Tự ngồi mà dẫn. Hơi đi sai đường thì đau, đừng cố."',
+  'event.cultivator_teach.result.serve': 'Gánh nước, bổ củi cho người ấy {weeks} tuần. Hôm cuối được dạy mấy câu khẩu quyết. "Tự ngồi mà dẫn. Hơi đi sai đường thì đau, đừng cố."',
+  'event.cultivator_teach.result.decline': 'Đứng dậy về. Người áo xám rót thêm chén trà, không nói gì.',
 };

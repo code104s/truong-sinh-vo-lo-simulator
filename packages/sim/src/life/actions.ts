@@ -63,6 +63,8 @@ export const ACTIONS: readonly ActionDef[] = [
   // Tông môn (S3): dự kỳ tuyển ở trị sở trong tháng có sứ giả; đệ tử ký danh làm tạp dịch (chép kinh, hái thuốc nộp lên núi)
   { id: 'action.trial', group: 'seek', slots: 1, stamina: 30, riskPpm: 0 },
   { id: 'action.sect_duty', group: 'seek', slots: 1, stamina: 150, riskPpm: 0 },
+  // Tán tu (S4): tự dẫn khí theo công pháp thô; rủi ro là thương kinh mạch (rút riêng khi hỏng), không phải tai nạn
+  { id: 'action.induce', group: 'seek', slots: 1, stamina: 120, riskPpm: 0, minStamina: 60 },
   { id: 'action.rest', group: 'rest', slots: 1, stamina: 0, riskPpm: 0 },
   { id: 'action.heal', group: 'heal', slots: 1, stamina: 20, riskPpm: 0, places: ['town', 'city'] },
   { id: 'action.travel', group: 'travel', slots: 1, stamina: 100, riskPpm: 300, minStamina: 30 },

@@ -116,3 +116,32 @@
   - Batch sáu chiến lược 1.000 đời: mọi tiêu chí v0.6 đạt; lần đầu FAIL vì "bị cướp bắt theo" (`event.bandit_seize`) ra 0 lần — chỉ người chơi máy lang bạt gặp, 3–6 lần mỗi 1.000 đời ở v0.7–S2, RNG đổi thì ra 0. Đưa vào danh sách hiếm có ghi chú (đường đi có test riêng).
 - **Digest pin:** số hiệu thế lực sau tông môn dịch một; trẻ NPC rời vùng đổi làng: đời 3 chết đói 42 → 44; đời 1, 2 giữ tuổi.
 - Chưa có ở S3 (để F1): giao diện chưa hiện linh thạch, nghĩa vụ; `CultivationView` chưa có hai trường ấy.
+
+### S4 — tán tu (2026-10-30)
+- **Công pháp thô** (Q6), cờ `crude_manual`, nhớ cả đời; hai lối, cả hai nối dấu vết của S1–S2:
+
+  | Sự kiện | Khi nào | Giá |
+  |---|---|---|
+  | Cuộn sách trong khe đá (`event.ruin_scroll`) | tìm cơ duyên ở quận có di tích, đã vào hang (`found_ruin`), chưa có đường tu | một ô, thể lực; **đọc cần chữ từ mức "Thạo"** (1.000 điểm), chưa đủ chữ thì chỉ có lối bỏ lại |
+  | Xin chỉ đường (`event.cultivator_teach`) | đã gặp tu sĩ lưu lạc, đã được kiểm là có linh căn (dải khác "không có"), trung tuần | 1.500 văn (vào quỹ quận), hay theo làm việc bốn tuần |
+
+- **Tự dẫn khí** (`action.induce`, nhóm "Đường tiên", `life/rogue.ts`): một ô, thể lực 120, không ra tiền.
+  - Khóa: chưa có công pháp (`lock.no_manual`), đã có đường tu (`lock.has_path`), đã biết không có linh căn (`lock.no_root`), đang thương kinh mạch (`lock.meridian`, khóa tạm như mệt, đói).
+  - Lần đầu cũng là lần biết linh căn (ghi dải như S2). Không có linh căn: mang ám ảnh `haunted`, công pháp thành vô dụng (Q6).
+  - Thành công mỗi ô (ppm): tạp 80.000, khá 200.000, tốt 350.000; nhân linh khí nơi ở (Bước 0, S1), ngộ tính (50–150%), chia mệt; trần 800.000. Thành thì đường tu `rogue`: không linh thạch, không nghĩa vụ, tông môn không xét.
+  - Hỏng: mất ô; 15% số lần hỏng là **thương kinh mạch** (`illness.meridian`): bệnh nặng 8–16 tuần, tổn hại 10–35 mỗi tuần, khỏi thì luôn để lại di chứng 20–60 (giảm sức khỏe tối đa). Bệnh có trọng số 0 trong bảng bệnh nên không bao giờ đến như bệnh thường (thêm cuối bảng: lượt rút bệnh cũ không đổi).
+  - Rút trên luồng `actions` (như chuyến buôn), chỉ khi có người tự dẫn khí: đời không đi đường này không đổi.
+- **Cảnh giới**: như đệ tử ký danh ở S3, dẫn khí thành chỉ đặt đường tu; `realm` vẫn `mortal`, `entered` vẫn null. Lúc nào ghi "vào tầng 1" (dẫn khí xong hay đột phá ở đỉnh) chốt ở S5 cho cả hai đường.
+- **Công pháp theo đường** (`TECHNIQUE_PCT`): tông môn 100%, tán tu 60% — S5 nhân vào linh khí mỗi ô (Q7).
+- **Đo** (test 5.000 người mỗi ô, ngộ tính 1–10, rút tới khi thành, tối đa 108 ô = ba năm toàn ô):
+
+  | Nơi | Tạp | Khá | Tốt |
+  |---|---|---|---|
+  | Làng (100%) | 12,5 ô; 1,71 lần thương kinh mạch | 5,1 ô; 0,61 lần | 2,9 ô; 0,29 lần |
+  | Thành (80%) | 15,6 ô; 2,19 lần | 6,5 ô; 0,83 lần | 3,7 ô; 0,41 lần |
+  | Quận có núi | 8,5 ô; 1,13 lần | 3,5 ô; 0,38 lần | 2,0 ô; 0,15 lần |
+
+  - Đệ tử ký danh được dẫn khí ngay khi đỗ, không rủi ro. Mỗi lần thương kinh mạch còn khóa dẫn khí 8–16 tuần, nên thời gian thật dài hơn số ô.
+  - Batch sáu chiến lược 1.000 đời (máy cloud 4 lõi): **PASS** mọi tiêu chí v0.6; điều độ 59,57 tuổi (S2: 59,68), cưới trước 30 tuổi 71,9%, 3,01 sự kiện/năm. "Xin chỉ đường" xảy ra 19–35 lần mỗi 1.000 đời người thường (đã trả tiền cho tu sĩ xem linh căn); người chơi máy cũ không xếp tự dẫn khí nên không ai thành tán tu. Thời gian 105–299 s mỗi chiến lược trên máy chậm, không so với ngân sách.
+  - So batch "tìm đạo" giữa hai đường là việc của S7 (người chơi máy tìm đạo chưa có).
+- **Test:** 705 (shared 99, worldgen 29, sim 483, headless 8, game 87); digest pin không đổi. Bảng sự kiện mẫu (`events.test.ts`) nâng chữ lên 1.000 để mở lối đọc tàn quyển.

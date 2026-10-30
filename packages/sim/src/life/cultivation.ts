@@ -27,6 +27,9 @@ export const newCultivation = (): CultivationState => ({ realm: 'mortal', root: 
 /** Linh khí tới đỉnh mỗi tầng (giá trị tạm, chốt ở S5 theo Q7: linh căn khá, tu một nửa số ô, tới đỉnh trong 3–6 năm). */
 export const QI_PEAK: Readonly<Record<Realm, number>> = { mortal: 0, qi1: 10_000 };
 
+/** Công pháp theo đường vào (Q6, Q7): công pháp nhập môn của tông môn 100%, công pháp thô của tán tu 60% — S5 nhân vào linh khí mỗi ô. */
+export const TECHNIQUE_PCT: Readonly<Record<CultivationPath, number>> = { sect: 100, rogue: 60 };
+
 /** Dải linh khí: chưa có, ít, nửa, gần đỉnh (từ 3/4), đỉnh. */
 export function qiBand(qi: number, peak: number): QiBand {
   if (peak <= 0 || qi <= 0) return 'empty';

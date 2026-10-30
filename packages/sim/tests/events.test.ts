@@ -78,7 +78,7 @@ function richSnap(personalityId: string, onRoad: boolean): LifeSnapshot {
     // v0.7 S8: có hàng trong túi (thuốc cho lựa chọn chữa trâu, gửi thuốc), có ruộng
     c.household = { ...c.household, independent: true, money: 5_000, grain: 500, taxDebt: 200, farmWeeks: 10, farmCounty: 0, tenure: 'tenant', goods: [50, 50, 100] };
     c.conditions = [{ id: 'illness.fever', kind: 'illness', severity: 'serious', weeksLeft: 4 }];
-    c.skillXp.martial = 2_000; c.skillXp.literacy = 500; c.skillXp.hunting = 500;
+    c.skillXp.martial = 2_000; c.skillXp.literacy = 1_000; c.skillXp.hunting = 500; // v0.8 S4: đủ chữ đọc tàn quyển
     if (onRoad) s.active = { slot: { action: 'action.travel', target: 1 }, total: 2, remaining: 2, preview: { county: 1, route: [0, 1], days: 6, slots: 2, risk: 'risk.low' } };
     withFactions(s);
   });

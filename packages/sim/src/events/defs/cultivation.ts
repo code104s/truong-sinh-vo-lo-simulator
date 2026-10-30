@@ -4,6 +4,7 @@
 import { mulDiv } from '../../core/math';
 import { calendarOf } from '@tsvl/shared';
 import { hasSite, newCultivation, testRoot } from '../../life/cultivation';
+import { CRUDE_MANUAL, MANUAL_LITERACY_XP } from '../../life/rogue';
 import { mountainCounty } from '../../life/wayward';
 import { addFlag, moveGrain, occupy, payTo, spendStamina, wound } from '../effects';
 import type { EventContext, EventDef } from '../engine';
@@ -222,5 +223,52 @@ export const hermitStoneTest: EventDef = {
   ],
 };
 
-export const CULTIVATION_EVENTS: readonly EventDef[] = [seekCave, seekLost, wanderingCultivator, shrineKeeper, hermitHint, ruinStone, cultivatorTest, hermitStoneTest];
+// —— Tán tu (S4, Q6): hai lối tới công pháp thô. Có công pháp rồi mới tự dẫn khí được (`action.induce`, life/rogue.ts) ——
+
+/** Tu sĩ lưu lạc đòi chừng này để chỉ điểm khẩu quyết dẫn khí (văn), hay theo làm việc cho người ấy bốn tuần. */
+export const TEACH_FEE = 1_500;
+export const TEACH_WEEKS = 4;
+
+/** Chưa có đường tu, chưa có công pháp thô. */
+const noManual = (ctx: EventContext) => !flag(ctx, CRUDE_MANUAL) && (ctx.player.cultivation?.path ?? null) === null;
+
+export const ruinScroll: EventDef = {
+  id: 'event.ruin_scroll',
+  category: 'cultivation',
+  // Lục trong hang đã vào (S1): một cuộn tàn quyển; đọc được hay không là ở chữ nghĩa
+  weight: (ctx) => (seeking(ctx) && hasSite(ctx.logic, ctx.c.location, 'ruin') && flag(ctx, 'found_ruin') && noManual(ctx) ? mulDiv(120_000, luckPct(ctx), 100) : 0),
+  cooldownTicks: 36,
+  choices: [
+    {
+      id: 'read', costs: ['time', 'stamina'],
+      available: (ctx) => (ctx.c.skillXp.literacy >= MANUAL_LITERACY_XP ? null : 'lock.literacy'),
+      apply: (ctx) => { spendStamina(ctx, 40); addFlag(ctx, CRUDE_MANUAL); return { result: 'read' }; },
+    },
+    { id: 'leave', costs: ['opportunity'], apply: () => ({ result: 'leave' }) },
+  ],
+};
+
+export const cultivatorTeach: EventDef = {
+  id: 'event.cultivator_teach',
+  category: 'cultivation',
+  // Đã được tu sĩ lưu lạc xem cho là có linh căn mà chưa có đường vào: lại gặp lúc trăng tròn, xin chỉ điểm
+  weight: (ctx) => {
+    const root = ctx.player.cultivation?.root ?? null;
+    return flag(ctx, 'met_cultivator') && root !== null && root !== 'none' && noManual(ctx) && calendarOf(ctx.tick).tenDay === 1 ? mulDiv(40_000, luckPct(ctx), 100) : 0;
+  },
+  cooldownTicks: 36,
+  params: () => ({ price: TEACH_FEE, weeks: TEACH_WEEKS }),
+  figure: () => man('adult', 'common'),
+  choices: [
+    {
+      id: 'pay', costs: ['money'],
+      available: (ctx) => (ctx.c.household.money >= TEACH_FEE ? null : 'lock.money'),
+      apply: (ctx) => { payTo(ctx, ctx.c.location, TEACH_FEE); addFlag(ctx, CRUDE_MANUAL); return { result: 'pay' }; },
+    },
+    { id: 'serve', costs: ['time'], apply: (ctx) => { occupy(ctx, 'action.toil', TEACH_WEEKS); addFlag(ctx, CRUDE_MANUAL); return { result: 'serve' }; } },
+    { id: 'decline', costs: ['opportunity'], apply: () => ({ result: 'decline' }) },
+  ],
+};
+
+export const CULTIVATION_EVENTS: readonly EventDef[] = [seekCave, seekLost, wanderingCultivator, shrineKeeper, hermitHint, ruinStone, cultivatorTest, hermitStoneTest, ruinScroll, cultivatorTeach];
 export const CULTIVATION_EVENT_IDS: readonly string[] = CULTIVATION_EVENTS.map((d) => d.id);

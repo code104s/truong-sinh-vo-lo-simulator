@@ -108,6 +108,8 @@ export const ILLNESSES: readonly IllnessDef[] = [
   { id: 'dysentery', severity: 'grave', weight: 12, season: { spring: 100, summer: 300, autumn: 150, winter: 50 }, place: { village: 100, town: 140, city: 200 }, weeks: [1, 3], damage: [80, 200], scarPpm: 400_000, scar: [40, 120] },
   { id: 'consumption', severity: 'serious', weight: 2, season: { spring: 100, summer: 100, autumn: 100, winter: 100 }, place: { village: 100, town: 120, city: 150 }, weeks: [12, 60], damage: [5, 20], scarPpm: 1_000_000, scar: [80, 200] },
   { id: 'stroke', severity: 'grave', weight: 5, season: { spring: 100, summer: 100, autumn: 100, winter: 150 }, place: SAME, minAgeRatio: 700, weeks: [1, 1], damage: [300, 700], scarPpm: 1_000_000, scar: [100, 300] },
+  // v0.8 S4: thương kinh mạch — chỉ do dẫn khí hỏng (trọng số 0, không rút như bệnh thường); bệnh dài, luôn để lại di chứng
+  { id: 'meridian', severity: 'serious', weight: 0, season: { spring: 100, summer: 100, autumn: 100, winter: 100 }, place: SAME, weeks: [8, 16], damage: [10, 35], scarPpm: 1_000_000, scar: [20, 60] },
 ];
 
 // —— Tai nạn ——

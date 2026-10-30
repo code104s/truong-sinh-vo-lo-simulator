@@ -5,8 +5,8 @@ import { birthplaceId, regionId } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 const character = () => Life.create({ worldSeed: 'actions', regionId: regionId('r0'), birthplaceId: birthplaceId('r0/c0') }, { id: birthplaceId('r0/c0'), name: 'Làng', nameHan: '村', kind: 'village', cell: { x: 0, y: 0 }, county: 0 }).snapshot().character;
 describe('danh mục hành động', () => {
-  it('đủ 28 hành động (v0.3 thêm buôn bán nhỏ, v0.5 thêm thăm hỏi, nhờ cậy, cưới hỏi, v0.7 thêm học việc, việc xưởng, đặt bẫy, mua ruộng, đi buôn chuyến, xin vào thương hội, võ đường, ứng tuyển sai dịch, đi tuần, hành nghề y, bỏ quê, dựng lều; v0.8 thêm tìm cơ duyên, dự kỳ tuyển, tạp dịch tông môn), mọi hành động tốn thời gian và mọi việc ngoài nghỉ có giá khác', () => {
-    expect(ACTIONS.filter((d) => !d.hidden)).toHaveLength(28);
+  it('đủ 29 hành động (v0.3 thêm buôn bán nhỏ, v0.5 thêm thăm hỏi, nhờ cậy, cưới hỏi, v0.7 thêm học việc, việc xưởng, đặt bẫy, mua ruộng, đi buôn chuyến, xin vào thương hội, võ đường, ứng tuyển sai dịch, đi tuần, hành nghề y, bỏ quê, dựng lều; v0.8 thêm tìm cơ duyên, dự kỳ tuyển, tạp dịch tông môn, tự dẫn khí), mọi hành động tốn thời gian và mọi việc ngoài nghỉ có giá khác', () => {
+    expect(ACTIONS.filter((d) => !d.hidden)).toHaveLength(29);
     expect(ACTIONS.filter((d) => d.hidden).map((d) => d.id)).toEqual(['action.corvee', 'action.toil', 'action.shelter', 'action.nurse', 'action.mourn']); // chỉ sự kiện đặt vào (S5, S6; v0.5 S5 thêm chăm người ốm, lo tang)
     for (const d of ACTIONS) { expect(d.slots).toBeGreaterThan(0); if (d.group !== 'rest') expect(d.stamina + d.riskPpm).toBeGreaterThan(0); }
   });
