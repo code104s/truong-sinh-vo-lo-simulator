@@ -33,6 +33,9 @@ export const ACTION_CHAR: Record<string, { char: string; tone: SealTone }> = {
   'action.drift': { char: '浪', tone: 'ink' }, 'action.build_hut': { char: '廬', tone: 'jade' },
   // Tìm cơ duyên (v0.8 S1)
   'action.seek': { char: '尋', tone: 'jade' },
+  // Đường tu (v0.8 F2): dự tuyển, tạp dịch tông môn, tự dẫn khí, tu luyện, đột phá
+  'action.trial': { char: '試', tone: 'jade' }, 'action.sect_duty': { char: '役', tone: 'ink' }, 'action.induce': { char: '引', tone: 'jade' },
+  'action.cultivate': { char: '修', tone: 'jade' }, 'action.breakthrough': { char: '破', tone: 'red' },
 };
 
 /** Ấn triện cho một mục nhật ký theo khóa nội dung: chữ và màu. */

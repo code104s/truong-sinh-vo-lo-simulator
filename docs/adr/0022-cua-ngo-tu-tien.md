@@ -239,3 +239,8 @@
 - **Khối "Đạo" ở Thân thế** (mọi đời, kể cả trẻ con): linh căn ("chưa từng được kiểm" hay dải); khi đã có đường tu thì thêm đường (đệ tử ký danh kèm tên tông môn, tán tu), cảnh giới, dải linh khí; đỉnh tầng một ghi "tầng sau chưa tới lúc" (M8); bị gạch tên thì ghi rõ, công pháp vẫn nhớ.
 - **Nghĩa vụ tông môn:** tuần tạp dịch năm nay trên số phải làm, thiếu thì cuối năm nộp tiền thay, đã bỏ mấy năm liền và mức bị gạch tên. Cần thêm `CultivationView.duty?` (ADR 0001, tùy chọn, không vào save, digest không đổi).
 - Logic hiển thị thuần ở `apps/game/src/app/cultivation.ts` (test `cultivation.test.ts`), giao diện ở `screens/Dao.tsx`.
+
+### F2 — tu luyện, đột phá trong bảng chọn việc (2026-10-30)
+- **Ô việc nhóm đường tiên:** triện riêng cho dự tuyển (試), tạp dịch (役), tự dẫn khí (引), tu luyện (修), đột phá (破). Ô tu luyện ghi linh khí nơi đang đứng theo dải: thành, trấn loãng; làng vừa phải; quận có núi dồi dào; di tích đậm đặc. Ô đột phá ghi cơ hội thành theo dải: dưới 25% mong manh, từ 25% khó thành, từ 45% năm ăn năm thua, từ 70% khá chắc. Rủi ro của tìm cơ duyên vẫn là chip rủi ro như mọi việc.
+- **Hỏi lại trước khi xếp đột phá:** cơ hội thành, tâm cảnh (tâm rối thì nói rõ đói, ốm, tang, tính nóng vội làm cơ hội thấp đi), số linh thạch sẽ dùng hết, được gì nếu thành, mất gì nếu hỏng (linh khí còn một nửa, thương kinh mạch, tâm cảnh chấn động một năm, hỏng nặng tổn thọ). Bấm "Xếp đột phá" mới đặt ô; ô bị khóa (chưa đầy, tâm còn chấn động) thì không hỏi.
+- Hợp đồng: `CultivationView.place?`, `breakthrough?` (ADR 0001). Xem trước dùng đúng luật lần đột phá thật (`breakthroughPreview` trong `cultivate.ts`); tang người thân chỉ tính khi thật cần xem trước, để view mỗi tuần không quét danh sách người.

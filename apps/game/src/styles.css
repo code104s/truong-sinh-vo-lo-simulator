@@ -485,6 +485,13 @@ p { margin: 0; }
 .dao-duty { display: flex; flex-direction: column; gap: 2px; }
 .realm-tag { white-space: nowrap; color: var(--jade); font-weight: 600; }
 .realm-tag .seal { margin-right: 4px; }
+.tile-dao { color: var(--jade); }
+.bt-confirm { display: flex; flex-direction: column; gap: 8px; max-width: 520px; }
+.bt-confirm p { margin: 0; }
+.bt-confirm .tone-good { color: var(--jade); }
+.bt-confirm .tone-warn { color: var(--ochre); }
+.bt-confirm .tone-bad { color: var(--cinnabar); }
+.bt-actions { justify-content: flex-end; gap: 8px; }
 .career-attrs, .dao-attrs { padding: 6px 0; }
 .skill-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .skill-list li { display: flex; justify-content: space-between; gap: 8px; }

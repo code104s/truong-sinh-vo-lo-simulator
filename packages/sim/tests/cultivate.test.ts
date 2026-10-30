@@ -1,15 +1,15 @@
 // v0.8 S5: tu luyện, đột phá vào Luyện Khí tầng 1 (ADR 0022 Q7–Q9).
-import { birthplaceId, regionId, TICKS_PER_YEAR } from '@tsvl/shared';
+import { birthplaceId, regionId, TICKS_PER_YEAR, vCharacterView } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { describe, expect, it } from 'vitest';
 import { Life, Rng } from '../src/index';
 import { autoAdvance, lastChoice, pastComingOfAge } from './auto';
-import { newCultivation, QI_PEAK, type CultivationState } from '../src/life/cultivation';
+import { newCultivation, QI_PEAK, QI_PLACE_PCT, qiPlaceBand, type CultivationState } from '../src/life/cultivation';
 import { createCharacter, type CharacterState, type SpiritRoot } from '../src/life/character';
 import { computeHealthMax } from '../src/life/health';
 import { MERIDIAN_ILLNESS } from '../src/life/rogue';
 import {
-  BREAKTHROUGH_PPM_RANGE, BREAKTHROUGH_STONES, breakthrough, breakthroughLock, breakthroughPpm, cultivate, cultivateLock, FAIL_SHAKEN_TICKS, mindOf,
+  BREAKTHROUGH_PPM_RANGE, BREAKTHROUGH_STONES, breakthrough, breakthroughLock, breakthroughPpm, breakthroughPreview, chanceBand, cultivate, cultivateLock, FAIL_SHAKEN_TICKS, mindOf,
   QI1_LIFESPAN_TICKS, QI_BODY, qiPerSlot, SEVERE_LIFESPAN_TICKS, STONE_QI_PCT,
 } from '../src/life/cultivate';
 import type { LifeSnapshot } from '../src/life/life';
@@ -173,6 +173,33 @@ describe('đột phá (v0.8 S5, Q8–Q9)', () => {
   });
 });
 
+describe('xem trước cho giao diện (v0.8 F2)', () => {
+  it('dải linh khí nơi ở: thành, trấn loãng; làng vừa; núi dồi dào; di tích đậm đặc', () => {
+    expect([QI_PLACE_PCT.city, QI_PLACE_PCT.town, QI_PLACE_PCT.village, QI_PLACE_PCT.mountain, QI_PLACE_PCT.ruin].map(qiPlaceBand)).toEqual(['thin', 'thin', 'common', 'rich', 'dense']);
+  });
+
+  it('dải cơ hội theo ngưỡng 25/45/70%; trần, sàn của luật rơi đúng dải', () => {
+    expect([249_999, 250_000, 449_999, 450_000, 699_999, 700_000].map(chanceBand)).toEqual(['slim', 'doubtful', 'doubtful', 'even', 'even', 'likely']);
+    expect(chanceBand(BREAKTHROUGH_PPM_RANGE[0])).toBe('slim');
+    expect(chanceBand(BREAKTHROUGH_PPM_RANGE[1])).toBe('likely');
+  });
+
+  it('chỉ khi người phàm có đường tu đã đầy; cùng luật với lần đột phá thật; tang chỉ tính khi cần', () => {
+    const c = person(GOOD, { personality: 'calm' });
+    let asked = 0;
+    const mourning = () => { asked++; return false; };
+    expect(breakthroughPreview(c, newCultivation(), T, mourning)).toBeNull();
+    expect(breakthroughPreview(c, disciple({ qi: PEAK - 1 }), T, mourning)).toBeNull();
+    expect(breakthroughPreview(c, disciple({ realm: 'qi1', qi: PEAK }), T, mourning)).toBeNull();
+    expect(asked).toBe(0);
+    const cult = disciple({ qi: PEAK, stones: 5 });
+    expect(breakthroughPreview(c, cult, T, mourning)).toEqual({ chance: chanceBand(breakthroughPpm(c, cult, T, false)), mind: 'calm', stones: BREAKTHROUGH_STONES });
+    // Vừa hỏng: tâm còn chấn động, cơ hội mong manh (ô đột phá bị khóa)
+    const shaken = disciple({ qi: PEAK, breakthroughs: [{ at: T - 1, ok: false }] });
+    expect(breakthroughPreview(c, shaken, T, () => false)).toMatchObject({ chance: 'slim', mind: 'shaken', stones: 0 });
+  });
+});
+
 describe('chơi thật (v0.8 S5)', () => {
   const bp = { id: birthplaceId('r0/c1'), name: 'Làng', nameHan: '村', kind: 'village' as const, cell: { x: 1, y: 0 }, county: PLAIN };
   function life(cult: Partial<CultivationState>, plan: string): Life {
@@ -193,11 +220,17 @@ describe('chơi thật (v0.8 S5)', () => {
     autoAdvance(l, 'year', lastChoice);
     expect(l.snapshot().cultivation.qi).toBeGreaterThan(0);
     expect(l.view().cultivation.qi).not.toBe('empty');
+    // F2: có đường tu thì view ghi linh khí nơi đang đứng; chưa đầy thì chưa có xem trước đột phá
+    expect(l.view().cultivation).toMatchObject({ place: 'common' });
+    expect(l.view().cultivation.breakthrough).toBeUndefined();
   });
 
   it('đầy thì đột phá: có kết quả, ghi vào đường tu và tổng kết; lưu tải cùng digest', () => {
     const l = life({ qi: PEAK, stones: 3 }, 'action.breakthrough');
     expect(l.actions().find((a) => a.id === 'action.breakthrough')!.locked).toBeNull();
+    // F2: xem trước đột phá có trong view, qua schema
+    expect(l.view().cultivation.breakthrough).toMatchObject({ mind: 'calm', stones: 3 });
+    expect(vCharacterView.check(l.view(), '$')).toBeNull();
     autoAdvance(l, 'month', lastChoice);
     const cult = l.snapshot().cultivation;
     expect(cult.breakthroughs).toHaveLength(1);

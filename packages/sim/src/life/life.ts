@@ -40,11 +40,11 @@ import { enlist, enlistLock, type EnlistWorld } from './soldier';
 import { ATONE_FEE, bandOf, canAtone, leaveBand, OUTLAW_CAUGHT_REP, ownEnter, ownLock, taxExempt, type OwnWorld } from './wayward';
 import { apprenticeAct, apprenticeLock, CAREER_DEFS, careerView, careerWorked, careerYear, entryGift, leaveAngers, legacyCareers, leaveCareer, mentorCareer, rankStep, type ApprenticeWorld, type CareerState } from './career';
 import { roadRisk, routeDanger } from '../factions/impact';
-import { cultivationView, legacyCultivation, newCultivation, type CultivationState } from './cultivation';
+import { cultivationView, legacyCultivation, newCultivation, qiPlaceBand, qiPlacePct, type CultivationState } from './cultivation';
 import { omenYear } from './omens';
 import { attendTrial, dutyLock, dutyView, dutyYear, foundSect, sectPhase, trialLock } from '../factions/sect';
 import { induce, induceLock } from './rogue';
-import { breakthrough, breakthroughLock, cultivate, cultivateLock, FAIL_SHAKEN_TICKS, SECLUSION_FADE_SLOTS } from './cultivate';
+import { breakthrough, breakthroughLock, breakthroughPreview, cultivate, cultivateLock, FAIL_SHAKEN_TICKS, SECLUSION_FADE_SLOTS } from './cultivate';
 import { LEAVE_ATTITUDE, shiftAttitude } from '../factions/attitude';
 import { controlOf, membershipOf, factionMoney, factionPhase, factionViews, newFactionWorld, type FactionWorldState } from '../factions/state';
 
@@ -782,10 +782,19 @@ export class Life {
     }
   }
 
-  /** Đường tu như người chơi thấy, kèm nghĩa vụ tông môn khi còn tên trong sổ (F1). */
+  /**
+   * Đường tu như người chơi thấy, kèm nghĩa vụ tông môn khi còn tên trong sổ (F1), linh khí nơi đang đứng và xem trước
+   * đột phá khi đã tới đỉnh (F2).
+   */
   private cultivationView(): CultivationView {
-    const duty = dutyView(this.s.cultivation);
-    return { ...cultivationView(this.s.cultivation), ...(duty ? { duty } : {}) };
+    const s = this.s, cult = s.cultivation;
+    const duty = dutyView(cult);
+    const preview = breakthroughPreview(s.character, cult, s.tick, () => this.mourning());
+    return {
+      ...cultivationView(cult), ...(duty ? { duty } : {}),
+      ...(cult.path ? { place: qiPlaceBand(qiPlacePct(this.logic, s.character.location)) } : {}),
+      ...(preview ? { breakthrough: preview } : {}),
+    };
   }
 
   private context(t: Tick) {

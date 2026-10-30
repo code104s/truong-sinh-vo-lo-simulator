@@ -18,6 +18,26 @@ export type CultivationPath = (typeof CULTIVATION_PATHS)[number];
 export const QI_BANDS = ['empty', 'low', 'half', 'high', 'peak'] as const;
 export type QiBand = (typeof QI_BANDS)[number];
 
+/** Linh khí nơi đang đứng, theo dải (F2): loãng (thành, trấn), thường (làng), dồi dào (núi), đậm đặc (di tích). Khóa `qi_place.<dải>`. */
+export const QI_PLACE_BANDS = ['thin', 'common', 'rich', 'dense'] as const;
+export type QiPlaceBand = (typeof QI_PLACE_BANDS)[number];
+
+/** Cơ hội đột phá thành, theo dải (F2, không lộ số). Khóa `chance.<dải>`. */
+export const CHANCE_BANDS = ['slim', 'doubtful', 'even', 'likely'] as const;
+export type ChanceBand = (typeof CHANCE_BANDS)[number];
+
+/** Tâm cảnh (Q8): dải tính từ tính cách, đói, bệnh, tang, lần hỏng gần đây. Khóa `mind.<dải>`. */
+export const MIND_BANDS = ['calm', 'steady', 'troubled', 'shaken'] as const;
+export type MindBand = (typeof MIND_BANDS)[number];
+
+/** Xem trước một lần đột phá (F2): hỏi lại người chơi trước khi xếp ô đột phá. */
+export interface BreakthroughPreview {
+  chance: ChanceBand;
+  mind: MindBand;
+  /** Linh thạch sẽ dùng hết dù thành hay hỏng. */
+  stones: number;
+}
+
 /** Đường tu như người chơi thấy. */
 export interface CultivationView {
   realm: Realm;
@@ -32,6 +52,10 @@ export interface CultivationView {
    * `expelAt` thì bị gạch tên), tiền nộp thay khi thiếu tuần. Chỉ có khi còn tên trong sổ tông môn.
    */
   duty?: SectDutyView;
+  /** Linh khí nơi đang đứng (F2); chỉ khi đã có đường tu. */
+  place?: QiPlaceBand;
+  /** Xem trước đột phá (F2); chỉ khi người phàm có đường tu đã tích linh khí tới đỉnh. */
+  breakthrough?: BreakthroughPreview;
 }
 
 export interface SectDutyView {
@@ -50,6 +74,8 @@ export const vCultivationView: Validator<CultivationView> = obj<CultivationView>
   path: nullable(oneOf(CULTIVATION_PATHS)),
   qi: nullable(oneOf(QI_BANDS)),
   duty: opt(vSectDutyView),
+  place: opt(oneOf(QI_PLACE_BANDS)),
+  breakthrough: opt(obj<BreakthroughPreview>({ chance: oneOf(CHANCE_BANDS), mind: oneOf(MIND_BANDS), stones: nat })),
 });
 
 /** Một đời tu cho tổng kết (F4): linh căn đã biết, cảnh giới cao nhất, lúc dẫn khí, các lần đột phá. */

@@ -29,7 +29,7 @@ describe('đường tu (v0.8 Bước 0)', () => {
     const s = Life.create({ worldSeed: 'tu', regionId: regionId('r0'), birthplaceId: bp.id }, bp, region).snapshot();
     s.cultivation = { ...newCultivation(), root: 'fair', path: 'sect', qi: 1_000, duty: { weeks: 3, missed: 1, since: 0 } };
     const l = Life.restore(s, [], region);
-    expect(l.view().cultivation).toEqual({ realm: 'mortal', root: 'fair', path: 'sect', qi: 'low', duty: { weeks: 3, need: SECT_DUTY_WEEKS, missed: 1, expelAt: SECT_EXPEL_MISSED, fee: SECT_DUTY_FEE } });
+    expect(l.view().cultivation).toEqual({ realm: 'mortal', root: 'fair', path: 'sect', qi: 'low', duty: { weeks: 3, need: SECT_DUTY_WEEKS, missed: 1, expelAt: SECT_EXPEL_MISSED, fee: SECT_DUTY_FEE }, place: 'thin' });
     expect(vCharacterView.check(l.view(), '$')).toBeNull();
     // Bị gạch tên (hay tán tu): không có nghĩa vụ
     s.cultivation = { ...s.cultivation, duty: null };

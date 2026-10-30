@@ -1,8 +1,8 @@
-// Đường tu (v0.8 F1): cảnh giới trên thanh trạng thái, khối Đạo ở hồ sơ.
+// Đường tu (v0.8 F1): cảnh giới trên thanh trạng thái, khối Đạo ở hồ sơ. F2: ô tu luyện, đột phá, hỏi lại trước khi đột phá.
 import { hasKey, t } from '@tsvl/content';
-import { QI_BANDS, REALMS, ROOT_BANDS, type CultivationView, type FactionView } from '@tsvl/shared';
+import { CHANCE_BANDS, MIND_BANDS, QI_BANDS, QI_PLACE_BANDS, REALMS, ROOT_BANDS, type CultivationView, type FactionView } from '@tsvl/shared';
 import { describe, expect, it } from 'vitest';
-import { daoBlock, dutyLines, realmLine } from '../src/app/cultivation';
+import { breakthroughAsk, cultivationNote, daoBlock, dutyLines, needsConfirm, realmLine } from '../src/app/cultivation';
 
 const mortal: CultivationView = { realm: 'mortal', root: null, path: null, qi: null };
 const sect: FactionView = { id: 'f9', kind: 'sect', name: { key: 'faction.sect.name', params: { name: 'Thanh Vân' } }, seat: 2, counties: [], strength: 'modest', members: 0 };
@@ -48,5 +48,33 @@ describe('đường tu (v0.8 F1)', () => {
   it('mọi khóa khối Đạo có chuỗi', () => {
     for (const id of [...REALMS.map((r) => `realm.${r}`), ...ROOT_BANDS.map((r) => `root.${r}`), ...QI_BANDS.map((q) => `qi.${q}`),
       'ui.dao.title', 'ui.dao.root', 'ui.dao.root_unknown', 'ui.dao.path', 'ui.dao.realm', 'ui.dao.qi', 'ui.dao.expelled', 'ui.dao.ceiling', 'ui.dao.duty']) expect(hasKey(id), id).toBe(true);
+  });
+
+  it('F2: ô tu luyện ghi linh khí nơi này; ô đột phá ghi cơ hội; việc khác, hay chưa có đường tu, không ghi', () => {
+    const cv: CultivationView = { realm: 'mortal', root: 'fair', path: 'rogue', qi: 'peak', place: 'rich', breakthrough: { chance: 'even', mind: 'steady', stones: 0 } };
+    const line = (id: string, c: CultivationView) => { const n = cultivationNote(id, c); return n && t(n.key, n.params); };
+    expect(line('action.cultivate', cv)).toBe('Linh khí nơi này dồi dào');
+    expect(line('action.breakthrough', cv)).toBe('Cơ hội thành: năm ăn năm thua');
+    expect(line('action.farm', cv)).toBeNull();
+    expect(line('action.cultivate', mortal)).toBeNull();
+    expect(line('action.breakthrough', { ...cv, breakthrough: undefined })).toBeNull();
+  });
+
+  it('F2: chỉ đột phá làm được mới hỏi lại; hộp hỏi ghi cơ hội, tâm cảnh, linh thạch, được gì, mất gì', () => {
+    expect(needsConfirm('action.breakthrough', null)).toBe(true);
+    expect(needsConfirm('action.breakthrough', 'lock.unsettled')).toBe(false);
+    expect(needsConfirm('action.cultivate', null)).toBe(false);
+    const a = breakthroughAsk({ chance: 'doubtful', mind: 'troubled', stones: 3 });
+    expect([t(a.chance), t(a.mind), t(a.stones.key, a.stones.params)]).toEqual(['khó thành', 'Tâm rối', 'Dùng 3 khối linh thạch, mất hết dù thành hay hỏng.']);
+    expect(a.mindWarn).toBe(true);
+    expect(a.losses.map((k) => t(k))).toEqual(['linh khí chỉ còn một nửa;', 'thương kinh mạch, ốm dài, khỏi mới tu tiếp được;', 'tâm cảnh chấn động một năm, chưa thử lại được;', 'hỏng nặng thì tổn thọ.']);
+    const calm = breakthroughAsk({ chance: 'likely', mind: 'calm', stones: 0 });
+    expect(calm.mindWarn).toBe(false);
+    expect(t(calm.stones.key)).toBe('Không có linh thạch đỡ, cơ hội thấp hơn.');
+  });
+
+  it('F2: mọi dải linh khí nơi ở, cơ hội, tâm cảnh và chữ hộp hỏi có chuỗi', () => {
+    for (const id of [...QI_PLACE_BANDS.map((b) => `qi_place.${b}`), ...CHANCE_BANDS.map((b) => `chance.${b}`), ...MIND_BANDS.map((b) => `mind.${b}`),
+      'ui.bt.title', 'ui.bt.intro', 'ui.bt.chance', 'ui.bt.mind', 'ui.bt.mind_warn', 'ui.bt.win', 'ui.bt.lose', 'ui.bt.confirm', 'ui.bt.cancel']) expect(hasKey(id), id).toBe(true);
   });
 });

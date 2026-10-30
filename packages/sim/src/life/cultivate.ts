@@ -2,7 +2,7 @@
 // tu tích linh khí tới đỉnh, rồi đột phá vào tầng 1: một ô, rút một lần; tâm cảnh là dải tính từ trạng thái sẵn có. Hỏng
 // thì thương kinh mạch, mất nửa linh khí, tâm cảnh tụt; nặng thì giảm thọ. Vào tầng 1 thì tu tiếp tới đỉnh tầng 1 rồi
 // dừng (trần v0.8, Q1). Thuần, tất định; số linh khí không lộ ra view.
-import { TICKS_PER_YEAR, ageYearsAt, type LogEntry, type RootBand, type Tick } from '@tsvl/shared';
+import { TICKS_PER_YEAR, ageYearsAt, type BreakthroughPreview, type ChanceBand, type LogEntry, type MindBand, type RootBand, type Tick } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { clamp, mulDiv } from '../core/math';
 import type { Rng } from '../core/rng';
@@ -68,7 +68,7 @@ export const SECLUSION_FADE_SLOTS = TICKS_PER_YEAR / 2;
 
 // —— Tâm cảnh (Q8): dải tính từ trạng thái sẵn có, không thêm chỉ số ẩn ——
 
-export type Mind = 'calm' | 'steady' | 'troubled' | 'shaken';
+export type Mind = MindBand;
 const CALM_PERSONALITIES: ReadonlySet<string> = new Set(['calm', 'aloof']);
 const RESTLESS_PERSONALITIES: ReadonlySet<string> = new Set(['hot_tempered', 'greedy', 'ambitious']);
 /** Đột phá hỏng trong chừng này tick thì tâm cảnh tụt (Q8: không thử lại ngay). */
@@ -122,6 +122,19 @@ export function breakthroughPpm(c: CharacterState, cult: CultivationState, tick:
   ppm -= Math.min(AGE_PPM_MAX, Math.max(0, ageYearsAt(c.birthTick, tick) - AGE_FROM) * AGE_PPM_PER_YEAR);
   if (cult.path === 'rogue') ppm += ROGUE_BREAKTHROUGH_PPM;
   return clamp(ppm, BREAKTHROUGH_PPM_RANGE[0], BREAKTHROUGH_PPM_RANGE[1]);
+}
+
+/** Dải cơ hội đột phá như người chơi thấy (F2): từ 70% khá chắc, từ 45% năm ăn năm thua, từ 25% khó, dưới nữa mong manh. */
+export function chanceBand(ppm: number): ChanceBand {
+  return ppm >= 700_000 ? 'likely' : ppm >= 450_000 ? 'even' : ppm >= 250_000 ? 'doubtful' : 'slim';
+}
+
+/** Xem trước đột phá (F2): chỉ khi người phàm có đường tu đã tới đỉnh; cùng luật với lần đột phá thật. */
+export function breakthroughPreview(c: CharacterState, cult: CultivationState, tick: Tick, mourning: () => boolean): BreakthroughPreview | null {
+  if (!cult.path || cult.realm !== 'mortal' || cult.qi < qiPeakOf(cult)) return null;
+  // Tang trong năm quét cả danh sách người: chỉ tính khi thật cần xem trước
+  const m = mourning();
+  return { chance: chanceBand(breakthroughPpm(c, cult, tick, m)), mind: mindOf(c, cult, tick, m), stones: stonesFor(cult) };
 }
 
 const MERIDIAN = ILLNESSES.find((d) => `illness.${d.id}` === MERIDIAN_ILLNESS)!;

@@ -1,6 +1,6 @@
 // Đường tu của người chơi (v0.8, ADR 0022): cảnh giới, linh căn đã kiểm, đường vào, linh khí, các lần đột phá; linh khí
 // nơi ở theo bản đồ. Bước 0: chỉ trạng thái và phép chiếu (luôn phàm nhân, chưa kiểm); luật ở S1–S5. Thuần, tất định.
-import type { CultivationPath, CultivationRecord, CultivationView, QiBand, Realm, RootBand, Tick } from '@tsvl/shared';
+import type { CultivationPath, CultivationRecord, CultivationView, QiBand, QiPlaceBand, Realm, RootBand, Tick } from '@tsvl/shared';
 import type { RegionLogic } from '@tsvl/worldgen';
 import type { SpiritRoot } from './character';
 import { hash32 } from '../core/hash';
@@ -110,6 +110,11 @@ export const QI_PLACE_PCT = { city: 80, town: 90, village: 100, mountain: 120, r
 export function qiPlacePct(logic: RegionLogic, county: number): number {
   if (sitesOf(logic).ruins.includes(county)) return QI_PLACE_PCT.ruin;
   return mountainCounty(logic, county) ? QI_PLACE_PCT.mountain : QI_PLACE_PCT[logic.settlementKind[county]!];
+}
+
+/** Dải linh khí nơi ở (F2): dưới gốc làng là loãng, bằng là thường, trên là dồi dào, từ mức di tích là đậm đặc. */
+export function qiPlaceBand(pct: number): QiPlaceBand {
+  return pct < QI_PLACE_PCT.village ? 'thin' : pct === QI_PLACE_PCT.village ? 'common' : pct < QI_PLACE_PCT.ruin ? 'rich' : 'dense';
 }
 
 /** Tìm cơ duyên (S1): vào núi sâu ở quận có đường núi, hay thăm miếu; nơi khác không có chỗ tìm. */

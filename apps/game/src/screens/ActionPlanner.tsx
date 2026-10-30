@@ -1,7 +1,8 @@
 import { t } from '@tsvl/content';
-import { ACTION_GROUPS, type ActionOption, type ActionProgress, type Cargo, type CareerView, type HaulOption, type HouseholdView, type MonthPlan, type NpcView, type PlanSlot, type Tick, type TravelOption } from '@tsvl/shared';
+import { ACTION_GROUPS, type ActionOption, type ActionProgress, type BreakthroughPreview, type Cargo, type CareerView, type CultivationView, type HaulOption, type HouseholdView, type MonthPlan, type NpcView, type PlanSlot, type Tick, type TravelOption } from '@tsvl/shared';
 import { useEffect, useState } from 'preact/hooks';
 import { paletteSplit } from '../app/career';
+import { breakthroughAsk, cultivationNote, needsConfirm } from '../app/cultivation';
 import { foodForecast } from '../app/forecast';
 import { haulRows } from '../app/goods';
 import { inlineDate } from '../app/format';
@@ -23,6 +24,8 @@ interface Props {
   career: CareerView | null;
   /** Chuyến buôn đi được từ đây (v0.7 F3b), chỉ khi là thương nhân. */
   hauls: HaulOption[];
+  /** Đường tu (v0.8 F2): linh khí nơi ở trên ô tu luyện, cơ hội trên ô đột phá, hỏi lại trước khi xếp đột phá. */
+  cultivation: CultivationView;
   onDraft: (plan: MonthPlan) => void; onApply: () => void; onUndo: () => void;
 }
 
@@ -65,7 +68,7 @@ function FoodForecastLine({ household, tick, farming }: { household: HouseholdVi
  * (hành động không có, đi mà không có đích); khóa của lúc này chỉ cảnh báo vì sim xét lại từng ô khi chạy (ADR 0008).
  * Bản nháp do màn Đời người giữ, để bấm tua là áp dụng luôn.
  */
-export function ActionPlanner({ plan, draft, active, slotIndex, actions, travel, world, locked, household, tick, people, circle, career, hauls, onDraft, onApply, onUndo }: Props) {
+export function ActionPlanner({ plan, draft, active, slotIndex, actions, travel, world, locked, household, tick, people, circle, career, hauls, cultivation, onDraft, onApply, onUndo }: Props) {
   const [picking, setPicking] = useState<number | null>(null);
   useEffect(() => { if (locked) setPicking(null); }, [locked]);
   const dirty = planDirty(draft, plan);
@@ -122,7 +125,7 @@ export function ActionPlanner({ plan, draft, active, slotIndex, actions, travel,
         </div>
       )}
       {picking !== null && (
-        <ActionPalette week={picking} current={draft.slots[picking]!} actions={actions} travel={travel} name={name} people={people} career={career} hauls={hauls}
+        <ActionPalette week={picking} current={draft.slots[picking]!} actions={actions} travel={travel} name={name} people={people} career={career} hauls={hauls} cultivation={cultivation}
           onPick={(slot) => choose(picking, slot)} onClose={() => setPicking(null)} />
       )}
     </section>
@@ -130,10 +133,12 @@ export function ActionPlanner({ plan, draft, active, slotIndex, actions, travel,
 }
 
 /** Bảng chọn hành động gom theo nhóm của GDD 3.2 E; đi lại thì chọn luôn điểm đến. */
-function ActionPalette({ week, current, actions, travel, name, people, career, hauls, onPick, onClose }: {
+function ActionPalette({ week, current, actions, travel, name, people, career, hauls, cultivation, onPick, onClose }: {
   week: number; current: PlanSlot; actions: ActionOption[]; travel: TravelOption[]; name: (c: number) => string; people: NpcView[];
-  career: CareerView | null; hauls: HaulOption[]; onPick: (slot: PlanSlot) => void; onClose: () => void;
+  career: CareerView | null; hauls: HaulOption[]; cultivation: CultivationView; onPick: (slot: PlanSlot) => void; onClose: () => void;
 }) {
+  // Đột phá (v0.8 F2): hỏi lại, nói rõ cơ hội và mất gì nếu hỏng, rồi mới xếp
+  const [asking, setAsking] = useState<BreakthroughPreview | null>(null);
   // Chuyến buôn (F3b): chọn việc trước, rồi chọn quận đích và hàng
   const [trading, setTrading] = useState(false);
   const { shown, foreign } = paletteSplit(actions, career);
@@ -151,7 +156,8 @@ function ActionPalette({ week, current, actions, travel, name, people, career, h
           <span class="section-title">{t('ui.plan.pick', { week: t(`tenday.${week}`) })}</span>
           <button class="close" type="button" onClick={onClose} aria-label={t('ui.close')} title={t('ui.close')}>✕</button>
         </div>
-        {trading ? <HaulPicker hauls={hauls} current={current} name={name} onPick={onPick} onBack={() => setTrading(false)} />
+        {asking ? <BreakthroughConfirm preview={asking} onConfirm={() => onPick({ action: 'action.breakthrough' })} onBack={() => setAsking(null)} />
+          : trading ? <HaulPicker hauls={hauls} current={current} name={name} onPick={onPick} onBack={() => setTrading(false)} />
           : social ? <PersonPicker action={social} current={current} people={people} onPick={onPick} onBack={() => setSocial(null)} /> : <>
         <p class="small muted">{t('ui.plan.pick_hint')}</p>
         {ACTION_GROUPS.map((group) => {
@@ -184,11 +190,15 @@ function ActionPalette({ week, current, actions, travel, name, people, career, h
                   </>
                   : list.map((a) => {
                     const seal = sealOf(a.id);
+                    const note = cultivationNote(a.id, cultivation);
+                    const pick = () => (group === 'social' ? setSocial(a)
+                      : needsConfirm(a.id, a.locked) && cultivation.breakthrough ? setAsking(cultivation.breakthrough) : onPick({ action: a.id }));
                     return (
-                      <button key={a.id} type="button" class={`tile${a.locked ? ' locked' : ''}${current.action === a.id ? ' chosen' : ''}`} onClick={() => (group === 'social' ? setSocial(a) : onPick({ action: a.id }))}>
+                      <button key={a.id} type="button" class={`tile${a.locked ? ' locked' : ''}${current.action === a.id ? ' chosen' : ''}`} onClick={pick}>
                         <span class="tile-a"><Seal char={seal.char} tone={seal.tone} />{t(a.id)}</span>
                         <CostChips option={a} />
                         {a.gains.length > 0 && <span class="tile-gain">{a.gains.map((g) => t(g)).join(' · ')}</span>}
+                        {note && <span class="tile-gain tile-dao">{t(note.key, note.params)}</span>}
                         {a.locked && <span class="tile-why">{t(a.locked)}</span>}
                       </button>
                     );
@@ -241,6 +251,35 @@ function PersonPicker({ action, current, people, onPick, onBack }: {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/**
+ * Hỏi lại trước khi xếp ô đột phá (v0.8 F2): cơ hội thành, tâm cảnh, linh thạch dùng, được gì, mất gì nếu hỏng. Dải chữ
+ * theo cùng luật sim lúc này; ô chạy thật thì sim xét lại (tâm cảnh có thể đổi trước tuần ấy).
+ */
+function BreakthroughConfirm({ preview, onConfirm, onBack }: { preview: BreakthroughPreview; onConfirm: () => void; onBack: () => void }) {
+  const a = breakthroughAsk(preview);
+  return (
+    <div class="bt-confirm">
+      <div class="row picker-head">
+        <button type="button" class="btn ghost small-btn" onClick={onBack}>{t('ui.social.back')}</button>
+        <span class="group-k">{t('ui.bt.title')}</span>
+      </div>
+      <p class="small">{t('ui.bt.intro')}</p>
+      <dl class="attrs">
+        <dt>{t('ui.bt.chance')}</dt><dd class="cap">{t(a.chance)}</dd>
+        <dt>{t('ui.bt.mind')}</dt><dd>{t(a.mind)}</dd>
+      </dl>
+      {a.mindWarn && <p class="small tone-warn">{t('ui.bt.mind_warn')}</p>}
+      <p class="small">{t(a.stones.key, a.stones.params)}</p>
+      <p class="small tone-good">{t('ui.bt.win')}</p>
+      <p class="small tone-bad">{t('ui.bt.lose')} {a.losses.map((k) => t(k)).join(' ')}</p>
+      <span class="row bt-actions">
+        <button type="button" class="btn ghost small-btn" onClick={onBack}>{t('ui.bt.cancel')}</button>
+        <button type="button" class="btn small-btn" onClick={onConfirm}>{t('ui.bt.confirm')}</button>
+      </span>
     </div>
   );
 }
