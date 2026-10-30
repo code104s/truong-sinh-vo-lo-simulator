@@ -6,6 +6,7 @@ import { hungerStaminaPct } from './household';
 export const STAMINA_BASE = 600;
 export const STAMINA_PER_CONSTITUTION = 35;
 export const STAMINA_RECOVERY_BASE = 45;
+export const QI_BODY_RECOVERY_PCT = 125;
 export const STAMINA_RECOVERY_PER_CONSTITUTION = 4;
 export const REST_STAMINA_BONUS = 240;
 export const EXHAUSTION_DAMAGE = 24;
@@ -46,7 +47,9 @@ export function spendStamina(c: CharacterState, cost: number): boolean {
 
 export function recoverStamina(c: CharacterState, tick: Tick, rest = false): void {
   const cap = staminaMax(c, tick);
-  const base = mulDiv(STAMINA_RECOVERY_BASE + c.constitution * STAMINA_RECOVERY_PER_CONSTITUTION, cap, 1000);
+  let base = mulDiv(STAMINA_RECOVERY_BASE + c.constitution * STAMINA_RECOVERY_PER_CONSTITUTION, cap, 1000);
+  // Luyện Khí tầng 1 (v0.8 S5, Q9): hồi sức nhanh hơn
+  if (c.traits.includes('qi_body')) base = mulDiv(base, QI_BODY_RECOVERY_PCT, 100);
   // Đói thì hồi một nửa (ADR 0013)
   c.stamina = Math.min(cap, c.stamina + mulDiv(base + (rest ? REST_STAMINA_BONUS : 0), hungerStaminaPct(c.household), 100));
 }

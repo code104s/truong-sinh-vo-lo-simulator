@@ -38,8 +38,8 @@ type Log = (e: Omit<LogEntry, 'tick'>) => void;
 const REST: PlanSlot = { action: 'action.rest' };
 /** Việc tự vào nghề (S6). */
 const OWN_ACTIONS: ReadonlySet<string> = new Set(['action.drift', 'action.build_hut']);
-/** Việc đường tu: tông môn (v0.8 S3) — dự kỳ tuyển, tạp dịch; tán tu (S4) — tự dẫn khí. */
-const SECT_ACTIONS: ReadonlySet<string> = new Set(['action.trial', 'action.sect_duty', 'action.induce']);
+/** Việc đường tu: tông môn (v0.8 S3) — dự kỳ tuyển, tạp dịch; tán tu (S4) — tự dẫn khí; tu luyện, đột phá (S5). */
+const SECT_ACTIONS: ReadonlySet<string> = new Set(['action.trial', 'action.sect_duty', 'action.induce', 'action.cultivate', 'action.breakthrough']);
 /**
  * Khóa tạm thời: tự hết theo mùa hoặc khi hồi sức. Ô đó nghỉ, không ngắt tua, chuyến đi dở giữ nguyên.
  * Các khóa khác (sai nơi, không có đường) là kế hoạch hỏng: nghỉ và ngắt tua một lần để người chơi sửa.

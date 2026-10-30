@@ -185,6 +185,8 @@ export function moneyGains(id: string): ContentId[] {
     case 'action.seek': case 'action.trial': return ['gain.fortune'];
     case 'action.sect_duty': return ['gain.sect'];
     case 'action.induce': return ['gain.induce'];
+    case 'action.cultivate': return ['gain.qi'];
+    case 'action.breakthrough': return ['gain.realm'];
     case 'action.craft': return ['gain.money', 'gain.goods'];
     case 'action.haul': return ['gain.money'];
     case 'action.join_guild': return ['gain.guild'];

@@ -41,6 +41,8 @@ export const TRAITS: readonly TraitDef[] = [
   { id: 'clumsy', visible: true, weight: 8, excludes: 'nimble', accidentPct: 150 },
   { id: 'keen_memory', visible: true, weight: 10 },
   { id: 'longevity_mark', visible: false, weight: 6, lifespanYears: 5 },
+  // v0.8 S5: thân thể sau khi vào Luyện Khí tầng 1 (Q9) — chỉ đột phá đặt vào (trọng số 0, cuối bảng: lượt rút lúc sinh không đổi)
+  { id: 'qi_body', visible: false, weight: 0, healthMaxDelta: 100, illnessPct: 70 },
 ];
 /** Trọng số số thiên phú 0, 1, 2. */
 export const TRAIT_COUNT_WEIGHTS = [50, 40, 10];

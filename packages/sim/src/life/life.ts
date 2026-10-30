@@ -43,6 +43,7 @@ import { roadRisk, routeDanger } from '../factions/impact';
 import { cultivationView, legacyCultivation, newCultivation, type CultivationState } from './cultivation';
 import { attendTrial, dutyLock, dutyYear, foundSect, sectPhase, trialLock } from '../factions/sect';
 import { induce, induceLock } from './rogue';
+import { breakthrough, breakthroughLock, cultivate, cultivateLock, FAIL_SHAKEN_TICKS } from './cultivate';
 import { LEAVE_ATTITUDE, shiftAttitude } from '../factions/attitude';
 import { controlOf, membershipOf, factionMoney, factionPhase, factionViews, newFactionWorld, type FactionWorldState } from '../factions/state';
 
@@ -176,7 +177,7 @@ export class Life {
     // Bỏ quê, dựng lều (S6): khóa riêng (ruộng, núi rừng, đã ở nghề ấy)
     for (const o of options) if (!o.locked && (o.id === 'action.drift' || o.id === 'action.build_hut')) o.locked = ownLock(o.id, s.character, { career: s.career, careers: s.careers, npcs: s.npcs, bonds: s.bonds, logic: this.logic, tick: s.tick });
     // Tông môn (v0.8 S3): kỳ tuyển ở trị sở trong tháng có sứ giả; tạp dịch chỉ đệ tử còn tên
-    for (const o of options) if (!o.locked && (o.id === 'action.trial' || o.id === 'action.sect_duty' || o.id === 'action.induce')) o.locked = this.sectLock(o.id);
+    for (const o of options) if (!o.locked && (o.id === 'action.trial' || o.id === 'action.sect_duty' || o.id === 'action.induce' || o.id === 'action.cultivate' || o.id === 'action.breakthrough')) o.locked = this.sectLock(o.id);
     return options;
   }
   /** Nơi đi được; mức rủi ro tính cả người giữ đường, đường băng cướp giữ ghi `danger` (v0.6 S6). */
@@ -615,15 +616,26 @@ export class Life {
         if (action === 'action.trial') attendTrial(c, s.cultivation, s.factions, s.tick, s.events.flags, log);
         // Tán tu (S4): rút trên luồng `actions`, chỉ khi có người tự dẫn khí
         else if (action === 'action.induce') induce(c, s.cultivation, s.events.flags, this.logic, s.tick, this.streams.get('actions'), log);
+        // Tu luyện không rút RNG; đột phá rút một lần trên luồng `actions` (S5)
+        else if (action === 'action.cultivate') cultivate(c, s.cultivation, this.logic, s.tick, log);
+        else if (action === 'action.breakthrough') breakthrough(c, s.cultivation, s.tick, this.mourning(), this.streams.get('actions'), log);
         else if (s.cultivation.duty) s.cultivation.duty.weeks++;
       },
     };
   }
 
-  /** Khóa việc đường tu lúc này: dự kỳ tuyển, tạp dịch (v0.8 S3); tự dẫn khí (S4). */
+  /** Tang người thân gần (cha mẹ, vợ chồng, con, anh em) trong năm: tâm cảnh khi đột phá (v0.8 S5, Q8). */
+  private mourning(): boolean {
+    const s = this.s;
+    return s.npcs.people.some((n) => n.death !== null && s.tick - n.death.tick < FAIL_SHAKEN_TICKS && kinRole(s.character, n) !== null);
+  }
+
+  /** Khóa việc đường tu lúc này: dự kỳ tuyển, tạp dịch (v0.8 S3); tự dẫn khí (S4); tu luyện, đột phá (S5). */
   private sectLock(action: string): string | null {
     const s = this.s;
     if (action === 'action.induce') return induceLock(s.character, s.cultivation, s.events.flags);
+    if (action === 'action.cultivate') return cultivateLock(s.character, s.cultivation);
+    if (action === 'action.breakthrough') return breakthroughLock(s.character, s.cultivation, s.tick, this.mourning());
     return action === 'action.trial' ? trialLock(s.character, s.cultivation, s.factions, s.tick) : dutyLock(s.cultivation);
   }
 

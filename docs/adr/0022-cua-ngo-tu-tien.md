@@ -145,3 +145,26 @@
   - Batch sáu chiến lược 1.000 đời (máy cloud 4 lõi): **PASS** mọi tiêu chí v0.6; điều độ 59,57 tuổi (S2: 59,68), cưới trước 30 tuổi 71,9%, 3,01 sự kiện/năm. "Xin chỉ đường" xảy ra 19–35 lần mỗi 1.000 đời người thường (đã trả tiền cho tu sĩ xem linh căn); người chơi máy cũ không xếp tự dẫn khí nên không ai thành tán tu. Thời gian 105–299 s mỗi chiến lược trên máy chậm, không so với ngân sách.
   - So batch "tìm đạo" giữa hai đường là việc của S7 (người chơi máy tìm đạo chưa có).
 - **Test:** 705 (shared 99, worldgen 29, sim 483, headless 8, game 87); digest pin không đổi. Bảng sự kiện mẫu (`events.test.ts`) nâng chữ lên 1.000 để mở lối đọc tàn quyển.
+
+### S5 — tu luyện, đột phá tầng 1 (2026-10-30)
+- **Chốt mốc vào tầng 1** (chủ dự án, 2026-10-30): Q1 ghi "dẫn khí nhập thể = vào tầng 1", nhưng GDD 5 đòi v0.8 có "đột phá lên tầng 1" và "thất bại đột phá có hậu quả". Chọn: **dẫn khí xong vẫn là phàm nhân** (đệ tử ký danh S3, tán tu S4), tu tới đỉnh rồi **đột phá thành công mới vào tầng 1** (`entered` là lúc ấy); vào tầng 1 tu tiếp tới đỉnh tầng 1 thì dừng (`lock.realm_cap`, "chưa tới lúc"). Đột phá tầng 2 là v0.9.
+- **Tu luyện** (`action.cultivate`, `life/cultivate.ts`): một ô, thể lực 80, không ra tiền, không rút RNG.
+  - Linh khí mỗi ô = 40 × dải linh căn (tạp 50, khá 100, tốt 170%) × ngộ tính (50–150%) × công pháp (`TECHNIQUE_PCT`: tông môn 100, tán tu 60) × linh khí nơi ở × linh thạch, chia mệt. Đỉnh 10.000 (`QI_PEAK`, giữ giá trị Bước 0).
+  - Linh thạch: còn hơn 3 khối thì mỗi ô đốt một khối, linh khí ×150%; 3 khối cuối giữ cho đột phá.
+  - Tu một nửa số ô (54 ô một năm), ngộ tính vừa, ở làng — năm tới đỉnh:
+
+    | | Tạp | Khá | Tốt |
+    |---|---|---|---|
+    | Tông môn | 9,3 | **4,6** | 2,7 |
+    | Tán tu | 15,4 | 7,7 | 4,6 |
+
+    Linh căn khá ở tông môn trong khoảng 3–6 năm của Q7. Quận có núi 120%, di tích 150% rút ngắn tương ứng; thành 80% kéo dài.
+- **Tâm cảnh** (Q8, không thêm chỉ số ẩn): điểm từ tính cách (điềm tĩnh, lạnh nhạt +1; nóng nảy, tham lam, tham vọng −1), đói −1, đang bệnh hay thương −1, tang người thân gần trong năm (cha mẹ, vợ chồng, con, anh em) −1, đột phá hỏng trong năm −3. Ra bốn dải: yên (≥ 1), thường (0), động (−1), loạn (≤ −2). Tâm cảnh loạn thì khóa đột phá (`lock.unsettled`) — hỏng xong phải chờ khoảng một năm.
+- **Đột phá** (`action.breakthrough`): một ô, thể lực 150, rút một lần trên luồng `actions`. Chỉ khi linh khí đầy, không thương kinh mạch, tâm cảnh không loạn.
+  - Cơ hội = 500.000 ppm; tâm cảnh yên +100.000, động −150.000; mỗi khối linh thạch (tối đa 3, dùng hết dù thành hay hỏng) +50.000; từ 30 tuổi mỗi năm −15.000 (tối đa −300.000); tán tu −80.000; giới hạn 50.000–900.000.
+  - Lần đầu hỏng, người 25 tuổi tính thường: đệ tử mang 3 khối linh thạch 35%, không linh thạch 50%; tán tu không linh thạch 58% (test 4.000 lần) — trong khoảng 30–60% của mục 6.
+  - **Hỏng:** thương kinh mạch (bệnh của S4, nếu chưa mang bệnh), linh khí còn nửa đỉnh, tâm cảnh loạn một năm; 10% số lần hỏng là **hỏng nặng: tổn thọ 3 năm** (`lifespanBonus`).
+  - **Thành:** vào tầng 1, linh khí về 0.
+- **Tầng 1 cho gì** (Q9): thọ +5 năm (`lifespanBonus`); nét ẩn `qi_body` (trọng số 0, chỉ đột phá đặt): sức khỏe tối đa +100, bệnh 70%; thể lực hồi 125%. **Chưa có "thuật" tiện ích** — Q9 để chọn ở S5; đề xuất để S6 hay F2 (thân nhẹ đi đường nhanh hơn) nếu chủ dự án muốn.
+- **Test:** 719 (sim 496); 12 test mới (`cultivate.test.ts`). Người chơi máy cũ không tu luyện nên lượt rút của batch không đổi.
+- **Đo** (batch sáu chiến lược 1.000 đời): **PASS**, kết quả trùng hệt S4 từng dòng (trừ thời gian chạy) — người chơi máy cũ không tu luyện, nét `qi_body` thêm cuối bảng với trọng số 0. Batch "tìm đạo" so hai đường là việc của S7.
