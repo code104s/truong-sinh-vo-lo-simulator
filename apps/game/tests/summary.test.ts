@@ -1,8 +1,8 @@
 import { hasKey, t } from '@tsvl/content';
-import { birthplaceId, regionId, type Birthplace, type LogEntry } from '@tsvl/shared';
+import { birthplaceId, regionId, TICKS_PER_YEAR, type Birthplace, type CultivationRecord, type LogEntry } from '@tsvl/shared';
 import { firstOpenChoice, Life } from '@tsvl/sim';
 import { describe, expect, it } from 'vitest';
-import { affairsRows, careerRows, departedPeople, eventOf, legacyRows, lifeCareer, turningPoints } from '../src/app/summary';
+import { affairsRows, careerRows, daoMilestones, daoReachLine, daoSummary, departedPeople, eventOf, legacyRows, lifeCareer, turningPoints, type DaoReach } from '../src/app/summary';
 
 const MISSING = /⟨|\{\w+\}/;
 
@@ -144,3 +144,47 @@ describe('một đời làm nghề (v0.7 F4)', () => {
     expect(t('ui.summary.career_rank', { rank: 'career.rank.master' })).toBe('Bậc cao nhất: Có tiếng');
   });
 });
+
+describe('đường tu trong màn tổng kết (v0.8 F4)', () => {
+  const Y = TICKS_PER_YEAR;
+  const rec = (r: Partial<CultivationRecord>): CultivationRecord => ({ root: null, realm: 'mortal', path: null, breakthroughs: [], ...r });
+  it('chạm tới đâu: chưa kiểm, không có linh căn, có mà không bước vào, đã dẫn khí, đã phá cảnh', () => {
+    const cases: [Partial<CultivationRecord>, DaoReach][] = [
+      [{}, 'untested'], [{ root: 'none' }, 'no_root'], [{ root: 'good' }, 'outside'],
+      [{ root: 'mixed', path: 'rogue', breakthroughs: [{ at: 20 * Y, ok: false }] }, 'entered'],
+      [{ root: 'fair', path: 'sect', realm: 'qi1', entered: 19 * Y + 4, breakthroughs: [{ at: 17 * Y, ok: false }, { at: 19 * Y + 4, ok: true }] }, 'risen'],
+    ];
+    expect(cases.map(([r]) => daoSummary(rec(r), 0).reach)).toEqual(cases.map(([, x]) => x));
+    for (const [r] of cases) expect(hasKey(daoReachLine(daoSummary(rec(r), 0)).key)).toBe(true);
+  });
+
+  it('đã phá cảnh: cảnh giới, tuổi dẫn khí, các lần đột phá theo tuổi; chưa kiểm thì ghi chưa từng được kiểm, chưa bước vào', () => {
+    const d = daoSummary(rec({ root: 'fair', path: 'sect', realm: 'qi1', entered: 19 * Y + 4, breakthroughs: [{ at: 17 * Y, ok: false }, { at: 19 * Y + 4, ok: true }] }), 0);
+    expect(d).toMatchObject({ root: 'root.fair', path: 'cultivation.path.sect', realm: 'qi1', enteredAge: 19, attempts: [{ age: 17, ok: false }, { age: 19, ok: true }] });
+    const line = daoReachLine(d);
+    expect(t(line.key, line.params)).toBe('Bước qua ngưỡng cửa: Luyện Khí tầng một từ năm 19 tuổi.');
+    const none = daoSummary(rec({}), 0);
+    expect([t(none.root), t(none.path), none.enteredAge, none.attempts]).toEqual(['Chưa từng được kiểm', 'Chưa bước vào', null, []]);
+    expect(t('ui.summary.dao_breaks_count', { count: 2, ok: 1, failed: 1 })).toBe('2 lần: 1 thành, 1 hỏng');
+  });
+
+  it('tab "Đạo": chỉ mốc đường tiên của chính mình trong những mốc lớn, giữ thứ tự', () => {
+    const at = (tick: number, key: string): LogEntry => ({ tick, key, params: {}, importance: 'major' });
+    const ms = [at(1, 'log.birth'), at(2, 'log.sect.joined'), at(3, 'event.seek_cave.result.enter'), at(4, 'log.kin.death'), at(5, 'log.breakthrough.ok'), at(6, 'log.sect.rumor')];
+    // Tin kỳ tuyển ba năm một lần là tin chung, lặp suốt đời: không vào tab
+    expect(daoMilestones(ms).map((e) => e.tick)).toEqual([2, 3, 5]);
+    for (const id of ['ui.summary.dao', 'ui.summary.dao_tab', 'ui.summary.dao_none', 'ui.summary.dao_breaks', 'ui.summary.dao_breaks_none', 'ui.summary.dao_attempt_ok', 'ui.summary.dao_attempt_failed'])
+      expect(hasKey(id), id).toBe(true);
+  });
+
+  it('chơi thật: tổng kết một đời mang khối đường tu khớp bản ghi của sim', () => {
+    const bp: Birthplace = { id: birthplaceId('r0/c0'), name: 'Phố Kỳ', nameHan: '浦岐', kind: 'village', cell: { x: 0, y: 0 }, county: 0 };
+    const life = Life.create({ worldSeed: 'f4', regionId: regionId('r0'), birthplaceId: bp.id, lifeSeed: 2 }, bp);
+    life.runToDeath(200 * Y, firstOpenChoice);
+    const sum = life.summary();
+    const d = daoSummary(sum.legacy.cultivation, sum.birthTick);
+    expect(d.attempts).toHaveLength(sum.legacy.cultivation.breakthroughs.length);
+    expect(d.realm).toBe(sum.legacy.cultivation.realm);
+  }, 60_000);
+});
+

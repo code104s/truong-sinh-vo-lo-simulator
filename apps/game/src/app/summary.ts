@@ -1,6 +1,7 @@
 // Màn tổng kết (F5): rút các ngã rẽ từ những mốc lớn. Khóa kết quả sự kiện là `<id sự kiện>.result.<kết quả>`
 // (ADR 0014), nên tách được id sự kiện để ghi tựa. Không có luật game.
-import { ageYearsAt, CAREER_RANKS, type CareerId, type CareerRank, type ContentId, type FactionFate, type Gender, type LifeSummary, type LogEntry, type Tick } from '@tsvl/shared';
+import { ageYearsAt, CAREER_RANKS, type CareerId, type CareerRank, type ContentId, type CultivationRecord, type FactionFate, type Gender, type LifeSummary, type LogEntry, type Realm, type Tick } from '@tsvl/shared';
+import { isDaoNews } from './chronicle';
 
 const RESULT = '.result.';
 
@@ -95,3 +96,45 @@ export function lifeCareer(rows: readonly CareerRow[]): CareerRow | null {
   for (const r of rows) if (!best || r.years > best.years || (r.years === best.years && (r.current || !best.current))) best = r;
   return best;
 }
+
+/** Đời tu chạm tới đâu (v0.8 F4): chưa kiểm; kiểm ra không có; có linh căn mà không bước vào; đã dẫn khí; đã phá cảnh. */
+export type DaoReach = 'untested' | 'no_root' | 'outside' | 'entered' | 'risen';
+
+export interface DaoSummary {
+  reach: DaoReach;
+  /** Khóa dải linh căn, hay "chưa từng được kiểm". */
+  root: ContentId;
+  /** Khóa đường vào, hay "chưa bước vào". */
+  path: ContentId;
+  realm: Realm;
+  /** Tuổi dẫn khí nhập thể (vào tầng một); null khi chưa. */
+  enteredAge: number | null;
+  /** Các lần đột phá theo thứ tự, tuổi lúc ấy. */
+  attempts: { age: number; ok: boolean }[];
+}
+
+/** Khối "Đường tu" ở bia đời (F4): chạm ngưỡng hay không, linh căn đã biết hay chưa, đường, cảnh giới, các lần đột phá. */
+export function daoSummary(rec: CultivationRecord, birthTick: Tick): DaoSummary {
+  const reach: DaoReach = rec.realm !== 'mortal' ? 'risen' : rec.path ? 'entered' : rec.root === 'none' ? 'no_root' : rec.root ? 'outside' : 'untested';
+  return {
+    reach,
+    root: rec.root ? `root.${rec.root}` : 'ui.dao.root_unknown',
+    path: rec.path ? `cultivation.path.${rec.path}` : 'ui.summary.dao_no_path',
+    realm: rec.realm,
+    enteredAge: rec.entered === undefined ? null : ageYearsAt(birthTick, rec.entered),
+    attempts: rec.breakthroughs.map((b) => ({ age: ageYearsAt(birthTick, b.at), ok: b.ok })),
+  };
+}
+
+/** Câu tóm đời tu ở đầu khối (F4). */
+export function daoReachLine(d: DaoSummary): { key: ContentId; params: Record<string, string | number> } {
+  const key = `ui.summary.dao_reach.${d.reach}`;
+  return d.reach === 'risen' ? { key, params: { realm: `realm.${d.realm}`, age: d.enteredAge ?? 0 } } : { key, params: {} };
+}
+
+/**
+ * Tab "Đạo" (F4): những mốc lớn về đường tiên trong cả đời, theo thứ tự thời gian. Bỏ tin kỳ tuyển ba năm một lần: tin
+ * chung của cả vùng, lặp suốt đời, lấn mất chuyện của chính mình.
+ */
+export const daoMilestones = (milestones: readonly LogEntry[]): LogEntry[] => milestones.filter((e) => isDaoNews(e) && e.key !== 'log.sect.rumor');
+

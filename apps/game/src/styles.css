@@ -815,6 +815,13 @@ polyline.road-guild { fill: none; stroke: var(--ochre); stroke-width: .3; stroke
 /* Di sản (v0.5 F4) */
 .legacy { margin-top: 10px; }
 .legacy .legacy-note { display: block; font-weight: 400; }
+/* v0.8 F4: đường tu ở bia đời */
+.dao-life .dao-reach { margin: 0; }
+.dao-life.reach-risen .dao-reach { color: var(--jade); font-weight: 600; }
+.dao-life .legacy-note { display: block; font-weight: 400; }
+.dao-life .tone-good { color: var(--jade); }
+.dao-life .tone-bad { color: var(--cinnabar); }
+.life-realm { color: var(--jade); }
 .legacy dd.tone-good { color: var(--jade); }
 .legacy dd.tone-warn { color: var(--ochre); }
 .legacy dd.tone-bad { color: var(--cinnabar); }

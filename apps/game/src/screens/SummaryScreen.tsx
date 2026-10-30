@@ -5,17 +5,18 @@ import { useState } from 'preact/hooks';
 import { logText, shortDate } from '../app/format';
 import type { WorldInfo } from '../app/state';
 import { FACTION_CHAR } from '../app/factions';
-import { affairsRows, careerRows, departedPeople, legacyRows, lifeCareer, turningPoints } from '../app/summary';
+import { REALM_SEAL, type RisenRealm } from '../app/cultivation';
+import { affairsRows, careerRows, daoMilestones, daoReachLine, daoSummary, departedPeople, legacyRows, lifeCareer, turningPoints } from '../app/summary';
 import { CAREER_CHAR } from '../ui/icons';
 import { BrushLabel, InkLandscape, Portrait, Scroll, Seal } from '../ui/ink';
 import { PORTRAIT_MIN_AGE, portraitOf } from '../ui/portraits';
 import { LogLine } from './LifeScreen';
 
-type Tab = 'turning' | 'departed' | 'affairs' | 'milestones';
-const TABS: readonly Tab[] = ['turning', 'departed', 'affairs', 'milestones'];
-const TAB_LABEL: Record<Tab, string> = { turning: 'ui.summary.turning', departed: 'ui.summary.departed', affairs: 'ui.summary.affairs', milestones: 'ui.summary.milestones' };
-/** Nhãn nút tab: bốn tab chung một hàng nên "Thế sự một đời" rút gọn (tiêu đề vẫn đủ chữ). */
-const TAB_BUTTON: Record<Tab, string> = { ...TAB_LABEL, affairs: 'ui.summary.affairs_tab' };
+type Tab = 'turning' | 'departed' | 'affairs' | 'dao' | 'milestones';
+const TABS: readonly Tab[] = ['turning', 'departed', 'affairs', 'dao', 'milestones'];
+const TAB_LABEL: Record<Tab, string> = { turning: 'ui.summary.turning', departed: 'ui.summary.departed', affairs: 'ui.summary.affairs', dao: 'ui.summary.dao', milestones: 'ui.summary.milestones' };
+/** Nhãn nút tab: năm tab chung một hàng nên "Thế sự một đời", "Đường tu" rút gọn (tiêu đề vẫn đủ chữ). */
+const TAB_BUTTON: Record<Tab, string> = { ...TAB_LABEL, affairs: 'ui.summary.affairs_tab', dao: 'ui.summary.dao_tab' };
 
 /**
  * Màn tổng kết (F5): bia đời bên trái — tuổi, nguyên do, của cải lúc nhắm mắt, số năm phải nhịn đói; bên phải các ngã
@@ -32,6 +33,11 @@ export function SummaryScreen({ summary: s, character, world, onBack }: { summar
   // Một đời làm nghề (v0.7 F4)
   const jobs = careerRows(s.legacy.careers);
   const main = lifeCareer(jobs);
+  // Đường tu (v0.8 F4)
+  const dao = daoSummary(s.legacy.cultivation, s.birthTick);
+  const reach = daoReachLine(dao);
+  const daoMarks = daoMilestones(s.milestones);
+  const okCount = dao.attempts.filter((a) => a.ok).length;
   const land = e.landMu > 0 ? `${t('ui.hud.mu', { mu: e.landMu })} · ${t(`tenure.${e.tenure}`)}` : e.tenure === 'tenant' ? t('tenure.tenant') : t('ui.hud.no_land');
   return (
     <div class="screen ink-screen full summary">
@@ -42,6 +48,7 @@ export function SummaryScreen({ summary: s, character, world, onBack }: { summar
             <Portrait src={character && s.ageYears >= PORTRAIT_MIN_AGE ? portraitOf(character) : null} alt={s.name} age={s.ageYears} />
             <h1 class="epitaph-name">{s.name}</h1>
             <p class="lived">{t('ui.summary.lived', { age: s.ageYears })} <Seal char="終" /></p>
+            {dao.reach === 'risen' && <p class="life-career life-realm"><Seal char={REALM_SEAL[dao.realm as RisenRealm]} tone="jade" /> {t(`realm.${dao.realm}`)}</p>}
             {main && <p class="life-career"><Seal char={CAREER_CHAR[main.id].char} tone={CAREER_CHAR[main.id].tone} /> {t('ui.hud.career', { career: `career.${main.id}`, rank: `career.rank.${main.rank}` })}</p>}
             <p>{t('ui.summary.span', { from: shortDate(s.birthTick), to: shortDate(s.deathTick) })}</p>
             <p>{t('ui.summary.cause', { cause: `death.${s.cause}`, detail: s.causeDetail })}</p>
@@ -90,6 +97,22 @@ export function SummaryScreen({ summary: s, character, world, onBack }: { summar
                 </ul>
               )}
             </div>
+            <div class={`estate dao-life reach-${dao.reach}`}>
+              <span class="dossier-k">{t('ui.summary.dao')}</span>
+              <p class="small dao-reach">{t(reach.key, reach.params)}</p>
+              <dl class="attrs">
+                <dt>{t('ui.dao.root')}</dt><dd class={dao.reach === 'untested' ? 'muted' : undefined}>{t(dao.root)}</dd>
+                <dt>{t('ui.dao.path')}</dt><dd class={dao.path === 'ui.summary.dao_no_path' ? 'muted' : undefined}>{t(dao.path)}</dd>
+                <dt>{t('ui.dao.realm')}</dt><dd>{t(`realm.${dao.realm}`)}</dd>
+                <dt>{t('ui.summary.dao_breaks')}</dt>
+                <dd>
+                  {dao.attempts.length
+                    ? t('ui.summary.dao_breaks_count', { count: dao.attempts.length, ok: okCount, failed: dao.attempts.length - okCount })
+                    : <span class="muted">{t('ui.summary.dao_breaks_none')}</span>}
+                  {dao.attempts.length > 0 && <span class="legacy-note small">{dao.attempts.map((a, i) => <span key={i} class={a.ok ? 'tone-good' : 'tone-bad'}>{i > 0 ? ' · ' : ''}{t(a.ok ? 'ui.summary.dao_attempt_ok' : 'ui.summary.dao_attempt_failed', { age: a.age })}</span>)}</span>}
+                </dd>
+              </dl>
+            </div>
             <p class="muted tiny">{t('ui.summary.digest', { digest: s.digest })}</p>
             <button class="btn primary" onClick={onBack}>{t('ui.back')}</button>
           </aside>
@@ -115,6 +138,8 @@ export function SummaryScreen({ summary: s, character, world, onBack }: { summar
                     </p>
                   ))
                   : <p class="muted">{t('ui.summary.affairs_none')}</p>
+              : tab === 'dao'
+                ? daoMarks.length ? daoMarks.map((x, i) => <LogLine key={i} e={x} forceMajor />) : <p class="muted">{t('ui.summary.dao_none')}</p>
               : tab === 'milestones'
                 ? s.milestones.map((x, i) => <LogLine key={i} e={x} forceMajor />)
                 : tab === 'departed'

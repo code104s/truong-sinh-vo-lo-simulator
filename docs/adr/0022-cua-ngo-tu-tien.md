@@ -259,3 +259,8 @@ Theo tài liệu "Làm Trường Sinh Vô Lộ cuốn hơn" (mục 7.3, 9.5), ha
 - **Lọc biên niên "Đạo":** tông môn, kỳ tuyển, trẻ được chọn, dấu hiệu tiên duyên, dẫn khí, tu luyện, đột phá, kết quả sự kiện đường tiên; các dòng ấy có triện riêng (宗, 兆, 引, 修, 成/逆, 道).
 - **Sửa:** dự tuyển khi đã có đường tu bị khóa bằng chữ "Đã là hội viên" của thương hội; nay "Đã bước vào đường tu" (test).
 - **Digest pin:** snapshot nhớ chốn đã biết, thêm dòng trẻ quen đỗ → digest ba đời mẫu đổi; tuổi, nguyên nhân giữ.
+
+### F4 — đường tu trong màn tổng kết (2026-10-30)
+- Dùng `LifeSummary.legacy.cultivation` có sẵn từ Bước 0 (`CultivationRecord`), không đổi hợp đồng, không đổi digest.
+- **Bia đời** thêm khối "Đường tu": một câu nói đời ấy chạm tới đâu (chưa từng được kiểm; kiểm ra không có linh căn; biết có linh căn mà chưa bước qua cửa; đã dẫn khí mà chưa phá cảnh; bước qua ngưỡng cửa, vào tầng một năm bao nhiêu tuổi), rồi linh căn, đường tu, cảnh giới, số lần đột phá (thành, hỏng) kèm tuổi từng lần. Người vào tầng một có thêm dòng cảnh giới với triện 氣 dưới tên.
+- **Tab "Đạo"** bên phải: các mốc lớn về đường tiên trong cả đời (tông môn, trẻ quen được chọn, dấu hiệu lúc nhỏ, dẫn khí, đột phá, kết quả sự kiện đường tiên). Bỏ tin kỳ tuyển ba năm một lần vì lặp suốt đời, lấn mất chuyện của chính mình.

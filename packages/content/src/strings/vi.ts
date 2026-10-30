@@ -321,6 +321,17 @@ export const VI: Readonly<Record<string, string>> = {
   // Di sản (v0.5 F4)
   // v0.7 F4: một đời làm nghề
   'ui.summary.careers': 'Một đời làm nghề', 'ui.summary.careers_none': 'Cả đời không theo nghề nào, sống bằng việc tự do.',
+  // v0.8 F4: đường tu trong màn tổng kết
+  'ui.summary.dao': 'Đường tu', 'ui.summary.dao_tab': 'Đạo', 'ui.summary.dao_none': 'Một đời không dính dáng gì tới tiên môn, tu sĩ, linh căn.',
+  'ui.summary.dao_reach.untested': 'Chưa từng được kiểm linh căn, sống trọn kiếp phàm nhân.',
+  'ui.summary.dao_reach.no_root': 'Đã được kiểm: không có linh căn. Cửa tiên không mở cho mình.',
+  'ui.summary.dao_reach.outside': 'Biết mình có linh căn mà chưa bước qua cửa.',
+  'ui.summary.dao_reach.entered': 'Đã dẫn khí nhập thể, chưa phá được cảnh giới.',
+  'ui.summary.dao_reach.risen': 'Bước qua ngưỡng cửa: {realm} từ năm {age} tuổi.',
+  'ui.summary.dao_no_path': 'Chưa bước vào',
+  'ui.summary.dao_breaks': 'Đột phá', 'ui.summary.dao_breaks_none': 'Chưa lần nào',
+  'ui.summary.dao_breaks_count': '{count} lần: {ok} thành, {failed} hỏng',
+  'ui.summary.dao_attempt_ok': '{age} tuổi: thành', 'ui.summary.dao_attempt_failed': '{age} tuổi: hỏng',
   'ui.summary.career_rank': 'Bậc cao nhất: {rank}', 'ui.summary.career_years': '{count} năm', 'ui.summary.career_short': 'chưa tròn năm',
   'ui.summary.career_stints': 'vào nghề {count} lần', 'ui.summary.career_current': 'làm tới lúc nhắm mắt',
   'ui.summary.legacy': 'Để lại','ui.summary.wife': 'Vợ', 'ui.summary.husband': 'Chồng', 'ui.summary.spouse': 'Vợ/chồng',
