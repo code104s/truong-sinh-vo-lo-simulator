@@ -477,3 +477,20 @@ Lý do: tổng kết "Một đời làm nghề" cần biết nghề nào còn l�
 
 ### 2026-10-29 — đóng v0.7: `SIM_VERSION` 0.7.1
 Lý do: sau Bước 0 (0.7.0) hình snapshot đổi thêm nhiều lần (nghề đã rời S1, ruộng dân nền đã bán S2, kho đồ và chợ hàng S3b, thái độ thế lực S7). Như lúc đóng v0.6, tăng lên **0.7.1**: save dev cũ bị từ chối bằng lỗi `VERSION`, giao diện báo save bản cũ. Hợp đồng v7 phát hành cùng phiên bản này; `PROTOCOL_VERSION`, `SAVE_VERSION` giữ 7. Save nghiệm thu sinh lại bằng 0.7.1.
+
+### 2026-10-29 — v0.8 Bước 0 (ADR 0022): hợp đồng v8
+Lý do: cửa ngõ tu tiên và Luyện Khí tầng 1 (chủ dự án duyệt Q1–Q15 ở `docs/v0.8-giai-doan-a.md`).
+- `cultivation.ts` (mới):
+  - `REALMS` (`mortal`, `qi1`; v0.9 thêm tầng 2, 3), khóa `realm.<id>`;
+  - `ROOT_BANDS` (`none`, `mixed`, `fair`, `good`) — dải linh căn sau khi kiểm, khóa `root.<dải>`;
+  - `CULTIVATION_PATHS` (`sect`, `rogue`), khóa `cultivation.path.<id>`; `QI_BANDS` (`empty` … `peak`), khóa `qi.<dải>`;
+  - `CultivationView { realm; root | null; path | null; qi | null }` — không lộ số linh khí, độ thuần linh căn;
+  - `CultivationRecord { root; realm; path; entered?; breakthroughs }` cho tổng kết.
+- `character.ts`: `CharacterView.cultivation` (bắt buộc; view kiểu v0.7 thiếu trường bị từ chối); `LifeSummary.legacy.cultivation`.
+- `factions.ts`: `FACTION_KINDS` thêm `sect` (tông môn ngoài vùng).
+- `PROTOCOL_VERSION` 7 → **8**, `SAVE_VERSION` 7 → **8**, `SIM_VERSION` **0.8.0**. Save v0.7 bị từ chối, không chuyển đổi.
+- Nhánh bị ảnh hưởng:
+  - **Sim:** snapshot thêm `cultivation` (người phàm, chưa kiểm); view, tổng kết chiếu từ đó; linh khí nơi ở theo bản đồ (`qiPlacePct`); digest pin đổi, tuổi và nguyên nhân chết của ba đời mẫu giữ nguyên.
+  - **Nội dung:** `realm.*`, `root.*`, `cultivation.path.*`, `qi.*`, `faction.kind.sect`, `faction.sect.name`, nhãn khối thế lực cho tông môn.
+  - **FE:** bảng loại thế lực thêm tông môn (triện 宗, không tô quận); hiển thị đường tu ở F1–F5.
+- v0.8 S1: `ACTION_GROUPS` thêm `seek` (tìm cơ duyên, GDD 3.2 E); hành động `action.seek`; khóa nội dung `group.seek`, `gain.fortune`, `lock.no_seek_place`. v8 chưa phát hành nên không tăng số.
