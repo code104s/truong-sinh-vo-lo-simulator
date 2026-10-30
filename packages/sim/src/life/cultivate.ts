@@ -23,7 +23,7 @@ type Log = (e: Omit<LogEntry, 'tick'>) => void;
  * nửa số ô (18 trong 36 ô một năm) thì khoảng 4,6 năm (Q7: 3–6 năm). S6 sửa: S5 tính nhầm 54 ô một năm.
  */
 export const QI_PER_SLOT = 120;
-export const QI_ROOT_PCT: Readonly<Record<Exclude<RootBand, 'none'>, number>> = { mixed: 50, fair: 100, good: 170 };
+export const QI_ROOT_PCT: Readonly<Record<Exclude<RootBand, 'none'>, number>> = { mixed: 20, fair: 100, good: 170 };
 /** Đốt một khối linh thạch mỗi ô thì nhanh hơn; giữ lại chừng này khối cho lúc đột phá. */
 export const STONE_QI_PCT = 150;
 export const BREAKTHROUGH_STONES = 3;
@@ -95,7 +95,7 @@ export const AGE_FROM = 30;
 export const AGE_PPM_PER_YEAR = 15_000;
 export const AGE_PPM_MAX = 300_000;
 /** Tán tu không thầy hộ pháp. */
-export const ROGUE_BREAKTHROUGH_PPM = -80_000;
+export const ROGUE_BREAKTHROUGH_PPM = -30_000;
 export const BREAKTHROUGH_PPM_RANGE = [50_000, 900_000] as const;
 /** Hỏng nặng (phần trong số lần hỏng): tổn thọ. */
 export const SEVERE_FAIL_PPM = 100_000;

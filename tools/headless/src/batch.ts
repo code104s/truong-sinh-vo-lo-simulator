@@ -1,14 +1,15 @@
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { ageYearsAt, calendarOf, type Birthplace, type RegionId } from '@tsvl/shared';
-import { BACKGROUNDS, CAREER_EVENT_IDS, CAREER_EVENTS_OF, CULTIVATION_EVENT_IDS, EVENT_IDS, Life, mountainCounty } from '@tsvl/sim';
+import { ageYearsAt, calendarOf, type Birthplace, type CultivationPath, type Realm, type RegionId, type RootBand } from '@tsvl/shared';
+import { BACKGROUNDS, CAREER_EVENT_IDS, CAREER_EVENTS_OF, CULTIVATION_EVENT_IDS, EVENT_IDS, Life, mountainCounty, rootBand } from '@tsvl/sim';
 import type { RegionLogic } from '@tsvl/worldgen';
 import { POLICIES, policyChoose, policyGoods, policyPlan, policyTrade, type PolicyContext, type PolicyName } from './policies';
 import { isPath, PATHS, pathChoose, pathPlan, type PathName } from './paths';
+import { isSeeker, SEEKERS, seekerChoose, seekerPlan, type SeekerName } from './seekers';
 
-/** Chiến lược batch: sáu người chơi máy v0.6, hay người chơi máy theo nghề (v0.7 S9, `--policy paths`). */
-export type Strategy = PolicyName | PathName;
+/** Chiến lược batch: sáu người chơi máy v0.6, người chơi máy theo nghề (v0.7 S9, `--policy paths`), tìm đạo (v0.8 S7, `--policy seekers`). */
+export type Strategy = PolicyName | PathName | SeekerName;
 
 export interface BatchRegion { seed: string; regionId: RegionId; birthplaces: Birthplace[]; logic: RegionLogic | null }
 /**
@@ -55,7 +56,11 @@ export const RARE_EVENTS: readonly string[] = [
 export interface BackgroundReport { count: number; meanAge: number; starvationPct: number }
 export interface PolicyReport {
   /** Theo nghề (S9). */
-  path?: PathStats; estateMedian: number; inheritedPct: number; inheritedMedian: number; npcDeaths: number; npcMeanAge: number; policy: Strategy; count: number; stuck: number; overCap: number; meanAge: number; medianAge: number; inRangePct: number; oldAgePct: number; starvationPct: number; causes: Record<string, number>; skills: Record<string, number>; byBackground: Record<string, BackgroundReport>; events: Record<string, number>; eventYears: number; ticks: number; ms: number; starved: (StarvedInfo & { background: string })[]; reached30: number; marriedBy30: number; withChildren: number; roadWeeks: [number, number]; robbed: [number, number] }
+  path?: PathStats;
+  /** Đường tu (v0.8 S7), mọi chiến lược. */
+  cult: CultStats;
+  /** Tìm đạo (S7): báo cáo riêng các đời đã vào đường tu, để so với người điều độ. */
+  onPath?: PolicyReport; estateMedian: number; inheritedPct: number; inheritedMedian: number; npcDeaths: number; npcMeanAge: number; policy: Strategy; count: number; stuck: number; overCap: number; meanAge: number; medianAge: number; inRangePct: number; oldAgePct: number; starvationPct: number; causes: Record<string, number>; skills: Record<string, number>; byBackground: Record<string, BackgroundReport>; events: Record<string, number>; eventYears: number; ticks: number; ms: number; starved: (StarvedInfo & { background: string })[]; reached30: number; marriedBy30: number; withChildren: number; roadWeeks: [number, number]; robbed: [number, number] }
 
 /** Kết quả một đời trong batch: đủ để gộp thành báo cáo, gửi được qua luồng (structured clone). */
 export interface LifeResult {
@@ -87,6 +92,17 @@ export interface LifeResult {
   robbed: [number, number];
   /** Người chơi máy theo nghề (S9): tuổi vào nghề (null: chưa vào), nghề lúc chết, số năm làm nghề ấy cả đời. */
   path?: { entered: number | null; atDeath: string | null; years: number };
+  /** Đường tu (v0.8 S7): xem `CultResult`. */
+  cult: CultResult;
+}
+/**
+ * Đường tu một đời (v0.8 S7): dải linh căn thật (đo, không phải thứ người chơi máy thấy), dải đã biết, đường vào, cảnh giới
+ * lúc chết, tuổi vào tầng 1, các lần đột phá; chết sớm vì hậu quả đột phá: chết vì thương kinh mạch, chết trong một năm
+ * sau một lần đột phá hỏng, hay chết già sau một lần hỏng nặng (thọ đã bị cắt ba năm).
+ */
+export interface CultResult {
+  band: RootBand; known: RootBand | null; path: CultivationPath | null; realm: Realm; qi1Age: number | null;
+  attempts: number; firstFailed: boolean | null; severe: boolean; fatal: boolean;
 }
 export interface StarvedInfo {
   age: number; independent: boolean; town: boolean; away: boolean; landMu: number; tenure: string; money: number; hungerYears: number;
@@ -99,8 +115,9 @@ export type TravelCache = Map<string, ReturnType<Life['travel']>>;
 /** Chạy đời thứ `i` của một chiến lược: thuần, tất định theo (vùng, i). */
 export function runLife(regions: readonly BatchRegion[], policy: Strategy, i: number, optionsCache: TravelCache = new Map()): LifeResult {
   const path = isPath(policy) ? policy : null;
-  // Chiến lược theo nghề mua bán lương, bán hàng như người điều độ
-  const trader: PolicyName = path ? 'balanced' : (policy as PolicyName);
+  const seeker = isSeeker(policy) ? policy : null;
+  // Chiến lược theo nghề, tìm đạo mua bán lương, bán hàng như người điều độ
+  const trader: PolicyName = path || seeker ? 'balanced' : (policy as PolicyName);
   let entered: number | null = null;
   const r = regions[i % regions.length]!, logic = r.logic!;
   const bp = r.birthplaces[Math.floor(i / regions.length) % r.birthplaces.length]!;
@@ -119,7 +136,7 @@ export function runLife(regions: readonly BatchRegion[], policy: Strategy, i: nu
   while (life.alive && life.tick < end) {
     if (life.tick % 36 === 35 && life.tick >= from && life.tick < to + 36) countDeaths();
     const key = `${r.seed}/${life.character.location}`;
-    if (!optionsCache.has(key)) optionsCache.set(key, policy === 'wanderer' || policy === 'scholar' || path ? life.travel() : []);
+    if (!optionsCache.has(key)) optionsCache.set(key, policy === 'wanderer' || policy === 'scholar' || path || seeker ? life.travel() : []);
     const ctx = (): PolicyContext => ({
       character: life.view(), date: calendarOf(life.tick), actions: life.actions(), travel: optionsCache.get(key)!, settlements: logic.settlementKind, seed: i, active: !!life.active, market: life.market(),
       // Xã giao (v0.5 S8): chỉ chiến lược `family`, ở tuần thứ hai, thứ ba của tháng — tuần chạy ô xã giao (kế hoạch xếp
@@ -127,6 +144,8 @@ export function runLife(regions: readonly BatchRegion[], policy: Strategy, i: nu
       ...(policy === 'family' && life.tick % 3 !== 0 ? { people: () => life.people() } : {}),
       // Theo nghề (S9): người trong quận (tìm thầy), thế lực (trị sở), quận núi rừng
       ...(path ? { people: () => life.people(), factions: () => life.factions(), mountain: logic.counties.map((_, k) => mountainCounty(logic, k)) } : {}),
+      // Tìm đạo (v0.8 S7): trị sở tông môn (kỳ tuyển), quận núi (tìm cơ duyên)
+      ...(seeker ? { factions: () => life.factions(), mountain: logic.counties.map((_, k) => mountainCounty(logic, k)) } : {}),
     });
     const now = ctx();
     // Đầu tháng: mua bán lương thực (không tốn ô) rồi mới xếp kế hoạch, để kế hoạch thấy kho mới
@@ -137,7 +156,7 @@ export function runLife(regions: readonly BatchRegion[], policy: Strategy, i: nu
       const g = policyTrade(trader, now); if (g !== 0 && life.trade(g) === null) Object.assign(now, ctx());
     }
     if (path && entered === null && now.character.career?.id === path) entered = now.character.ageYears;
-    const plan = path ? pathPlan(path, now) : policyPlan(policy as PolicyName, now);
+    const plan = path ? pathPlan(path, now) : seeker ? seekerPlan(seeker, now) : policyPlan(policy as PolicyName, now);
     if (plan) life.setPlan(plan);
     // Tuần đi đường: đường đang đi có băng cướp giữ không (đích đi từ quận đang đứng, như lúc xem trước chuyến đi)
     const trip = now.active ? life.active : null;
@@ -148,7 +167,7 @@ export function runLife(regions: readonly BatchRegion[], policy: Strategy, i: nu
     if (pending) {
       events[pending.eventId] = (events[pending.eventId] ?? 0) + 1;
       if (pending.eventId === 'event.highway_robbers' && road !== -1) robbed[road]++;
-      const refused = life.choose(pending.instance, path ? pathChoose(path, pending, ctx()) : policyChoose(policy as PolicyName, pending, ctx()));
+      const refused = life.choose(pending.instance, path ? pathChoose(path, pending, ctx()) : seeker ? seekerChoose(pending, ctx()) : policyChoose(policy as PolicyName, pending, ctx()));
       if (refused) throw new Error(`${policy}: ${refused}`);
     }
   }
@@ -165,11 +184,28 @@ export function runLife(regions: readonly BatchRegion[], policy: Strategy, i: nu
   // Nghề (S9): nghề lúc chết, số năm làm nghề của chiến lược cả đời (các lần làm cộng lại)
   const snap = path ? life.snapshot() : null;
   const careerInfo = snap ? { path: { entered, atDeath: snap.career?.id ?? null, years: snap.careers.filter((r) => r.id === path).reduce((s, r) => s + r.years, 0) + (snap.career?.id === path ? snap.career.years : 0) } } : {};
-  if (life.alive) return { stuck: true, overCap: false, age: 0, cause: '', background: c.background, skills: {}, events, ticks, npcDeaths, npcDeathAgeSum, estate, inherited, ...family, roadWeeks, robbed, ...careerInfo };
+  const cult = cultResult(life);
+  if (life.alive) return { stuck: true, overCap: false, age: 0, cause: '', background: c.background, skills: {}, events, ticks, npcDeaths, npcDeathAgeSum, estate, inherited, ...family, roadWeeks, robbed, ...careerInfo, cult };
   return {
     stuck: false, overCap: life.death!.tick - c.birthTick > c.lifespanBase + c.lifespanBonus, age: ageYearsAt(c.birthTick, life.death!.tick), cause: life.death!.cause,
-    background: c.background, skills: { ...c.skillXp }, events, ticks, npcDeaths, npcDeathAgeSum, estate, inherited, ...family, roadWeeks, robbed, ...careerInfo,
+    background: c.background, skills: { ...c.skillXp }, events, ticks, npcDeaths, npcDeathAgeSum, estate, inherited, ...family, roadWeeks, robbed, ...careerInfo, cult,
     ...(life.death!.cause === 'starvation' ? { starved: starvedInfo(life, logic, inherited > 0) } : {}),
+  };
+}
+
+/** Chết trong chừng này tick sau một lần đột phá hỏng thì tính là chết vì hậu quả đột phá. */
+export const BREAKTHROUGH_FATAL_TICKS = 36;
+function cultResult(life: Life): CultResult {
+  const c = life.character, v = life.view().cultivation;
+  const tries = life.log.filter((e) => e.key.startsWith('log.breakthrough.'));
+  const ok = tries.find((e) => e.key === 'log.breakthrough.ok');
+  const d = life.death;
+  const lastFail = tries.filter((e) => e.key !== 'log.breakthrough.ok').at(-1);
+  const severe = tries.some((e) => e.key === 'log.breakthrough.severe');
+  return {
+    band: rootBand(c.spiritRoot), known: v.root, path: v.path, realm: v.realm, qi1Age: ok ? ageYearsAt(c.birthTick, ok.tick) : null,
+    attempts: tries.length, firstFailed: tries.length ? tries[0]!.key !== 'log.breakthrough.ok' : null, severe,
+    fatal: !!d && (d.detail === 'illness.meridian' || (!!lastFail && d.tick - lastFail.tick < BREAKTHROUGH_FATAL_TICKS) || (severe && d.cause === 'old_age')),
   };
 }
 
@@ -232,18 +268,23 @@ export function aggregate(policy: Strategy, results: readonly LifeResult[], ms: 
     roadWeeks: [0, 1].map((k) => results.reduce((s, x) => s + x.roadWeeks[k]!, 0)) as [number, number],
     robbed: [0, 1].map((k) => results.reduce((s, x) => s + x.robbed[k]!, 0)) as [number, number],
     ...(isPath(policy) ? { path: pathStats(policy, results, events) } : {}),
+    cult: cultStats(results),
     npcDeaths, npcMeanAge: npcAgeSum / Math.max(1, npcDeaths), policy, count: n, stuck, overCap, meanAge: avg(ages), medianAge: ages[Math.floor(ages.length / 2)] ?? 0, inRangePct: 100 * ages.filter((a) => a >= 40 && a <= 80).length / n, oldAgePct: 100 * (causes.old_age ?? 0) / n, starvationPct: 100 * (causes.starvation ?? 0) / n, causes, skills, byBackground, events, eventYears, ticks, ms };
 }
 
 export async function runPolicyBatch(regions: BatchRegion[], n: number, selection: string, out?: string, runner: LifeRunner = sequentialRunner(regions)): Promise<PolicyReport[]> {
   const paths = selection === 'paths' || isPath(selection);
-  const policies: readonly Strategy[] = selection === 'all' ? POLICIES : selection === 'paths' ? PATHS : [...POLICIES, ...PATHS].filter((p) => p === selection);
-  if (!policies.length) throw new Error(`--policy phải là ${POLICIES.join('|')}|all|paths|${PATHS.join('|')}`);
+  const seekers = selection === 'seekers' || isSeeker(selection);
+  // Tìm đạo (v0.8 S7): chạy kèm người điều độ để so (mặt khác biệt, đời không linh căn, thọ người tầng 1)
+  const policies: readonly Strategy[] = selection === 'all' ? POLICIES : selection === 'paths' ? PATHS : selection === 'seekers' ? ['balanced', ...SEEKERS] : [...POLICIES, ...PATHS, ...SEEKERS].filter((p) => p === selection);
+  if (!policies.length) throw new Error(`--policy phải là ${POLICIES.join('|')}|all|paths|${PATHS.join('|')}|seekers|${SEEKERS.join('|')}`);
   const reports: PolicyReport[] = [];
   for (const policy of policies) {
     const started = performance.now();
-    const report = aggregate(policy, await runner(policy, n), 0);
+    const results = await runner(policy, n);
+    const report = aggregate(policy, results, 0);
     report.ms = performance.now() - started;
+    if (isSeeker(policy)) report.onPath = aggregate(policy, results.filter((x) => x.cult.path !== null), 0);
     reports.push(report);
     console.log(`${policy}: ${n} đời · kẹt ${report.stuck} · vượt trần ${report.overCap} · trung bình ${report.meanAge.toFixed(2)} · trung vị ${report.medianAge} · 40–80 ${report.inRangePct.toFixed(1)}% · chết già ${report.oldAgePct.toFixed(1)}% · ${report.ms.toFixed(0)} ms`);
     console.log(`  Nguyên nhân: ${JSON.stringify(report.causes)} · kỹ năng trung bình: ${JSON.stringify(report.skills)}`);
@@ -255,9 +296,10 @@ export async function runPolicyBatch(regions: BatchRegion[], n: number, selectio
     if (report.roadWeeks[0] + report.roadWeeks[1] > 0) console.log(`  Đường: ${roadLine(report)}`);
     console.log(`  Sự kiện: ${(Object.values(report.events).reduce((a, b) => a + b, 0) / Math.max(1, report.eventYears)).toFixed(2)}/năm sau 12 tuổi · ${Object.keys(report.events).length} loại`);
     const ps = report.path;
+    if (report.cult.rooted || report.cult.known) console.log(`  Đường tu: ${cultLine(report)}`);
     if (ps) console.log(`  Nghề: vào nghề ${ps.enteredPct.toFixed(1)}% đời (tuổi vào trung bình ${ps.entryAge.toFixed(1)}) · trọn đời trong nghề ${ps.livedPct.toFixed(1)}% · còn trong nghề lúc chết ${ps.atDeathPct.toFixed(1)}% · làm nghề trung bình ${ps.years.toFixed(1)} năm · sự kiện riêng của nghề ${ps.ownEventPct.toFixed(1)}% · kỹ năng chính ${ps.mainSkill}`);
   }
-  const failed = paths ? pathCriteria(reports, selection === 'paths') : batchCriteria(reports, selection === 'all');
+  const failed = paths ? pathCriteria(reports, selection === 'paths') : seekers ? seekerCriteria(reports, selection === 'seekers') : batchCriteria(reports, selection === 'all');
   for (const f of failed) console.log(`  ✗ ${f}`);
   const pass = failed.length === 0;
   console.log(pass ? 'KẾT QUẢ: PASS' : 'KẾT QUẢ: FAIL (xem phân bố/cân bằng chiến lược)');
@@ -267,6 +309,46 @@ export async function runPolicyBatch(regions: BatchRegion[], n: number, selectio
 }
 
 const pct = (k: number, n: number) => (100 * k) / Math.max(1, n);
+
+/** Tuổi trung bình, của cải trung vị, số con trung bình của một nhóm đời (không kẹt). */
+export interface GroupStats { count: number; meanAge: number; estateMedian: number; children: number }
+function groupStats(xs: readonly LifeResult[]): GroupStats {
+  const lived = xs.filter((x) => !x.stuck);
+  const estates = lived.map((x) => x.estate).sort((a, b) => a - b);
+  const n = Math.max(1, lived.length);
+  return { count: lived.length, meanAge: lived.reduce((s, x) => s + x.age, 0) / n, estateMedian: estates[Math.floor(estates.length / 2)] ?? 0, children: lived.reduce((s, x) => s + x.children, 0) / n };
+}
+/**
+ * Đường tu của một chiến lược (v0.8 S7, nghiệm thu mục 6): số đời có linh căn thật, đã biết dải, vào đường (tông môn, tán
+ * tu), vào tầng 1 (theo đường), đột phá (lần đầu hỏng, chết vì hậu quả); nhóm đời vào tầng 1, nhóm không có linh căn, nhóm
+ * đã vào đường tu.
+ */
+export interface CultStats {
+  rooted: number; known: number; sect: number; rogue: number; qi1: number; qi1Rooted: number; qi1Sect: number; qi1Rogue: number; rootedSect: number; rootedRogue: number;
+  attempted: number; firstFailed: number; fatal: number; qi1Group: GroupStats; noRoot: GroupStats; onPath: GroupStats; everyone: GroupStats;
+  /** Đời vào tầng 1: [tuổi vào, tuổi lúc chết]; tuổi lúc chết mọi đời (tăng dần) — để so thọ người tầng 1 với người cùng tuổi. */
+  qi1Ages: [number, number][]; ages: number[];
+}
+function cultStats(results: readonly LifeResult[]): CultStats {
+  const rooted = results.filter((x) => x.cult.band !== 'none'), qi1 = results.filter((x) => x.cult.qi1Age !== null);
+  const tried = results.filter((x) => x.cult.attempts > 0);
+  return {
+    rooted: rooted.length, known: results.filter((x) => x.cult.known !== null).length,
+    sect: results.filter((x) => x.cult.path === 'sect').length, rogue: results.filter((x) => x.cult.path === 'rogue').length,
+    rootedSect: rooted.filter((x) => x.cult.path === 'sect').length, rootedRogue: rooted.filter((x) => x.cult.path === 'rogue').length,
+    qi1: qi1.length, qi1Rooted: rooted.filter((x) => x.cult.qi1Age !== null).length,
+    qi1Sect: qi1.filter((x) => x.cult.path === 'sect').length, qi1Rogue: qi1.filter((x) => x.cult.path === 'rogue').length,
+    attempted: tried.length, firstFailed: tried.filter((x) => x.cult.firstFailed).length, fatal: tried.filter((x) => x.cult.fatal).length,
+    qi1Group: groupStats(qi1), noRoot: groupStats(results.filter((x) => x.cult.band === 'none')), onPath: groupStats(results.filter((x) => x.cult.path !== null)), everyone: groupStats(results),
+    qi1Ages: qi1.filter((x) => !x.stuck).map((x) => [x.cult.qi1Age!, x.age]), ages: results.filter((x) => !x.stuck).map((x) => x.age).sort((a, b) => a - b),
+  };
+}
+const cultLine = (r: PolicyReport) => {
+  const k = r.cult;
+  return `có linh căn ${k.rooted} · biết dải ${k.known} · vào đường tông môn ${k.sect}, tán tu ${k.rogue} · vào tầng 1 ${k.qi1} (tông môn ${k.qi1Sect}, tán tu ${k.qi1Rogue}; ${pct(k.qi1Rooted, k.rooted).toFixed(1)}% đời có linh căn) · đột phá ${k.attempted} đời, lần đầu hỏng ${pct(k.firstFailed, k.attempted).toFixed(1)}%, chết vì hậu quả ${k.fatal}`
+    + (k.qi1 ? ` · tầng 1: ${k.qi1Group.meanAge.toFixed(1)} tuổi, của cải ${k.qi1Group.estateMedian} văn, ${k.qi1Group.children.toFixed(2)} con` : '')
+    + ` · không linh căn: ${k.noRoot.meanAge.toFixed(1)} tuổi, của cải ${k.noRoot.estateMedian} văn`;
+};
 
 /** Số đo một nghề (S9): vào nghề, còn trong nghề lúc chết, số năm làm nghề, phần sự kiện riêng của nghề, kỹ năng chính. */
 export interface PathStats { enteredPct: number; entryAge: number; atDeathPct: number; livedPct: number; years: number; ownEventPct: number; mainSkill: string }
@@ -345,6 +427,8 @@ export function batchCriteria(reports: PolicyReport[], all: boolean): string[] {
   const by = (p: PolicyName) => reports.find((r) => r.policy === p);
   for (const r of reports) {
     if (r.stuck || r.overCap) failed.push(`${r.policy}: kẹt ${r.stuck}, vượt trần ${r.overCap}`);
+    // v0.8 S7: người không tìm đạo hầu như không chạm ngưỡng
+    if (10 * pct(r.cult.qi1, r.count) >= ORDINARY_QI1_MAX_PCT_X10) failed.push(`${r.policy}: vào tầng 1 ${pct(r.cult.qi1, r.count).toFixed(1)}% đời ≥ ${ORDINARY_QI1_MAX_PCT_X10 / 10}%`);
     const poor = r.byBackground.destitute, rich = r.byBackground.wealthy;
     if (poor && rich && !(poor.meanAge <= rich.meanAge - BACKGROUND_GAP_YEARS)) failed.push(`${r.policy}: bần cùng ${poor.meanAge.toFixed(1)} không thấp hơn giàu ${rich.meanAge.toFixed(1)} ít nhất ${BACKGROUND_GAP_YEARS} năm`);
   }
@@ -383,3 +467,97 @@ export function batchCriteria(reports: PolicyReport[], all: boolean): string[] {
   return failed;
 }
 
+
+/**
+ * Tìm đạo (nghiệm thu v0.8 mục 6, Q2). Chạm ngưỡng: cả hai đường đều có người vào tầng 1; trong số đời có linh căn, người
+ * chơi máy tìm đạo (gộp hai đường) vào tầng 1 ở 30–60%, tông môn cao hơn tán tu. Đủ giá: khác người điều độ ở ít nhất hai trong năm
+ * mặt; đời không có linh căn sống kém hơn người điều độ (thọ ngắn hơn hay của cải ít hơn). Đột phá: lần đầu hỏng 30–60%; có
+ * đời chết vì hậu quả nhưng không quá 10% số đời đột phá. Tu tiên không phải đường đúng: người tầng 1 thọ hơn người điều
+ * độ không quá 8 năm, của cải, con cái không quá 1,5 lần. Sự kiện tu tiên xảy ra hết (trừ danh sách hiếm).
+ */
+export const SEEKER_QI1_PCT = [30, 60] as const;
+export const ORDINARY_QI1_MAX_PCT_X10 = 5;
+export const SEEKER_FACETS_MIN = 2;
+export const FIRST_FAIL_PCT = [30, 60] as const;
+export const BREAKTHROUGH_FATAL_MAX_PCT = 10;
+export const QI1_AGE_GAP_MAX = 8;
+export const QI1_RICHER_X10 = 15;
+/** Sự kiện tu tiên được phép không xảy ra trong batch tìm đạo (ghi chú ở ADR 0022). */
+export const RARE_SEEKER_EVENTS: readonly string[] = [
+  // Gặp lại ẩn sĩ: cần đã gặp ẩn sĩ khi ẩn dật (sự kiện nghề v0.7) — người chơi máy tìm đạo không theo nghề. Đường đi có
+  // test riêng (events.test.ts)
+  'event.hermit_hint', 'event.hermit_stone',
+  // Vợ/chồng lạnh nhạt vì tu: người tìm đạo làm ăn như người điều độ, ít khi cưới (chiến lược `family` mới đi hỏi vợ)
+  'event.spouse_cold',
+];
+
+const mainSkillOf = (r: PolicyReport) => Object.entries(r.skills).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? '-';
+const cultEventPct = (r: PolicyReport) => pct(CULTIVATION_EVENT_IDS.reduce((s, id) => s + (r.events[id] ?? 0), 0), Object.values(r.events).reduce((a, b) => a + b, 0));
+/** Các mặt người tìm đạo khác người điều độ (năm mặt của tiêu chí "6+ con đường" v0.7). */
+export function seekerFacets(a: PolicyReport, b: PolicyReport): string[] {
+  const out: string[] = [];
+  if (Math.abs(a.meanAge - b.meanAge) >= PATH_AGE_GAP) out.push('tuổi thọ');
+  const ca = causeShare(a), cb = causeShare(b);
+  if (mainCause(a) !== mainCause(b) || [...new Set([...Object.keys(ca), ...Object.keys(cb)])].some((k) => Math.abs((ca[k] ?? 0) - (cb[k] ?? 0)) >= PATH_CAUSE_GAP_PCT)) out.push('nguyên nhân chết');
+  const lo = Math.max(1, Math.min(a.estateMedian, b.estateMedian)), hi = Math.max(a.estateMedian, b.estateMedian);
+  if (hi * 10 >= lo * PATH_ESTATE_RATIO_X10) out.push('của cải');
+  if (mainSkillOf(a) !== mainSkillOf(b)) out.push('kỹ năng chính');
+  if (cultEventPct(a) >= PATH_OWN_EVENT_PCT) out.push('sự kiện riêng');
+  return out;
+}
+
+export function seekerCriteria(reports: PolicyReport[], all: boolean): string[] {
+  const failed: string[] = [];
+  for (const r of reports) if (r.stuck || r.overCap) failed.push(`${r.policy}: kẹt ${r.stuck}, vượt trần ${r.overCap}`);
+  if (!all) return failed;
+  const balanced = reports.find((r) => r.policy === 'balanced')!;
+  const seekers = reports.filter((r) => isSeeker(r.policy));
+  const rate = (r: PolicyReport) => pct(r.cult.qi1Rooted, r.cult.rooted);
+  // Gộp hai đường (ADR 0023): người tìm đạo có linh căn vào tầng 1 ở 30–60%; từng đường in riêng, tông môn phải cao hơn
+  const both = pct(seekers.reduce((s, r) => s + r.cult.qi1Rooted, 0), seekers.reduce((s, r) => s + r.cult.rooted, 0));
+  console.log(`Vào tầng 1 (đời có linh căn): gộp ${both.toFixed(1)}% · ${seekers.map((r) => `${r.policy} ${rate(r).toFixed(1)}%`).join(' · ')}`);
+  if (both < SEEKER_QI1_PCT[0] || both > SEEKER_QI1_PCT[1]) failed.push(`tìm đạo: vào tầng 1 ${both.toFixed(1)}% đời có linh căn ngoài ${SEEKER_QI1_PCT.join('–')}%`);
+  for (const r of seekers) {
+    const k = r.cult;
+    // Đời đã vào đường tu so với người điều độ (đời chưa bước vào thì sống như người thường, phần ấy đo ở đời không linh căn)
+    const p = r.onPath!;
+    const facets = seekerFacets(p, balanced);
+    console.log(`${r.policy}, ${p.count} đời đã vào đường tu, so với điều độ: khác ${facets.length} mặt (${facets.join(', ') || 'không'}) · ${p.meanAge.toFixed(1)} tuổi · nguyên nhân ${JSON.stringify(p.causes)} · của cải ${p.estateMedian} văn · kỹ năng chính ${mainSkillOf(p)} · sự kiện tu tiên ${cultEventPct(p).toFixed(1)}%`);
+    if (facets.length < SEEKER_FACETS_MIN) failed.push(`${r.policy}: chỉ khác điều độ ${facets.length} mặt`);
+    const none = k.noRoot, base = balanced.cult.noRoot;
+    if (!(none.meanAge < base.meanAge || none.estateMedian < base.estateMedian)) failed.push(`${r.policy}: đời không linh căn ${none.meanAge.toFixed(1)} tuổi, ${none.estateMedian} văn không kém điều độ (${base.meanAge.toFixed(1)} tuổi, ${base.estateMedian} văn)`);
+  }
+  const sect = reports.find((r) => r.policy === 'seeker_sect'), rogue = reports.find((r) => r.policy === 'seeker_rogue');
+  const qi1Sect = seekers.reduce((s, r) => s + r.cult.qi1Sect, 0), qi1Rogue = seekers.reduce((s, r) => s + r.cult.qi1Rogue, 0);
+  if (!qi1Sect || !qi1Rogue) failed.push(`vào tầng 1: tông môn ${qi1Sect}, tán tu ${qi1Rogue} — cả hai đường phải có người`);
+  if (sect && rogue && !(rate(sect) > rate(rogue))) failed.push(`tông môn ${rate(sect).toFixed(1)}% không cao hơn tán tu ${rate(rogue).toFixed(1)}%`);
+  // Đột phá, người tầng 1: gộp hai chiến lược tìm đạo
+  const sum = (f: (k: CultStats) => number) => seekers.reduce((s, r) => s + f(r.cult), 0);
+  const attempted = sum((k) => k.attempted), firstFail = pct(sum((k) => k.firstFailed), attempted), fatal = sum((k) => k.fatal);
+  console.log(`Đột phá (tìm đạo): ${attempted} đời, lần đầu hỏng ${firstFail.toFixed(1)}%, chết vì hậu quả ${fatal} (${pct(fatal, attempted).toFixed(1)}%)`);
+  if (firstFail < FIRST_FAIL_PCT[0] || firstFail > FIRST_FAIL_PCT[1]) failed.push(`đột phá lần đầu hỏng ${firstFail.toFixed(1)}% ngoài ${FIRST_FAIL_PCT.join('–')}%`);
+  if (!fatal || pct(fatal, attempted) > BREAKTHROUGH_FATAL_MAX_PCT) failed.push(`chết vì hậu quả đột phá ${fatal} đời (${pct(fatal, attempted).toFixed(1)}%): phải có, không quá ${BREAKTHROUGH_FATAL_MAX_PCT}%`);
+  const qi1 = seekers.flatMap((r) => (r.cult.qi1 ? [{ n: r.cult.qi1, g: r.cult.qi1Group }] : []));
+  const n = qi1.reduce((s, x) => s + x.n, 0);
+  if (n) {
+    const children = qi1.reduce((s, x) => s + x.n * x.g.children, 0) / n;
+    const estate = Math.max(...qi1.map((x) => x.g.estateMedian)), base = balanced.cult.everyone;
+    // Thọ: so với người điều độ đã sống tới đúng tuổi người ấy vào tầng 1 (người tầng 1 đã qua được tuổi trẻ)
+    const pairs = seekers.flatMap((r) => r.cult.qi1Ages);
+    const peers = (from: number) => { const xs = balanced.cult.ages.filter((a) => a >= from); return xs.reduce((s, a) => s + a, 0) / Math.max(1, xs.length); };
+    const age = pairs.reduce((s, p) => s + p[1], 0) / Math.max(1, pairs.length), peerAge = pairs.reduce((s, p) => s + peers(p[0]), 0) / Math.max(1, pairs.length);
+    console.log(`Tầng 1 (tìm đạo): ${n} đời · ${age.toFixed(1)} tuổi (điều độ cùng tuổi ${peerAge.toFixed(1)}, cả thảy ${balanced.meanAge.toFixed(1)}) · của cải trung vị cao nhất ${estate} văn (điều độ ${balanced.estateMedian}) · ${children.toFixed(2)} con (điều độ ${base.children.toFixed(2)})`);
+    if (age - peerAge > QI1_AGE_GAP_MAX) failed.push(`người tầng 1 thọ hơn người điều độ cùng tuổi ${(age - peerAge).toFixed(1)} năm > ${QI1_AGE_GAP_MAX}`);
+    if (estate * 10 > Math.max(1, balanced.estateMedian) * QI1_RICHER_X10) failed.push(`người tầng 1 giàu hơn điều độ quá ${QI1_RICHER_X10 / 10} lần`);
+    if (children * 10 > base.children * QI1_RICHER_X10) failed.push(`người tầng 1 đông con hơn điều độ quá ${QI1_RICHER_X10 / 10} lần`);
+  }
+  // Sự kiện: tần suất như batch v0.6; mọi sự kiện tu tiên xảy ra ít nhất một lần trong batch tìm đạo
+  const count = seekers.reduce((s, r) => s + Object.values(r.events).reduce((a, b) => a + b, 0), 0);
+  const perYear = count / Math.max(1, seekers.reduce((s, r) => s + r.eventYears, 0));
+  console.log(`Sự kiện (tìm đạo): ${perYear.toFixed(2)}/năm sau 12 tuổi`);
+  if (perYear < EVENTS_PER_YEAR[0] || perYear > EVENTS_PER_YEAR[1]) failed.push(`sự kiện ${perYear.toFixed(2)}/năm ngoài ${EVENTS_PER_YEAR.join('–')}`);
+  const seen = new Set(seekers.flatMap((r) => Object.keys(r.events)));
+  const missing = CULTIVATION_EVENT_IDS.filter((id) => !seen.has(id) && !RARE_SEEKER_EVENTS.includes(id));
+  if (missing.length) failed.push(`sự kiện tu tiên chưa xảy ra lần nào: ${missing.join(', ')}`);
+  return failed;
+}

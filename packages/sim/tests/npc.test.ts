@@ -57,9 +57,10 @@ describe('khung NPC (v0.4 Bước 0)', () => {
     expect(a.moneyEnd).toBe(a.moneyStart);
     expect(a).toMatchObject({ years: 20, counties: 2, ticks: 20 * 36, npcStart: 32 });
     // Từ S3 mọi NPC đều sống (L1 theo tháng): có người mất, chưa có sinh tới S4
-    // Từ S4 có sinh: số người sống = ban đầu + sinh − mất
+    // Từ S4 có sinh: số người sống = ban đầu + sinh − mất; từ v0.8 S3 trừ cả trẻ tông môn tuyển rời vùng (S7: 15% có
+    // linh căn nên kỳ tuyển có người đỗ)
     expect(a.births).toBeGreaterThan(0);
-    expect(a.npcEnd).toBe(32 + a.births - Object.values(a.deaths).reduce((x, y) => x + y, 0));
+    expect(a.npcEnd).toBe(32 + a.births - Object.values(a.deaths).reduce((x, y) => x + y, 0) - a.sectRecruits);
   });
 });
 

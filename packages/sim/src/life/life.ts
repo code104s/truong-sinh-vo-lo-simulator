@@ -41,6 +41,7 @@ import { ATONE_FEE, bandOf, canAtone, leaveBand, OUTLAW_CAUGHT_REP, ownEnter, ow
 import { apprenticeAct, apprenticeLock, CAREER_DEFS, careerView, careerWorked, careerYear, entryGift, leaveAngers, legacyCareers, leaveCareer, mentorCareer, rankStep, type ApprenticeWorld, type CareerState } from './career';
 import { roadRisk, routeDanger } from '../factions/impact';
 import { cultivationView, legacyCultivation, newCultivation, type CultivationState } from './cultivation';
+import { omenYear } from './omens';
 import { attendTrial, dutyLock, dutyYear, foundSect, sectPhase, trialLock } from '../factions/sect';
 import { induce, induceLock } from './rogue';
 import { breakthrough, breakthroughLock, cultivate, cultivateLock, FAIL_SHAKEN_TICKS, SECLUSION_FADE_SLOTS } from './cultivate';
@@ -318,6 +319,8 @@ export class Life {
     // Tông môn (v0.8 S3): tin kỳ tuyển tháng Giêng; đầu tháng Ba sứ giả kiểm trẻ NPC, trẻ đỗ rời vùng. Đầu năm xét nghĩa vụ đệ tử
     sectPhase(this.s.factions, this.s.npcs, this.s.economy, this.logic, t, { c, log });
     if (isYearStart(t)) dutyYear(c, this.s.cultivation, this.s.factions, t, log);
+    // Dấu hiệu tiên duyên tuổi thơ (S7, ADR 0023): chỉ dòng biên niên, suy từ seed gốc của đời
+    if (isYearStart(t)) omenYear(c, lifeRoot(this.s.config), t, log);
     const firstNew = this.s.npcs.nextId;
     // Là mẹ thì có thể sinh khó
     npcPhase(this.s.npcs, this.s.economy, this.logic, t, c.location, { player: family });

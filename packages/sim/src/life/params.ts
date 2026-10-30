@@ -18,8 +18,8 @@ export const BACKGROUND_WEIGHTS: Record<SettlementKind, readonly number[]> = {
 
 export const ELEMENTS = ['metal', 'wood', 'water', 'fire', 'earth'] as const;
 export type Element = (typeof ELEMENTS)[number];
-/** Tỉ lệ có linh căn (giá trị tạm, chốt ở v0.8). */
-export const SPIRIT_ROOT_PPM = 50_000;
+/** Tỉ lệ có linh căn: 15%, người chơi và NPC cùng luật (v0.8 S7, ADR 0023; v0.1–S6 là 5%). */
+export const SPIRIT_ROOT_PPM = 150_000;
 /** Trọng số số hệ linh căn 1..5. */
 export const SPIRIT_ROOT_COUNT_WEIGHTS = [10, 20, 30, 25, 15];
 
@@ -42,7 +42,7 @@ export const TRAITS: readonly TraitDef[] = [
   { id: 'keen_memory', visible: true, weight: 10 },
   { id: 'longevity_mark', visible: false, weight: 6, lifespanYears: 5 },
   // v0.8 S5: thân thể sau khi vào Luyện Khí tầng 1 (Q9) — chỉ đột phá đặt vào (trọng số 0, cuối bảng: lượt rút lúc sinh không đổi)
-  { id: 'qi_body', visible: false, weight: 0, healthMaxDelta: 100, illnessPct: 70 },
+  { id: 'qi_body', visible: false, weight: 0, healthMaxDelta: 100, illnessPct: 85 },
 ];
 /** Trọng số số thiên phú 0, 1, 2. */
 export const TRAIT_COUNT_WEIGHTS = [50, 40, 10];

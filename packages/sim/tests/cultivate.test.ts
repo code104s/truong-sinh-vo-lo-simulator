@@ -128,7 +128,11 @@ describe('đột phá (v0.8 S5, Q8–Q9)', () => {
     expect(c.lifespanBonus - before).toBe(QI1_LIFESPAN_TICKS);
     expect(c.traits).toContain(QI_BODY);
     const plain = person(GOOD); plain.lifespanBonus = c.lifespanBonus;
-    expect(c.healthMax).toBeGreaterThan(computeHealthMax(plain, T));
+    // Trần 1000 cả với thân thể tầng 1 (S7 sửa lỗi S5: người trẻ vào tầng 1 có sức khỏe 1100, save bị từ chối); về già
+    // thân thể tầng 1 giữ sức hơn người thường
+    expect(c.healthMax).toBeLessThanOrEqual(1000);
+    const old = T + 35 * TICKS_PER_YEAR;
+    expect(computeHealthMax(c, old)).toBeGreaterThan(computeHealthMax(plain, old));
     expect(breakthroughLock(c, { ...cult, qi: PEAK }, T, false)).toBe('lock.realm_cap');
     cult.qi = PEAK - 1; cultivate(c, cult, region, T, () => {});
     expect([cult.qi, cultivateLock(c, cult)]).toEqual([PEAK, 'lock.realm_cap']);

@@ -187,7 +187,7 @@ describe('kiểm tra linh căn (v0.8 S2)', () => {
     expect(testRoot(s, null)).toBe('good');
   });
 
-  it('20.000 người sinh ra: khoảng 5% có linh căn; người không có linh căn luôn ra "không có"; trong người có thì tạp nhiều nhất, tốt ít nhất', () => {
+  it('20.000 người sinh ra: khoảng 15% có linh căn (S7, ADR 0023); người không có linh căn luôn ra "không có"; trong người có thì tạp nhiều nhất, tốt ít nhất', () => {
     const bands: Record<string, number> = { none: 0, mixed: 0, fair: 0, good: 0 };
     let rooted = 0;
     const r = Rng.fromSeed(7), names = Rng.fromSeed(8);
@@ -197,8 +197,8 @@ describe('kiểm tra linh căn (v0.8 S2)', () => {
       bands[b]!++;
       if (c.spiritRoot) rooted++; else expect(b).toBe('none');
     }
-    expect(rooted / 20_000).toBeGreaterThan(0.04);
-    expect(rooted / 20_000).toBeLessThan(0.06);
+    expect(rooted / 20_000).toBeGreaterThan(0.14);
+    expect(rooted / 20_000).toBeLessThan(0.16);
     expect(bands.mixed! + bands.fair! + bands.good!).toBe(rooted);
     expect(bands.mixed!).toBeGreaterThan(bands.fair!);
     expect(bands.fair!).toBeGreaterThan(bands.good!);

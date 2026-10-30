@@ -419,6 +419,8 @@ const poor = (id: string, home: number, personality = 'hot_tempered') => {
   const n = person(id, { home, money: 100, land: 0 });
   n.occupation = 'farmer';
   n.character.personality = personality;
+  // Bỏ cướp về làng thì làm ruộng (chưa giỏi săn); không phụ thuộc kỹ năng rút lúc dựng người (v0.8 S7 đổi chuỗi rút)
+  n.character.skillXp.hunting = 0;
   return n;
 };
 /** Rng luôn rút trúng (0) hay không bao giờ trúng (999). */

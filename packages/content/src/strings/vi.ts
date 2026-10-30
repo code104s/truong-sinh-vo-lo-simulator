@@ -344,6 +344,11 @@ export const VI: Readonly<Record<string, string>> = {
   'sect.name.0': 'Thanh Vân', 'sect.name.1': 'Tử Hà', 'sect.name.2': 'Huyền Thủy', 'sect.name.3': 'Lạc Hà', 'sect.name.4': 'Bích Lạc', 'sect.name.5': 'Vân Tiêu',
   'action.trial': 'Dự kỳ tuyển tông môn', 'action.sect_duty': 'Làm tạp dịch cho tông môn', 'gain.sect': 'Nghĩa vụ tông môn',
   'lock.no_trial': 'Không có kỳ tuyển ở đây lúc này', 'lock.trial_age': 'Quá tuổi dự tuyển', 'lock.not_disciple': 'Không phải đệ tử tông môn',
+  // Dấu hiệu tiên duyên tuổi thơ (v0.8 S7, ADR 0023): không nói thẳng là linh căn
+  'log.omen.dream_light': 'Năm {age} tuổi, đêm nào cũng mơ thấy một đốm sáng trôi trên đỉnh núi; tỉnh dậy người nhẹ bẫng.',
+  'log.omen.quick_heal': 'Năm {age} tuổi, ngã rách đầu gối mà mấy hôm đã liền da, bà lang trong làng lấy làm lạ.',
+  'log.omen.beasts_shy': 'Năm {age} tuổi, trâu bò trong xóm hễ thấy mình lại gục đầu lùi lại, chó cũng không sủa.',
+  'log.omen.wind_voice': 'Năm {age} tuổi, ngồi ngoài đồng nghe trong gió có tiếng như ai thở; hỏi thì không ai nghe thấy.',
   'log.sect.rumor': 'Nghe tin tháng Ba người {sect} Tông xuống {place} chọn trẻ có căn cơ.',
   'log.sect.took': 'Người {sect} Tông xuống {place}, chọn được {count} đứa trẻ đưa lên núi.',
   'log.sect.kin_taken': '{name} được người {sect} Tông chọn, theo lên núi.',

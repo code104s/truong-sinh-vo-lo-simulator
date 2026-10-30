@@ -46,8 +46,8 @@ describe('tạo nhân vật', () => {
       expect(c.lifespanBase).toBeLessThan(96 * TICKS_PER_YEAR);
       expect(c.traits.includes('hardy') && c.traits.includes('sickly')).toBe(false);
     }
-    expect(roots).toBeGreaterThan(50); // ~5%
-    expect(roots).toBeLessThan(160);
+    expect(roots).toBeGreaterThan(240); // ~15% (v0.8 S7, ADR 0023; trước là 5%)
+    expect(roots).toBeLessThan(360);
     expect(Math.abs(girls - 1000)).toBeLessThan(120);
     expect(Object.keys(kinds).sort()).toEqual(['comfortable', 'commoner', 'destitute', 'wealthy']);
   });
@@ -193,11 +193,13 @@ describe('tất định và lưu/tải (nghiệm thu Sim)', () => {
     // chết đói 42 → 44; đời 1, 2 giữ tuổi. Cùng nguyên nhân.
     // v0.8 S6: snapshot đường tu thêm số ô ngồi tu trong năm → digest đổi. Đời 3 đã mang ám ảnh (S2: tu sĩ xem, không có
     // linh căn) nên gặp sự kiện ám ảnh, chọn lựa chọn đầu: bỏ việc lên núi tìm một tháng, chết đói 44 → 41. Cùng nguyên nhân.
+    // v0.8 S7 (ADR 0023): linh căn 5% → 15% cho mọi người — lúc dựng NPC rút thêm độ thuần, số hệ nên làng đổi người, kỳ
+    // tuyển có trẻ NPC đỗ rời vùng → digest cả ba đời đổi; đời 1 chết đói 52 → 50, đời 2, 3 giữ tuổi. Cùng nguyên nhân.
     expect(out).toMatchInlineSnapshot(`
       [
-        "52 starvation d983eaa21cf5d975",
-        "51 starvation 7320b79324b71baf",
-        "41 starvation 368243ba955b7863",
+        "50 starvation e6e4b27e22b8fcbc",
+        "51 starvation 9ae77b6c31f69a5b",
+        "41 starvation 1f953c7e820b60bc",
       ]
     `);
   });

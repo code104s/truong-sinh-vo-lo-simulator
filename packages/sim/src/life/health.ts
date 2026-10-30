@@ -47,7 +47,8 @@ function traitProduct(traits: readonly string[], key: 'illnessPct' | 'accidentPc
 export function computeHealthMax(c: CharacterState, tick: Tick): number {
   let m = Math.min(1000, lerpTable(HEALTH_MAX_BY_AGE_RATIO, ageRatio(c, tick)) + idiv(c.skillXp.martial, 1000) * 5) - c.scars;
   for (const t of c.traits) m += traitDef(t).healthMaxDelta ?? 0;
-  return Math.max(HEALTH_MAX_FLOOR, m);
+  // Trần 1000 cả khi có nét cộng (thân thể tầng 1, v0.8 S7 sửa lỗi S5: sức khỏe vượt 1000 thì save bị từ chối)
+  return Math.max(HEALTH_MAX_FLOOR, Math.min(1000, m));
 }
 
 /** Pha "Hậu quả", nhịp năm: lão hóa (ADR 0002). Cũng gọi lúc sinh để đặt trần ban đầu. */

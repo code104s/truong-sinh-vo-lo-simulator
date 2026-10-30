@@ -6,6 +6,7 @@ export { idiv, mulDiv, clamp, lerpTable, sortedEntries } from './core/math';
 export { Life, SIM_VERSION, STREAMS, firstOpenChoice, lifeRoot, type LifeSnapshot, type AdvanceResult } from './life/life';
 export { toView, type CharacterState } from './life/character';
 export { mountainCounty } from './life/wayward';
+export { rootBand } from './life/cultivation';
 export { MERCHANT_LIVING_CAPITAL } from './npc/phase';
 export { BACKGROUNDS, type Background } from './life/params';
 export { CAREER_EVENT_IDS, CAREER_EVENTS_OF, CULTIVATION_EVENT_IDS, EVENT_IDS } from './events/catalog';
