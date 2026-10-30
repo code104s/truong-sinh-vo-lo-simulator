@@ -2,13 +2,19 @@
 // sức mạnh: chỉ để lại dấu vết dẫn tới chỗ kiểm linh căn (S2). Đọc các cờ dấu vết từ v0.3–v0.7 (`heard_immortal`,
 // `knows_cave`, `half_map`, `met_hermit`, `hermit_gift`, `temple_prayer`, `road_friend`).
 import { mulDiv } from '../../core/math';
+import { lookup } from '../../npc/family';
+import type { NpcState } from '../../npc/state';
+import { sectOf } from '../../factions/sect';
+import { QI_PEAK } from '../../life/cultivation';
+import { MERIDIAN_ILLNESS } from '../../life/rogue';
+import { mindOf } from '../../life/cultivate';
 import { calendarOf } from '@tsvl/shared';
 import { hasSite, newCultivation, testRoot } from '../../life/cultivation';
 import { CRUDE_MANUAL, MANUAL_LITERACY_XP } from '../../life/rogue';
 import { mountainCounty } from '../../life/wayward';
-import { addFlag, moveGrain, occupy, payTo, spendStamina, wound } from '../effects';
+import { addFlag, moveGrain, occupy, payFaction, payNpc, payTo, spendStamina, wound } from '../effects';
 import type { EventContext, EventDef } from '../engine';
-import { doingNow, man } from './common';
+import { castOr, doingNow, man, npcAge } from './common';
 
 /** Cờ dẫn tới chỗ kiểm linh căn ngoài kỳ tuyển (S2): đá thử trong hang, tu sĩ lưu lạc, ẩn sĩ có viên đá. */
 export const ROOT_TEST_LEADS = ['found_ruin', 'met_cultivator', 'hermit_stone'] as const;
@@ -270,5 +276,258 @@ export const cultivatorTeach: EventDef = {
   ],
 };
 
-export const CULTIVATION_EVENTS: readonly EventDef[] = [seekCave, seekLost, wanderingCultivator, shrineKeeper, hermitHint, ruinStone, cultivatorTest, hermitStoneTest, ruinScroll, cultivatorTeach];
+// —— Giá với phàm giới, ám ảnh, đời tu (S6, Q10). Người đã dẫn khí: sự kiện kể bằng chữ người tu ("linh khí", "kinh
+// mạch"); người chưa bước qua (ám ảnh) vẫn kể bằng chữ phàm nhân ——
+
+const cultOf = (ctx: EventContext) => ctx.player.cultivation ?? null;
+/** Đã dẫn khí (đệ tử ký danh hay tán tu). */
+const onPath = (ctx: EventContext) => (cultOf(ctx)?.path ?? null) !== null;
+/** Năm nay đã ngồi tu từ chừng này ô: người nhà bắt đầu thấy vắng. */
+export const SECLUDED_SLOTS = 6;
+const secluded = (ctx: EventContext) => onPath(ctx) && cultOf(ctx)!.secluded >= SECLUDED_SLOTS;
+const cultivatingNow = (ctx: EventContext) => doingNow(ctx) === 'action.cultivate';
+/** Thêm, bớt linh khí trong giới hạn đỉnh tầng đang tu (người chưa có đường tu thì không có gì). */
+function shiftQi(ctx: EventContext, d: number): void {
+  const cult = cultOf(ctx);
+  if (!cult?.path) return;
+  cult.qi = Math.max(0, Math.min(QI_PEAK.qi1, cult.qi + d));
+}
+
+/** Cha hay mẹ còn sống, ở cùng quận, từ 50 tuổi (cha trước). */
+function agedParentHere(ctx: EventContext): NpcState | null {
+  const byId = lookup(ctx.npcs);
+  for (const id of [ctx.c.kin.father, ctx.c.kin.mother]) {
+    const n = id === null ? undefined : byId.get(id);
+    if (n && !n.death && n.character.location === ctx.c.location && npcAge(ctx, n) >= 50) return n;
+  }
+  return null;
+}
+/** Vợ hay chồng còn sống, ở cùng quận. */
+function spouseHere(ctx: EventContext): NpcState | null {
+  const id = ctx.c.kin.spouse;
+  const n = id === null ? undefined : lookup(ctx.npcs).get(id);
+  return n && !n.death && n.character.location === ctx.c.location ? n : null;
+}
+const named = (ctx: EventContext): Record<string, string> => (ctx.npc ? { name: ctx.npc.character.name } : {});
+
+export const PARENT_GIFT = 200;
+export const parentFar: EventDef = {
+  id: 'event.parent_far',
+  category: 'cultivation',
+  // Ngồi tu nhiều trong năm mà cha mẹ già ở ngay bên (Q10: người thân dần xa)
+  weight: (ctx) => (secluded(ctx) && agedParentHere(ctx) ? 60_000 : 0),
+  cooldownTicks: 72,
+  cast: (ctx) => agedParentHere(ctx),
+  variant: (ctx) => (ctx.npc ? 'named' : null),
+  bonds: { visit: { closeness: 10 }, gift: { closeness: 4, trust: 3 }, stay: { closeness: -10 } },
+  params: (ctx) => ({ ...named(ctx), price: PARENT_GIFT }),
+  figure: castOr(() => man('old', 'common')),
+  choices: [
+    { id: 'visit', costs: ['time', 'stamina'], apply: (ctx) => { spendStamina(ctx, 40); occupy(ctx, 'action.nurse', 1); return { result: 'visit' }; } },
+    {
+      id: 'gift', costs: ['money'],
+      available: (ctx) => (ctx.c.household.money >= PARENT_GIFT ? null : 'lock.money'),
+      apply: (ctx) => { if (ctx.npc) payNpc(ctx, ctx.npc, PARENT_GIFT); else payTo(ctx, ctx.c.location, PARENT_GIFT); return { result: 'gift' }; },
+    },
+    { id: 'stay', costs: ['opportunity'], apply: () => ({ result: 'stay' }) },
+  ],
+};
+
+export const spouseCold: EventDef = {
+  id: 'event.spouse_cold',
+  category: 'cultivation',
+  weight: (ctx) => (secluded(ctx) && spouseHere(ctx) ? 60_000 : 0),
+  cooldownTicks: 72,
+  cast: (ctx) => spouseHere(ctx),
+  variant: (ctx) => (ctx.npc ? 'named' : null),
+  bonds: { talk: { closeness: 8, trust: 4 }, share: { trust: 6 }, ignore: { closeness: -15, hostility: 5 } },
+  params: (ctx) => named(ctx),
+  figure: castOr(() => man('adult', 'common')),
+  choices: [
+    { id: 'talk', costs: ['time'], apply: (ctx) => { spendStamina(ctx, 20); occupy(ctx, 'action.nurse', 1); return { result: 'talk' }; } },
+    // Chia linh thạch cho người nhà mang đi bán? Không: linh thạch không đổi ra tiền (Q11). Hứa bớt ngồi tu: mất linh khí
+    { id: 'share', costs: ['opportunity', 'time'], available: (ctx) => (onPath(ctx) ? null : 'lock.no_path'), apply: (ctx) => { shiftQi(ctx, -300); return { result: 'share' }; } },
+    { id: 'ignore', costs: ['opportunity'], apply: () => ({ result: 'ignore' }) },
+  ],
+};
+
+/** Ám ảnh (Q10): đã biết mình không có linh căn, hay trượt kỳ tuyển, mà chưa buông. Chọn buông thì hết. */
+const haunted = (ctx: EventContext) => flag(ctx, 'haunted') && !onPath(ctx);
+function letGo(ctx: EventContext): void {
+  const i = ctx.events.flags.indexOf('haunted');
+  if (i >= 0) ctx.events.flags.splice(i, 1);
+  addFlag(ctx, 'let_go');
+}
+
+export const ELIXIR_PRICE = 800;
+export const fakeElixir: EventDef = {
+  id: 'event.fake_elixir',
+  category: 'cultivation',
+  weight: (ctx) => (haunted(ctx) && ctx.age >= 16 ? 6_000 : 0),
+  cooldownTicks: 180,
+  params: () => ({ price: ELIXIR_PRICE }),
+  figure: () => man('adult', 'common'),
+  choices: [
+    {
+      id: 'buy', costs: ['money'],
+      available: (ctx) => (ctx.c.household.money >= ELIXIR_PRICE ? null : 'lock.money'),
+      // Viên thuốc là bột gạo vo tròn: tiền mất vào chợ, không có gì đổi lại
+      apply: (ctx) => { payTo(ctx, ctx.c.location, ELIXIR_PRICE); return { result: 'buy' }; },
+    },
+    { id: 'let_go', costs: ['opportunity'], apply: (ctx) => { letGo(ctx); return { result: 'let_go' }; } },
+    { id: 'walk', costs: ['opportunity'], apply: () => ({ result: 'walk' }) },
+  ],
+};
+
+export const hauntedDream: EventDef = {
+  id: 'event.haunted_dream',
+  category: 'cultivation',
+  weight: (ctx) => (haunted(ctx) && ctx.age >= 16 ? 5_000 : 0),
+  cooldownTicks: 180,
+  choices: [
+    // Bỏ việc lên núi tìm lại: mất một tháng, mệt, đường núi
+    { id: 'go', costs: ['time', 'risk'], apply: (ctx, rng) => { occupy(ctx, 'action.toil', 3); if (rng.chance(100_000)) { wound(ctx, 2); return { result: 'go_hurt' }; } return { result: 'go' }; } },
+    { id: 'let_go', costs: ['opportunity'], apply: (ctx) => { letGo(ctx); return { result: 'let_go' }; } },
+    { id: 'sleep', costs: ['stamina'], apply: (ctx) => { spendStamina(ctx, 60); return { result: 'sleep' }; } },
+  ],
+};
+
+export const immortalRumor: EventDef = {
+  id: 'event.immortal_rumor',
+  category: 'cultivation',
+  // Ở trấn, thành: người kể chuyện tiên nhân bay qua; ai chưa nghe chuyện tiên dễ dừng lại nghe
+  weight: (ctx) => (ctx.age >= 12 && ctx.logic.settlementKind[ctx.c.location] !== 'village' && !flag(ctx, 'heard_immortal') ? 4_000 : 0),
+  cooldownTicks: 360,
+  params: () => ({ price: 10 }),
+  figure: () => man('old', 'poor'),
+  choices: [
+    { id: 'pay', costs: ['money'], available: (ctx) => (ctx.c.household.money >= 10 ? null : 'lock.money'), apply: (ctx) => { payTo(ctx, ctx.c.location, 10); addFlag(ctx, 'heard_immortal'); addFlag(ctx, 'heard_trial'); return { result: 'pay' }; } },
+    { id: 'listen', costs: ['time'], apply: (ctx) => { spendStamina(ctx, 10); addFlag(ctx, 'heard_immortal'); return { result: 'listen' }; } },
+    { id: 'pass', costs: ['opportunity'], apply: () => ({ result: 'pass' }) },
+  ],
+};
+
+export const FELLOW_GRAIN = 10;
+export const fellowCultivator: EventDef = {
+  id: 'event.fellow_cultivator',
+  category: 'cultivation',
+  // Đồng đạo: người cũng mới dẫn khí, gặp khi vào núi hay ngồi tu ở chốn linh khí
+  weight: (ctx) => (onPath(ctx) && (seeking(ctx) || cultivatingNow(ctx)) ? 20_000 : 0),
+  cooldownTicks: 72,
+  params: () => ({ grain: FELLOW_GRAIN }),
+  figure: () => man('adult', 'common'),
+  choices: [
+    { id: 'discuss', costs: ['time', 'stamina'], apply: (ctx) => { spendStamina(ctx, 60); shiftQi(ctx, 400); return { result: 'discuss' }; } },
+    {
+      id: 'share_food', costs: ['grain'],
+      available: (ctx) => (ctx.c.household.grain >= FELLOW_GRAIN ? null : 'lock.grain'),
+      apply: (ctx) => { moveGrain(ctx, ctx.c.location, -FELLOW_GRAIN); addFlag(ctx, 'fellow_friend'); return { result: 'share_food' }; },
+    },
+    { id: 'avoid', costs: ['opportunity'], apply: () => ({ result: 'avoid' }) },
+  ],
+};
+
+export const cultivatorRobber: EventDef = {
+  id: 'event.cultivator_robber',
+  category: 'cultivation',
+  // Kẻ cướp đoạt cấp thấp: người tu mất đường, chặn người có linh thạch nơi núi vắng
+  weight: (ctx) => (onPath(ctx) && cultOf(ctx)!.stones > 0 && (seeking(ctx) || mountainCounty(ctx.logic, ctx.c.location)) ? 6_000 : 0),
+  cooldownTicks: 180,
+  figure: () => man('adult', 'poor'),
+  choices: [
+    { id: 'hand_over', costs: ['opportunity'], available: (ctx) => ((cultOf(ctx)?.stones ?? 0) > 0 ? null : 'lock.no_stones'), apply: (ctx) => { cultOf(ctx)!.stones = 0; return { result: 'hand_over' }; } },
+    {
+      id: 'flee', costs: ['risk', 'stamina'],
+      apply: (ctx, rng) => {
+        spendStamina(ctx, 100);
+        if (rng.chance(400_000)) { wound(ctx, 3); const cult = cultOf(ctx); if (cult) cult.stones = Math.max(0, cult.stones - 1); return { result: 'flee_caught' }; }
+        return { result: 'flee' };
+      },
+    },
+    { id: 'beg', costs: ['health'], apply: (ctx) => { const cult = cultOf(ctx); if (cult) cult.stones = Math.max(0, cult.stones - 1); ctx.c.health = Math.max(1, ctx.c.health - 60); return { result: 'beg' }; } },
+  ],
+};
+
+export const qiDeviation: EventDef = {
+  id: 'event.qi_deviation',
+  category: 'cultivation',
+  // Tẩu hỏa: ngồi tu khi tâm cảnh không yên (đói, bệnh, tang, tính nóng)
+  weight: (ctx) => {
+    const cult = cultOf(ctx);
+    if (!cult?.path || !cultivatingNow(ctx) || ctx.c.conditions.some((x) => x.id === MERIDIAN_ILLNESS)) return 0;
+    const mind = mindOf(ctx.c, cult, ctx.tick, false);
+    return mind === 'troubled' ? 20_000 : mind === 'shaken' ? 50_000 : 2_000;
+  },
+  cooldownTicks: 72,
+  choices: [
+    { id: 'stop', costs: ['opportunity'], apply: (ctx) => { shiftQi(ctx, -500); return { result: 'stop' }; } },
+    {
+      id: 'push', costs: ['risk'],
+      apply: (ctx, rng) => {
+        if (rng.chance(500_000)) {
+          if (!ctx.c.conditions.some((x) => x.kind === 'illness')) ctx.c.conditions.push({ id: MERIDIAN_ILLNESS, kind: 'illness', severity: 'serious', weeksLeft: 8 });
+          shiftQi(ctx, -1_000);
+          return { result: 'push_hurt' };
+        }
+        shiftQi(ctx, 300);
+        return { result: 'push' };
+      },
+    },
+    { id: 'rest', costs: ['time'], apply: (ctx) => { occupy(ctx, 'action.shelter', 1); shiftQi(ctx, -200); return { result: 'rest' }; } },
+  ],
+};
+
+export const cultivationInsight: EventDef = {
+  id: 'event.cultivation_insight',
+  category: 'cultivation',
+  weight: (ctx) => (onPath(ctx) && cultivatingNow(ctx) ? mulDiv(4_000, 50 + ctx.c.aptitude * 10, 100) : 0),
+  cooldownTicks: 180,
+  choices: [
+    { id: 'sit', costs: ['time', 'stamina'], apply: (ctx) => { spendStamina(ctx, 80); occupy(ctx, 'action.toil', 1); shiftQi(ctx, 800); return { result: 'sit' }; } },
+    { id: 'note', costs: ['stamina'], apply: (ctx) => { spendStamina(ctx, 30); shiftQi(ctx, 200); return { result: 'note' }; } },
+    { id: 'rise', costs: ['opportunity'], apply: () => ({ result: 'rise' }) },
+  ],
+};
+
+export const ERRAND_FEE = 300;
+export const sectErrand: EventDef = {
+  id: 'event.sect_errand',
+  category: 'cultivation',
+  // Đệ tử ký danh còn tên: tông môn gửi tin nhờ việc (hái thuốc, đưa thư); làm thì tính vào tuần tạp dịch năm nay
+  weight: (ctx) => (cultOf(ctx)?.duty ? 15_000 : 0),
+  cooldownTicks: 108,
+  params: () => ({ price: ERRAND_FEE }),
+  choices: [
+    { id: 'go', costs: ['time', 'stamina'], apply: (ctx) => { spendStamina(ctx, 60); occupy(ctx, 'action.toil', 2); const d = cultOf(ctx)?.duty; if (d) d.weeks += 2; return { result: 'go' }; } },
+    {
+      id: 'pay', costs: ['money'],
+      available: (ctx) => (ctx.c.household.money >= ERRAND_FEE ? null : 'lock.money'),
+      apply: (ctx) => { payFaction(ctx, sectOf(ctx.factions), ctx.c.location, ERRAND_FEE); const d = cultOf(ctx)?.duty; if (d) d.weeks += 1; return { result: 'pay' }; },
+    },
+    { id: 'ignore', costs: ['opportunity'], apply: () => ({ result: 'ignore' }) },
+  ],
+};
+
+export const sectSenior: EventDef = {
+  id: 'event.sect_senior',
+  category: 'cultivation',
+  // Sư huynh trên núi xuống: xem tiến độ; người đã tích được nhiều được chỉ thêm, kẻ đòi "lễ" thì lấy linh thạch
+  weight: (ctx) => (cultOf(ctx)?.path === 'sect' && cultOf(ctx)!.duty ? 8_000 : 0),
+  cooldownTicks: 180,
+  figure: () => man('adult', 'rich'),
+  choices: [
+    {
+      id: 'gift', costs: ['opportunity'],
+      available: (ctx) => ((cultOf(ctx)?.stones ?? 0) > 0 ? null : 'lock.no_stones'),
+      apply: (ctx) => { cultOf(ctx)!.stones--; shiftQi(ctx, 600); return { result: 'gift' }; },
+    },
+    { id: 'ask', costs: ['time'], apply: (ctx) => { spendStamina(ctx, 30); shiftQi(ctx, 200); return { result: 'ask' }; } },
+    { id: 'bow', costs: ['opportunity'], apply: () => ({ result: 'bow' }) },
+  ],
+};
+
+export const CULTIVATION_EVENTS: readonly EventDef[] = [
+  seekCave, seekLost, wanderingCultivator, shrineKeeper, hermitHint, ruinStone, cultivatorTest, hermitStoneTest, ruinScroll, cultivatorTeach,
+  parentFar, spouseCold, fakeElixir, hauntedDream, immortalRumor, fellowCultivator, cultivatorRobber, qiDeviation, cultivationInsight, sectErrand, sectSenior,
+];
 export const CULTIVATION_EVENT_IDS: readonly string[] = CULTIVATION_EVENTS.map((d) => d.id);

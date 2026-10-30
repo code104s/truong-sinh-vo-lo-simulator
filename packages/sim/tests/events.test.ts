@@ -7,6 +7,7 @@ import { CAREER_EVENT_IDS, CAREER_EVENTS_OF, EVENTS, WANDERING_PHYSICIAN_FEE } f
 import { checkCatalog, makeContext, newEventsState, rollEvent, type EventDef } from '../src/events/engine';
 import type { CharacterState } from '../src/life/character';
 import type { LifeSnapshot } from '../src/life/life';
+import { newCultivation } from '../src/life/cultivation';
 import type { FactionState } from '../src/factions/state';
 import { kinRole, PLAYER_ID } from '../src/npc/family';
 import type { Bond } from '../src/social/bonds';
@@ -79,6 +80,9 @@ function richSnap(personalityId: string, onRoad: boolean): LifeSnapshot {
     c.household = { ...c.household, independent: true, money: 5_000, grain: 500, taxDebt: 200, farmWeeks: 10, farmCounty: 0, tenure: 'tenant', goods: [50, 50, 100] };
     c.conditions = [{ id: 'illness.fever', kind: 'illness', severity: 'serious', weeksLeft: 4 }];
     c.skillXp.martial = 2_000; c.skillXp.literacy = 1_000; c.skillXp.hunting = 500; // v0.8 S4: đủ chữ đọc tàn quyển
+    // v0.8 S6: đệ tử ký danh có linh thạch, đang tích linh khí (mở lựa chọn của sự kiện đời tu)
+    c.spiritRoot = { elements: ['wood', 'fire'], purity: 50 };
+    s.cultivation = { ...newCultivation(), root: 'fair', path: 'sect', qi: 5_000, stones: 4, duty: { weeks: 0, missed: 0, since: 0 }, secluded: 10 };
     if (onRoad) s.active = { slot: { action: 'action.travel', target: 1 }, total: 2, remaining: 2, preview: { county: 1, route: [0, 1], days: 6, slots: 2, risk: 'risk.low' } };
     withFactions(s);
   });
@@ -322,7 +326,7 @@ describe('người thật trong sự kiện (v0.4 S6)', () => {
     if (eventId === 'event.grain_broker') { const n = alive(1)[0]!; n.occupation = 'merchant'; n.character.household.money = 100_000; }
     // Gia đình (v0.5 S5): mẹ người chơi già, ốm ở cùng quận; hay vừa mất
     const mother = s.npcs.people.find((n) => n.id === s.character.kin.mother)!;
-    if (eventId === 'event.parent_ill' || eventId === 'event.kin_funeral') { mother.character.location = s.character.location; mother.character.birthTick = s.tick - 60 * 36; }
+    if (eventId === 'event.parent_ill' || eventId === 'event.kin_funeral' || eventId === 'event.parent_far') { mother.character.location = s.character.location; mother.character.birthTick = s.tick - 60 * 36; }
     if (eventId === 'event.parent_ill') mother.character.conditions = [{ id: 'illness.fever', kind: 'illness', severity: 'serious', weeksLeft: 6 }];
     if (eventId === 'event.kin_funeral') { mother.character.alive = false; mother.death = { tick: s.tick - 2, cause: 'old_age', detail: 'old_age.natural' }; }
     // Quan hệ (v0.5 S7): một người lạ cùng quận (không phải người thân) đóng vai người trong chuyện
@@ -350,7 +354,7 @@ describe('người thật trong sự kiện (v0.4 S6)', () => {
       n.character.kin.mother = mother.id; n.character.household.independent = true;
     }
     if (eventId === 'event.friend_in_need') { bond({ closeness: 30 }); n.character.household.hunger = 2; }
-    if (eventId === 'event.spouse_quarrel') { unwed(); s.character.kin.spouse = n.id; n.character.kin.spouse = PLAYER_ID; }
+    if (eventId === 'event.spouse_quarrel' || eventId === 'event.spouse_cold') { unwed(); s.character.kin.spouse = n.id; n.character.kin.spouse = PLAYER_ID; }
     if (eventId === 'event.clan_match') {
       unwed(); s.character.kin.spouse = null;
       Object.assign(n.character, { gender: s.character.gender === 'male' ? 'female' : 'male', birthTick: s.character.birthTick });
@@ -369,13 +373,13 @@ describe('người thật trong sự kiện (v0.4 S6)', () => {
     'event.bandit_lure', 'event.bandit_raid', 'event.beggar', 'event.child_ill', 'event.clan_match', 'event.corvee_levy', 'event.craft_pupil_asks', 'event.debt_called', 'event.enemy_revenge',
     'event.estate_dispute', 'event.farm_old_hand', 'event.friend_brings_rice', 'event.friend_in_need', 'event.grain_broker', 'event.granary_theft', 'event.greedy_levy', 'event.highway_robbers',
     'event.hunt_trap_victim', 'event.join_caravan', 'event.kin_funeral', 'event.land_suit', 'event.market_brawl', 'event.matchmaker', 'event.merchant_partner', 'event.neighbor_harvest',
-    'event.outlaw_kin_news', 'event.parent_ill', 'event.recluse_visitor', 'event.rent_hike',
-    'event.report_bandits', 'event.spouse_quarrel', 'event.tax_collector', 'event.village_festival', 'event.village_funeral', 'event.village_wedding', 'event.wandering_physician',
+    'event.outlaw_kin_news', 'event.parent_far', 'event.parent_ill', 'event.recluse_visitor', 'event.rent_hike',
+    'event.report_bandits', 'event.spouse_cold', 'event.spouse_quarrel', 'event.tax_collector', 'event.village_festival', 'event.village_funeral', 'event.village_wedding', 'event.wandering_physician',
   ];
   /** Biến thể có tên khác "named" ở trạng thái mẫu: họ Trần đứng đầu làng (S7). */
   const NAMED_VARIANT: Record<string, string> = { 'event.bandit_raid': 'named_clan', 'event.village_festival': 'clan' };
 
-  it('ba mươi sáu sự kiện gọi người thật (v0.5 S5 cha mẹ ốm, tang; S7 chín sự kiện quan hệ; v0.6 S7 sự kiện thế lực và sáu sự kiện cũ nối vào thế lực; v0.7 S8 sáu sự kiện nghề): biến thể có tên, thẻ là người ấy, mọi khóa văn bản đủ', async () => {
+  it('ba mươi tám sự kiện gọi người thật (v0.5 S5 cha mẹ ốm, tang; S7 chín sự kiện quan hệ; v0.6 S7 sự kiện thế lực và sáu sự kiện cũ nối vào thế lực; v0.7 S8 sáu sự kiện nghề; v0.8 S6 cha mẹ, vợ chồng của người ngồi tu): biến thể có tên, thẻ là người ấy, mọi khóa văn bản đủ', async () => {
     const { t } = await import('@tsvl/content');
     const MISSING = /⟨|\{\w+\}/;
     expect(EVENTS.filter((d) => d.cast).map((d) => d.id)).toEqual(NAMED);

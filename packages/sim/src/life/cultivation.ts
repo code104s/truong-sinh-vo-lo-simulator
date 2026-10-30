@@ -20,9 +20,11 @@ export interface CultivationState {
   stones: number;
   /** Đệ tử ký danh còn tên trong sổ (S3): tuần tạp dịch năm nay, số năm liền bỏ nghĩa vụ, lúc vào; null là không (chưa vào, tán tu, bị gạch tên). */
   duty: { weeks: number; missed: number; since: Tick } | null;
+  /** Ô tu luyện trong năm nay (S6): tu nhiều thì ít thời gian cho người thân, quan hệ phai nhanh hơn; đầu năm đặt lại. */
+  secluded: number;
 }
 
-export const newCultivation = (): CultivationState => ({ realm: 'mortal', root: null, path: null, qi: 0, entered: null, breakthroughs: [], stones: 0, duty: null });
+export const newCultivation = (): CultivationState => ({ realm: 'mortal', root: null, path: null, qi: 0, entered: null, breakthroughs: [], stones: 0, duty: null, secluded: 0 });
 
 /** Linh khí tới đỉnh mỗi tầng (giá trị tạm, chốt ở S5 theo Q7: linh căn khá, tu một nửa số ô, tới đỉnh trong 3–6 năm). */
 export const QI_PEAK: Readonly<Record<Realm, number>> = { mortal: 0, qi1: 10_000 };

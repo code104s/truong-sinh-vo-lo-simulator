@@ -58,7 +58,7 @@ describe('tu luyện (v0.8 S5, Q7)', () => {
     expect(at(FAIR, disciple(), { county: 0 })).toBeGreaterThan(at(FAIR, disciple()));
     expect(at(FAIR, disciple(), { county: 2 })).toBeLessThan(at(FAIR, disciple()));
     expect(qiPerSlot(person(null), disciple(), region, T)).toBe(0);
-    const years = PEAK / at(FAIR, disciple()) / 54;
+    const years = PEAK / at(FAIR, disciple()) / (TICKS_PER_YEAR / 2);
     expect(years).toBeGreaterThanOrEqual(3);
     expect(years).toBeLessThanOrEqual(6);
   });

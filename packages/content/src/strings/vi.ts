@@ -362,6 +362,7 @@ export const VI: Readonly<Record<string, string>> = {
   'action.cultivate': 'Tu luyện', 'action.breakthrough': 'Đột phá', 'gain.qi': 'Linh khí', 'gain.realm': 'Cảnh giới',
   'lock.no_path': 'Chưa dẫn khí nhập thể', 'lock.qi_peak': 'Linh khí đã đầy, phải đột phá', 'lock.qi_not_peak': 'Linh khí chưa tới đỉnh',
   'lock.realm_cap': 'Đã tới đỉnh tầng một, chưa tới lúc đi tiếp', 'lock.unsettled': 'Tâm cảnh chưa yên',
+  'lock.no_stones': 'Không có linh thạch',
   'log.cultivate.peak': 'Linh khí trong người đã đầy, ngồi bao lâu cũng không tụ thêm. Tới lúc phá cửa.',
   'log.cultivate.cap': 'Linh khí tầng một đã đầy. Muốn đi xa hơn thì chưa tới lúc.',
   'log.breakthrough.ok': 'Ngồi suốt đêm, luồng khí phá qua một chỗ tắc, chạy thông khắp người. Luyện Khí tầng một.',

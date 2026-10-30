@@ -191,11 +191,13 @@ describe('tất định và lưu/tải (nghiệm thu Sim)', () => {
     // v0.8 S2: đời 3 gặp tu sĩ lưu lạc nên được hẹn kiểm linh căn (chọn lựa chọn cuối: thôi) → digest đổi; tuổi, nguyên nhân giữ.
     // v0.8 S3: tông môn lập cùng quan phủ (số hiệu thế lực sau dịch một); trẻ NPC đỗ kỳ tuyển rời vùng → làng đổi người, đời 3
     // chết đói 42 → 44; đời 1, 2 giữ tuổi. Cùng nguyên nhân.
+    // v0.8 S6: snapshot đường tu thêm số ô ngồi tu trong năm → digest đổi. Đời 3 đã mang ám ảnh (S2: tu sĩ xem, không có
+    // linh căn) nên gặp sự kiện ám ảnh, chọn lựa chọn đầu: bỏ việc lên núi tìm một tháng, chết đói 44 → 41. Cùng nguyên nhân.
     expect(out).toMatchInlineSnapshot(`
       [
-        "52 starvation 5ab48436c67cadc1",
-        "51 starvation f00a26222fc75bd6",
-        "44 starvation d92ef1dae58e7468",
+        "52 starvation d983eaa21cf5d975",
+        "51 starvation 7320b79324b71baf",
+        "41 starvation 368243ba955b7863",
       ]
     `);
   });

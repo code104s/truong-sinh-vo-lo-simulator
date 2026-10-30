@@ -89,6 +89,7 @@ const vCultivationState = obj<CultivationState>({
   breakthroughs: arr(obj<{ at: number; ok: boolean }>({ at: nat, ok: bool })),
   stones: nat,
   duty: nullable(obj<{ weeks: number; missed: number; since: number }>({ weeks: nat, missed: nat, since: nat })),
+  secluded: nat,
 });
 const vCareerState = obj<CareerState>({
   id: oneOf(CAREERS), rank: oneOf(CAREER_RANKS), since: nat, faction: nullable(vFactionId), mentor: nullable(vNpcId), years: nat, weeks: nat, idle: nat,

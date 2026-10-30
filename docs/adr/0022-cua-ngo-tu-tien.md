@@ -149,9 +149,9 @@
 ### S5 — tu luyện, đột phá tầng 1 (2026-10-30)
 - **Chốt mốc vào tầng 1** (chủ dự án, 2026-10-30): Q1 ghi "dẫn khí nhập thể = vào tầng 1", nhưng GDD 5 đòi v0.8 có "đột phá lên tầng 1" và "thất bại đột phá có hậu quả". Chọn: **dẫn khí xong vẫn là phàm nhân** (đệ tử ký danh S3, tán tu S4), tu tới đỉnh rồi **đột phá thành công mới vào tầng 1** (`entered` là lúc ấy); vào tầng 1 tu tiếp tới đỉnh tầng 1 thì dừng (`lock.realm_cap`, "chưa tới lúc"). Đột phá tầng 2 là v0.9.
 - **Tu luyện** (`action.cultivate`, `life/cultivate.ts`): một ô, thể lực 80, không ra tiền, không rút RNG.
-  - Linh khí mỗi ô = 40 × dải linh căn (tạp 50, khá 100, tốt 170%) × ngộ tính (50–150%) × công pháp (`TECHNIQUE_PCT`: tông môn 100, tán tu 60) × linh khí nơi ở × linh thạch, chia mệt. Đỉnh 10.000 (`QI_PEAK`, giữ giá trị Bước 0).
+  - Linh khí mỗi ô = 120 × dải linh căn (tạp 50, khá 100, tốt 170%) × ngộ tính (50–150%) × công pháp (`TECHNIQUE_PCT`: tông môn 100, tán tu 60) × linh khí nơi ở × linh thạch, chia mệt. Đỉnh 10.000 (`QI_PEAK`, giữ giá trị Bước 0).
   - Linh thạch: còn hơn 3 khối thì mỗi ô đốt một khối, linh khí ×150%; 3 khối cuối giữ cho đột phá.
-  - Tu một nửa số ô (54 ô một năm), ngộ tính vừa, ở làng — năm tới đỉnh:
+  - Tu một nửa số ô (18 trong 36 ô một năm), ngộ tính vừa, ở làng — năm tới đỉnh (S6 sửa: S5 tính nhầm một năm 54 ô và đặt gốc 40, khiến khá + tông môn mất gần 14 năm; nay gốc 120):
 
     | | Tạp | Khá | Tốt |
     |---|---|---|---|
@@ -168,3 +168,29 @@
 - **Tầng 1 cho gì** (Q9): thọ +5 năm (`lifespanBonus`); nét ẩn `qi_body` (trọng số 0, chỉ đột phá đặt): sức khỏe tối đa +100, bệnh 70%; thể lực hồi 125%. **Chưa có "thuật" tiện ích** — Q9 để chọn ở S5; đề xuất để S6 hay F2 (thân nhẹ đi đường nhanh hơn) nếu chủ dự án muốn.
 - **Test:** 719 (sim 496); 12 test mới (`cultivate.test.ts`). Người chơi máy cũ không tu luyện nên lượt rút của batch không đổi.
 - **Đo** (batch sáu chiến lược 1.000 đời): **PASS**, kết quả trùng hệt S4 từng dòng (trừ thời gian chạy) — người chơi máy cũ không tu luyện, nét `qi_body` thêm cuối bảng với trọng số 0. Batch "tìm đạo" so hai đường là việc của S7.
+
+### S6 — giá với phàm giới, sự kiện tu tiên (2026-10-30)
+- **Sửa S5:** một năm có 36 ô (mỗi tick một ô), không phải 108; S5 lấy 54 ô cho "một nửa số ô" nên đặt linh khí gốc mỗi ô 40, khiến linh căn khá + tông môn mất gần 14 năm tới đỉnh. Nay gốc **120** (`QI_PER_SLOT`): khá + tông môn 84 ô, tu 18 ô mỗi năm thì 4,6 năm. Bảng năm tới đỉnh ở mục S5 giữ nguyên số (đã tính theo tỉ lệ).
+- **Quan hệ phai khi ngồi tu nhiều** (Q10): `CultivationState.secluded` đếm ô tu luyện trong năm. Đầu năm, năm qua tu từ 18 ô (một nửa số ô) thì `fadeBonds` chạy thêm một lượt (như người lưu lạc), rồi đếm lại từ 0.
+- **11 sự kiện mới nhóm "Đường tiên"** (tổng nhóm 21, toàn bộ **121**). Văn bản ở `events.cultivation.vi.ts`: người đã dẫn khí kể bằng chữ người tu, người ôm ám ảnh kể bằng chữ phàm nhân.
+
+  | Sự kiện | Khi nào | Lựa chọn, giá |
+  |---|---|---|
+  | Cha mẹ ngoài sân (`parent_far`, người thật) | năm nay đã tu từ 6 ô, cha/mẹ từ 50 tuổi ở cùng quận | ra ở nhà (một ô chăm người, gần lại); gửi 200 văn; ngồi lại (nhạt đi) |
+  | Bữa cơm một người (`spouse_cold`, người thật) | như trên, vợ/chồng ở cùng quận | nói chuyện cả buổi; hứa bớt ngồi tu (mất 300 linh khí); im lặng (nhạt, thêm hiềm) |
+  | Viên thuốc tiên (`fake_elixir`) | mang ám ảnh, chưa có đường tu | mua 800 văn (vào quỹ quận, không được gì); **buông** (bỏ ám ảnh); đi qua |
+  | Giấc mơ trên núi (`haunted_dream`) | như trên | bỏ việc lên núi một tháng (có thể ngã); **buông**; thức tới sáng (mệt) |
+  | Người kể chuyện ở chợ (`immortal_rumor`) | ở trấn, thành, chưa nghe chuyện tiên | trả 10 văn (nghe chuyện tiên, kỳ tuyển); đứng nghe (chuyện tiên); đi qua |
+  | Đồng đạo (`fellow_cultivator`) | đã dẫn khí, đang tìm cơ duyên hay ngồi tu | đàm đạo (thể lực, +400 linh khí); chia gạo; chào rồi đi |
+  | Kẻ chặn đường (`cultivator_robber`) | đã dẫn khí, có linh thạch, ở núi hay đang tìm cơ duyên | đưa hết linh thạch; chạy (40% bị đuổi kịp: thương, mất một khối); van xin (mất một khối, sức khỏe) |
+  | Khí nghịch (`qi_deviation`) | đang ngồi tu; tâm cảnh động ×10, loạn ×25 | dừng (−500 linh khí); cố (50% thương kinh mạch, −1.000; không thì +300); nghỉ một tuần (−200) |
+  | Chợt hiểu (`cultivation_insight`) | đang ngồi tu, theo ngộ tính | ngồi tiếp một tuần (+800); ghi lại (+200); đứng dậy |
+  | Tin từ trên núi (`sect_errand`) | đệ tử còn tên | đi hái thuốc hai tuần (tính 2 tuần tạp dịch); nộp 300 văn vào kho tông môn (1 tuần); hẹn lần sau |
+  | Sư huynh xuống núi (`sect_senior`) | đệ tử tông môn còn tên | biếu một khối linh thạch (+600); xin chỉ điểm (+200); tiễn ra cửa |
+
+  - **Ám ảnh có thể buông** (Q10): lựa chọn "buông" bỏ cờ `haunted`, đặt `let_go`; sự kiện ám ảnh không đến nữa. Không trừ chỉ số vô cớ: giá của ám ảnh là tiền, thời gian người chơi tự chọn bỏ ra.
+  - Linh thạch không đổi ra tiền ở mọi lựa chọn (Q11).
+- **Chưa làm:** "thuật" tiện ích tầng 1 (Q9) — để chủ dự án quyết ở S7 hay F2.
+- **Test:** 727 (sim 504); 8 test mới (`seclusion.test.ts`). Bảng sự kiện mẫu (`events.test.ts`) thêm đường tu (đệ tử có linh thạch, đang tích linh khí) để mở lựa chọn; danh sách sự kiện gọi người thật 36 → 38.
+- **Đo** (batch sáu chiến lược 1.000 đời): **PASS** mọi tiêu chí v0.6; điều độ 59,61 tuổi (S5: 59,57), cưới trước 30 tuổi 71,9%, 3,04 sự kiện/năm (S5: 3,01). Sự kiện ám ảnh gặp nhiều ở người chơi máy thường vì phần lớn đã trả tiền cho tu sĩ xem rồi biết mình không có linh căn (S2): thuốc tiên giả 313–1.462, giấc mơ 367–1.329 lần mỗi 1.000 đời (học giả nhiều nhất); người kể chuyện 51–219. Tám sự kiện đời tu chưa xảy ra vì người chơi máy cũ không dẫn khí — đo ở S7 với người chơi máy tìm đạo.
+- **Digest pin:** snapshot thêm `secluded` → digest đổi; đời mẫu 3 (đã mang ám ảnh từ S2) gặp giấc mơ trên núi, chọn lựa chọn đầu (bỏ việc một tháng) → chết đói 44 → 41. Cùng nguyên nhân.

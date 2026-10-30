@@ -19,10 +19,10 @@ type Log = (e: Omit<LogEntry, 'tick'>) => void;
 
 /**
  * Linh khí mỗi ô gốc, nhân dải linh căn (%), ngộ tính (50–150%), công pháp (tông môn 100, tán tu 60), linh khí nơi ở,
- * linh thạch; chia mệt. Linh căn khá, ngộ tính vừa, công pháp tông môn, ở làng: 40 mỗi ô — đỉnh 10.000 là 250 ô, tu một
- * nửa số ô (54 ô một năm) thì khoảng 4,6 năm (Q7: 3–6 năm).
+ * linh thạch; chia mệt. Linh căn khá, ngộ tính vừa, công pháp tông môn, ở làng: 120 mỗi ô — đỉnh 10.000 là 84 ô, tu một
+ * nửa số ô (18 trong 36 ô một năm) thì khoảng 4,6 năm (Q7: 3–6 năm). S6 sửa: S5 tính nhầm 54 ô một năm.
  */
-export const QI_PER_SLOT = 40;
+export const QI_PER_SLOT = 120;
 export const QI_ROOT_PCT: Readonly<Record<Exclude<RootBand, 'none'>, number>> = { mixed: 50, fair: 100, good: 170 };
 /** Đốt một khối linh thạch mỗi ô thì nhanh hơn; giữ lại chừng này khối cho lúc đột phá. */
 export const STONE_QI_PCT = 150;
@@ -54,10 +54,17 @@ export function cultivate(c: CharacterState, cult: CultivationState, logic: Regi
   if (cultivateLock(c, cult)) return;
   let qi = qiPerSlot(c, cult, logic, tick);
   if (cult.stones > BREAKTHROUGH_STONES) { cult.stones--; qi = mulDiv(qi, STONE_QI_PCT, 100); }
+  cult.secluded++;
   const peak = qiPeakOf(cult);
   cult.qi = Math.min(peak, cult.qi + qi);
   if (cult.qi >= peak) log({ key: cult.realm === 'mortal' ? 'log.cultivate.peak' : 'log.cultivate.cap', params: {}, importance: 'major' });
 }
+
+/**
+ * Giá với phàm giới (S6, Q10): năm nào tu từ chừng này ô trở lên (một nửa số ô cả năm) thì đầu năm sau quan hệ phai thêm
+ * một lượt, như người lưu lạc.
+ */
+export const SECLUSION_FADE_SLOTS = TICKS_PER_YEAR / 2;
 
 // —— Tâm cảnh (Q8): dải tính từ trạng thái sẵn có, không thêm chỉ số ẩn ——
 

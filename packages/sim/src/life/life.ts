@@ -43,7 +43,7 @@ import { roadRisk, routeDanger } from '../factions/impact';
 import { cultivationView, legacyCultivation, newCultivation, type CultivationState } from './cultivation';
 import { attendTrial, dutyLock, dutyYear, foundSect, sectPhase, trialLock } from '../factions/sect';
 import { induce, induceLock } from './rogue';
-import { breakthrough, breakthroughLock, cultivate, cultivateLock, FAIL_SHAKEN_TICKS } from './cultivate';
+import { breakthrough, breakthroughLock, cultivate, cultivateLock, FAIL_SHAKEN_TICKS, SECLUSION_FADE_SLOTS } from './cultivate';
 import { LEAVE_ATTITUDE, shiftAttitude } from '../factions/attitude';
 import { controlOf, membershipOf, factionMoney, factionPhase, factionViews, newFactionWorld, type FactionWorldState } from '../factions/state';
 
@@ -327,6 +327,9 @@ export class Life {
       fadeBonds(c, { npcs: this.s.npcs, bonds: this.s.bonds, rng: this.streams.get('social') });
       // Người lưu lạc ít quan hệ bền: quan hệ phai gấp đôi (S6, Q7)
       if (this.s.career?.id === 'drifter') fadeBonds(c, { npcs: this.s.npcs, bonds: this.s.bonds, rng: this.streams.get('social') });
+      // Năm qua phần lớn ngồi tu (v0.8 S6, Q10): ít thời gian cho người thân, quan hệ phai thêm một lượt
+      if (this.s.cultivation.secluded >= SECLUSION_FADE_SLOTS) fadeBonds(c, { npcs: this.s.npcs, bonds: this.s.bonds, rng: this.streams.get('social') });
+      this.s.cultivation.secluded = 0;
     }
     // Thừa kế (v0.5 S3): cha, mẹ, vợ/chồng mất thì người chơi nhận phần mình. Người ở tầng L1 tính cả tháng nên có thể
     // mất vào tuần sau: tin báo đúng tuần mất, sau tin người ấy mất (phần chia giữ trong snapshot tới lúc ấy)
