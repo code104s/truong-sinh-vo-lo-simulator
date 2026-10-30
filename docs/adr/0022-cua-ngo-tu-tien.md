@@ -194,3 +194,34 @@
 - **Test:** 727 (sim 504); 8 test mới (`seclusion.test.ts`). Bảng sự kiện mẫu (`events.test.ts`) thêm đường tu (đệ tử có linh thạch, đang tích linh khí) để mở lựa chọn; danh sách sự kiện gọi người thật 36 → 38.
 - **Đo** (batch sáu chiến lược 1.000 đời): **PASS** mọi tiêu chí v0.6; điều độ 59,61 tuổi (S5: 59,57), cưới trước 30 tuổi 71,9%, 3,04 sự kiện/năm (S5: 3,01). Sự kiện ám ảnh gặp nhiều ở người chơi máy thường vì phần lớn đã trả tiền cho tu sĩ xem rồi biết mình không có linh căn (S2): thuốc tiên giả 313–1.462, giấc mơ 367–1.329 lần mỗi 1.000 đời (học giả nhiều nhất); người kể chuyện 51–219. Tám sự kiện đời tu chưa xảy ra vì người chơi máy cũ không dẫn khí — đo ở S7 với người chơi máy tìm đạo.
 - **Digest pin:** snapshot thêm `secluded` → digest đổi; đời mẫu 3 (đã mang ám ảnh từ S2) gặp giấc mơ trên núi, chọn lựa chọn đầu (bỏ việc một tháng) → chết đói 44 → 41. Cùng nguyên nhân.
+
+### S7 — người chơi máy tìm đạo, cân bằng, đo (2026-10-30)
+- **Người chơi máy tìm đạo** (`tools/headless/src/seekers.ts`, `pnpm sim batch --policy seekers` chạy kèm người điều độ để so). Chỉ đọc view và khóa sim công bố, sống còn trước như các chiến lược khác:
+  - `seeker_sect`: năm tuyển (chia hết cho 3) từ tháng Giêng lên trị sở, tháng Ba dự tuyển, tới 20 tuổi; biết mình không có linh căn thì thôi; ngoài mùa tuyển về nhà;
+  - `seeker_rogue`: từ 15 tới 45 tuổi; nhà ở nơi tìm được (núi, miếu) thì tháng nào cũng tìm cơ duyên, không thì mỗi năm một chuyến lúc nông nhàn (tháng 10–12) lên một quận núi (vùng không núi thì tìm miếu ở làng, trấn khác); có công pháp thô thì tự dẫn khí;
+  - đã có đường tu: đủ ăn một năm thì tu hai ô mỗi tháng, chưa đủ thì một ô; đệ tử làm tạp dịch một ô mỗi tháng từ tháng 6; đủ đỉnh thì đột phá, tâm cảnh bất an thì chờ;
+  - chuyện cơ duyên (vào hang, đãi tu sĩ, cúng miếu, chạm đá, xin chỉ điểm) chọn lựa chọn đầu đang mở; chuyện khác như người điều độ.
+- **Số đo đường tu trong mọi batch** (`CultResult`, `CultStats`): dải linh căn thật (đo, người chơi máy không thấy), dải đã biết, đường vào, tuổi vào tầng 1, các lần đột phá, chết sớm vì hậu quả đột phá (chết vì thương kinh mạch, chết trong một năm sau lần hỏng, hay chết già sau lần hỏng nặng — thọ đã bị cắt ba năm). Batch sáu chiến lược thêm tiêu chí: mỗi chiến lược vào tầng 1 dưới 0,5% đời.
+- **Đọc tiêu chí mục 6:**
+  - "30–60% đời có linh căn vào tầng 1" tính **gộp hai đường**; từng đường in riêng, tông môn phải cao hơn tán tu, cả hai phải có người;
+  - "khác người điều độ ít nhất hai mặt" so các đời **đã vào đường tu** (đời chưa bước vào sống như người thường; phần ấy đo ở "đời không linh căn sống kém hơn");
+  - "thọ hơn trung bình không quá 8 năm" so với **người điều độ cùng tuổi**: trung bình tuổi lúc mất của đời điều độ đã sống tới đúng tuổi người ấy vào tầng 1 (người tầng 1 đã qua được tuổi trẻ, so với cả thảy thì lệch vì chọn mẫu).
+- **Ba lượt cân bằng** (Q2: chỉnh tốc độ tu luyện, tỉ lệ đột phá trước; tỉ lệ linh căn đổi theo ADR 0023):
+
+  | Lượt | Thay đổi | Tông môn | Tán tu | Lần đầu hỏng |
+  |---|---|---|---|---|
+  | 1 | (luật S6, 5% linh căn) | 83% | 19,5% | 60% |
+  | 2 | linh căn tạp tu 50 → 20%; bot tán tu tìm miếu ở vùng không núi | 61% | 17% | 56% |
+  | 3 | linh căn 15% (ADR 0023); tán tu đột phá −8 → −3%; thân thể tầng 1 bệnh 70 → 85% | 53% | 23% | 49% |
+
+  Lượt 1 cho thấy đệ tử vào sổ từ 13 tuổi gần như chắc tới tầng 1 (có cả đời để thử lại), còn tán tu kẹt ở ba chỗ: vùng không núi thì bot không đi tìm, linh căn tạp tu bằng 60% của 50% thì hai mươi năm mới tới đỉnh, đột phá không linh thạch lại muộn tuổi thì 9/10 lần đầu hỏng.
+- **Sửa lỗi S5:** sức khỏe tối đa cộng nét `qi_body` (+100) không có trần, người trẻ vào tầng 1 có sức khỏe 1.100 và save bị validate từ chối. `computeHealthMax` nay giữ trần 1.000 sau khi cộng nét; thân thể tầng 1 giữ sức hơn người thường khi về già. Có test hồi quy (`cultivate.test.ts`).
+- **Đo cuối** (máy cloud 4 lõi, sau mọi thay đổi):
+  - batch tìm đạo 1.000 đời: **PASS**. Đời có linh căn 145; vào tầng 1 gộp 38,3% (tông môn 77/145 = 53,1%, tán tu 34/145 = 23,4%). Đột phá 158 đời, lần đầu hỏng 49,4%, chết sớm vì hậu quả 3 đời (1,9%). Người tầng 1 70,5 tuổi, người điều độ cùng tuổi 63,7 (+6,8 năm); của cải trung vị cao nhất 36.529 văn (điều độ 32.291). Đời đã vào đường tu khác người điều độ ba mặt (tuổi thọ, nguyên nhân chết, của cải); kỹ năng chính vẫn là nông, sự kiện tu tiên 11–15%. Đời không linh căn: tìm đạo 59,3–59,6 tuổi, 30.987–31.660 văn; điều độ 59,4 tuổi, 32.890 văn. Sự kiện 3,35/năm sau 12 tuổi;
+  - mọi sự kiện tu tiên xảy ra trừ ba sự kiện hiếm (`RARE_SEEKER_EVENTS`): gặp lại ẩn sĩ, viên đá ẩn sĩ (cần đã gặp ẩn sĩ khi ẩn dật — nghề v0.7) và vợ/chồng lạnh nhạt (người chơi máy tìm đạo ít khi cưới). Đường đi của cả ba có test riêng;
+  - batch sáu chiến lược 1.000 đời: không ai vào tầng 1; mọi tiêu chí v0.6 đạt **trừ** "gia đình cưới trước 30 tuổi" 69,4% (2.000 đời: 69,1%; cần 70%). Cùng code mà linh căn 5% thì 71,9%: nguyên nhân là nhiều thanh niên NPC đỗ kỳ tuyển rời vùng hơn (ADR 0023). Chờ chủ dự án quyết;
+  - batch nghề 500 đời (cỡ nghiệm thu v0.7): **PASS**; 1.000 đời thì farmer – soldier, merchant – soldier chỉ khác một mặt (tiêu chí v0.7 đo ở 500 đời);
+  - thế giới 30 seed × 100 năm: dân số mỗi quận 75–130% hạn mức; trượt đúng hai nợ v0.7 (gia tộc 2–10 ở 95% vùng-năm, cướp sau đói kém gấp 1,0 lần).
+- **Hiệu năng:** trung bình 397 µs/tick trên 30 vùng (máy cloud 4 lõi, bận chạy batch song song); vùng 20 quận 698 µs. Vượt ngân sách 300 µs — nợ v0.7 còn đó, đề xuất một task tối ưu riêng. Batch mỗi chiến lược 296–330 s trên máy này (ngân sách 110 s đo trên máy chủ dự án).
+- **Digest pin:** đổi theo ADR 0023 (linh căn 15%); đời 1 chết đói 52 → 50, đời 2, 3 giữ tuổi.
+- **Test:** 737 (sim 508, headless 14); mới: `omens.test.ts` (3), `tools/headless/tests/seekers.test.ts` (6), test hồi quy trần sức khỏe.
